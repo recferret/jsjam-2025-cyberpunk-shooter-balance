@@ -1,0 +1,56 @@
+<!DOCTYPE>
+<html>
+<head>
+    <meta charset="utf-8"/>
+    <title>FSW2</title>
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, minimal-ui" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    
+    <style>
+		body {
+			margin : 0px;
+			padding : 0px;
+			background-color: black;
+			position: absolute;
+			width: 100%;
+			height: 100%;
+			overflow: hidden;
+		}
+		canvas {
+			width : 100% !important;
+			height : 100% !important;
+		}
+        canvas#webgl {
+			width : 100% !important;
+			height : 100% !important;
+        }
+        #fullscreen {
+			position: absolute;
+			top: 4px;
+			right: 2px;
+			border: none;
+			border-radius: 3px;
+			font-size: 12pt;
+			background-color: black;
+			color: white;
+			cursor: pointer;
+		}
+		#fullscreen:hover {
+			background-color: orange;
+		}
+    </style>
+</head>
+<body style="margin:0;padding:0;background-color:black;">
+    <div>
+		<div>
+			<canvas id="webgl"></canvas>
+		</div>
+	</div>
+
+    <script type="text/javascript" src="game.js"></script>
+
+</body>
+</html>

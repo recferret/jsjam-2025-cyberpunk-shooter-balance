@@ -1,0 +1,21 @@
+-cp src
+
+-lib heaps
+-lib uuid
+-lib actuate
+-lib slide
+-lib colyseus-websocket
+
+-js game.js
+-main ClientMain
+
+# -cp src
+
+# -lib heaps
+# -lib uuid
+# -lib colyseus-websocket
+
+# --hl Main.hl
+# -main ServerMain
+
+-debug

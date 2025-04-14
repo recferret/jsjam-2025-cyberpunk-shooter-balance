@@ -1,0 +1,11 @@
+-cp src
+
+-lib heaps
+-lib uuid
+-lib echo
+-lib colyseus-websocket
+
+--hl Main.hl
+-main ServerMain
+
+-debug
