@@ -1,7 +1,5 @@
 package game.base.camera;
 
-import hxd.Window;
-
 import engine.base.Cooldown;
 
 class CameraController {
@@ -13,8 +11,8 @@ class CameraController {
     private var bumpOffX = 0.0;
 	private var bumpOffY = 0.0;
 	private var bumpFrict = 0.85;
-
 	private var shakePower = 1.0;
+    private var framesPassed = 0;
 
     public function new(scene:h2d.Scene) {
         this.scene = scene;
@@ -38,24 +36,25 @@ class CameraController {
 		this.shakePower = shakePower;
 	}
 
-    // TODO pass dt and frames passed ?
-    private var framesPassed = 0;
     public function update() {
         if (target != null) {
-            scene.camera.x = hxd.Math.lerp(scene.camera.x, target.x - 640, 0.1);
+            scene.camera.x = hxd.Math.lerp(scene.camera.x, target.x - 320, 0.1);
             if (scene.camera.x < 0) {
                 scene.camera.x = 0;
             }
-            if (scene.camera.x > 1280) {
-                scene.camera.x = 1280   ;
+
+            trace(scene.camera.x, scene.camera.y);
+
+            if (scene.camera.x > 360) {
+                scene.camera.x = 360   ;
             }
 
-            scene.camera.y = hxd.Math.lerp(scene.camera.y, target.y - 360, 0.1);
+            scene.camera.y = hxd.Math.lerp(scene.camera.y, target.y - 180, 0.1);
             if (scene.camera.y < 35) {
                 scene.camera.y = 35;
             }
-            if (scene.camera.y > 1800) {
-                scene.camera.y = 1800;
+            if (scene.camera.y > 630) {
+                scene.camera.y = 630;
             }
 
             scene.x = 0;

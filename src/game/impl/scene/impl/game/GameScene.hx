@@ -1,5 +1,7 @@
 package game.impl.scene.impl.game;
 
+import engine.base.geom.Rectangle;
+import game.base.graphics.BitmapUtils;
 import h3d.Engine;
 import haxe.Timer;
 import hxd.Event;
@@ -43,6 +45,8 @@ import network.client.RemoteNetworking;
 import network.client.AbstractNetworking;
 import network.client.WsClientEvents;
 
+
+
 class GameScene 
     extends AbstractScene
     // Engine events
@@ -73,11 +77,10 @@ class GameScene
 
     // LocalNetworking
     private var networking:AbstractNetworking;
+    private var lastMousePos:h2d.col.Point;
+    private var allowToSpawnRect = false;
 
-    private var lineCoords = new Array<Point>();
-    private var lines = new Array<Line>();
-    private var coordsAdded = 0;
-    private var nextLineIndex = 0;
+    private final gameBorders:GameBorders;
 
 	public function new() {
 		super();
@@ -99,6 +102,8 @@ class GameScene
         add(map2, AbstractScene.BG_LAYER);
         add(map3, AbstractScene.BG_LAYER);
         add(map4, AbstractScene.BG_LAYER);
+
+        gameBorders = new GameBorders(this);
 
         // camera.setViewport(400, 300, 800, 600);
 
@@ -180,14 +185,6 @@ class GameScene
         Timer.delay(function callback() {
             networking.gameEnter();
         }, 500);
-
-
-        // final bmp = new h2d.Bitmap(hxd.Res.flintandsteelneon2.toTile().center(), this);
-        // bmp.setPosition(200, 200);
-        // bmp.filter = new Glow(0xff0000, 1, 1, 1, 1, false);
-
-        // FxManager.instance.flint(400, 450);
-
 	}
 
     // --------------------------------------
@@ -199,6 +196,7 @@ class GameScene
     public function absOnEvent(event:hxd.Event) {
         final cursor = new h2d.col.Point(event.relX, event.relY);
         camera.screenToCamera(cursor);
+        lastMousePos = cursor;
 
         if (event.kind == EventKind.EMove && playerCharacter != null) {
             final lookAtAngle = MathUtils.angleBetweenPoints(
@@ -214,33 +212,6 @@ class GameScene
 
             gameEngine.addInputCommand(playerInputCommand);
         }
-
-        if (event.kind == EventKind.EPush) {
-            lineCoords.push(new Point(cursor.x, cursor.y));
-            coordsAdded++;
-
-            if (Borders.instance.lines.length == 0) {
-                if (coordsAdded == 2) {
-                    coordsAdded = 0;
-
-                    final p1x = lineCoords[nextLineIndex].x;
-                    final p1y = lineCoords[nextLineIndex].y;
-                    nextLineIndex++;
-                    final p2x = lineCoords[nextLineIndex].x;
-                    final p2y = lineCoords[nextLineIndex].y;
-
-                    Borders.instance.lines.push(new Line(p1x, p1y, p2x, p2y));
-                }
-            } else {
-                final p1x = lineCoords[nextLineIndex].x;
-                final p1y = lineCoords[nextLineIndex].y;
-                nextLineIndex++;
-                final p2x = lineCoords[nextLineIndex].x;
-                final p2y = lineCoords[nextLineIndex].y;
-
-                Borders.instance.lines.push(new Line(p1x, p1y, p2x, p2y));
-            }
-        }
     }
 
     public function absOnResize(w:Int, h:Int) {
@@ -248,8 +219,6 @@ class GameScene
 
 	public function absStart() {
     }
-
-    var allowBackspace = true;
 
 	public function absUpdate(dt:Float, fps:Float) {
         SlideTweenManager.update(dt);
@@ -266,20 +235,25 @@ class GameScene
 			cast(uiScene, GameUiScene).update();
 		}
 
-        if (Key.isDown(Key.SPACE)) {
-            trace(Borders.instance.lines);
+        if (Key.isDown(Key.SHIFT)) {
+            var rectsString = '';
+            for (value in gameBorders.rectWrappers) {
+                rectsString += value.rect.toString() + ',\n';
+            }
+            trace(rectsString);
         }
 
-        if (allowBackspace && Key.isDown(Key.BACKSPACE)) {
-            Borders.instance.lines.pop();
-            allowBackspace = false;
-
+        if (Key.isDown(Key.SPACE) && allowToSpawnRect) {
+            allowToSpawnRect = false;
             haxe.Timer.delay(function callback() {
-                allowBackspace = true;
-                coordsAdded = 0;
-                nextLineIndex = 0;
-                lineCoords.pop();
+                allowToSpawnRect = true;
             }, 1000);
+        }
+
+        if (gameBorders.rectToReplace != null) {
+            gameBorders.rectToReplace.bmp.setPosition(lastMousePos.x, lastMousePos.y);
+            gameBorders.rectToReplace.rect.setPosition(lastMousePos.x, lastMousePos.y);
+            Borders.instance.rectangles.get(gameBorders.rectToReplace.id).setPosition(lastMousePos.x, lastMousePos.y);
         }
 	}
 
@@ -289,11 +263,8 @@ class GameScene
             value.drawSight(debugGraphics);
         }
 
-        for (line in lines) {
-            GraphicsUtils.DrawLine(debugGraphics, line.x1, line.y1, line.x2, line.y2, Colors.BlueColor);
-        }
-        for (line in Borders.instance.lines) {
-            GraphicsUtils.DrawLine(debugGraphics, line.x1, line.y1, line.x2, line.y2, Colors.RedColor);
+        for (rect in Borders.instance.rectangles) {
+            GraphicsUtils.DrawRect(debugGraphics, rect, Colors.GreenColor);
         }
     }
     

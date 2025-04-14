@@ -10,7 +10,7 @@ class Rectangle {
 	public var h:Float;
 	public var r:Float;
 
-	public function new(x:Float, y:Float, w:Float, h:Float, r:Float) {
+	public function new(x:Float, y:Float, w:Float, h:Float, r:Float = 0) {
 		this.x = x;
 		this.y = y;
 		this.w = w;
@@ -18,10 +18,9 @@ class Rectangle {
 		this.r = r;
 	}
 
-	public function updatePosition(x:Float, y:Float, r:Float) {
+	public function setPosition(x:Float, y:Float) {
 		this.x = x;
 		this.y = y;
-		this.r = r;
 	}
 
 	public function getCenter(offsetX:Float = 0, offsetY:Float = 0) {
@@ -169,5 +168,9 @@ class Rectangle {
 			}
 			return false;
 		}
+	}
+
+	public function toString() {
+		return 'new Rectangle(' + x + ', ' + y + ', ' + w + ', ' + h + ')';
 	}
 }

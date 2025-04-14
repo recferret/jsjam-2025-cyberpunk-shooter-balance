@@ -10,6 +10,6 @@ class EngineDebugConfig {
     public static var HeroSpreadAngleFactor = 1;
 
     public static var HeroWeaponRange = 900;
-    public static var HeroWeaponBulletSpeed = 900;
+    public static var HeroWeaponBulletSpeed = 500;
 
 }

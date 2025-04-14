@@ -27,7 +27,7 @@ class LocalNetworking extends AbstractNetworking {
     function gameEnterImpl(request:ProtoGameEnterRequest) {
         GameScene.gameEngine.createCharacter({
             x: 400,
-            y: 200,
+            y: 100,
             entityType: EntityType.Cyberpunk,
             ownerId: request.body.playerId,
             aiControlled: false,
