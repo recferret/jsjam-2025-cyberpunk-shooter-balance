@@ -82,6 +82,9 @@ class GameScene
 
     private final gameBorders:GameBorders;
 
+    private var debugMode = false;
+    private var allowToChangeDebugMode = true;
+
 	public function new() {
 		super();
 
@@ -152,25 +155,17 @@ class GameScene
         Game.PlayerId = Uuid.v4();
 
         setInputCallback(function callback(input:PlayerInputCommand) {
-            gameEngine.addInputCommand(input);
+            if (!debugMode) {
+                gameEngine.addInputCommand(input);
 
-            if (input.inputCommand == InputCommand.Skill) {
-                for (value in characters) {
-                    if (value.getEngineEntity().getOwnerId() != Game.PlayerId) {
-                        value.phantomFx();
+                if (input.inputCommand == InputCommand.Skill) {
+                    for (value in characters) {
+                        if (value.getEngineEntity().getOwnerId() != Game.PlayerId) {
+                            value.phantomFx();
+                        }
                     }
                 }
             }
-
-            // if (input.inputCommand == InputCommand.Move) {
-            //     if (fswGameEngine.allowMovementInput(playerCharacter.getEngineEntity().getId())) {
-            //         networking.input(9, input.angle);
-            //     }
-            // } else if (input.inputCommand == InputCommand.Shoot) {
-            //     // if (fswGameEngine.allowShootInput(playerCharacter.getEngineEntity().getId())) {
-            //         networking.input(8, input.angle);
-            //     // }
-            // } 
         });
 
         setUiScene(new GameUiScene());
@@ -198,19 +193,21 @@ class GameScene
         camera.screenToCamera(cursor);
         lastMousePos = cursor;
 
-        if (event.kind == EventKind.EMove && playerCharacter != null) {
-            final lookAtAngle = MathUtils.angleBetweenPoints(
-                new Point(playerCharacter.x, playerCharacter.y),
-                new Point(cursor.x, cursor.y),
-            );
+        if (!debugMode) {
+            if (event.kind == EventKind.EMove && playerCharacter != null) {
+                final lookAtAngle = MathUtils.angleBetweenPoints(
+                    new Point(playerCharacter.x, playerCharacter.y),
+                    new Point(cursor.x, cursor.y),
+                );
 
-            // DRY
-            final playerInputCommand = new PlayerInputCommand();
-            playerInputCommand.setPlayerId(Game.PlayerId);
-            playerInputCommand.setInputCommand(InputCommand.LookAt);
-            playerInputCommand.setAngle(lookAtAngle);
+                // DRY
+                final playerInputCommand = new PlayerInputCommand();
+                playerInputCommand.setPlayerId(Game.PlayerId);
+                playerInputCommand.setInputCommand(InputCommand.LookAt);
+                playerInputCommand.setAngle(lookAtAngle);
 
-            gameEngine.addInputCommand(playerInputCommand);
+                gameEngine.addInputCommand(playerInputCommand);
+            }
         }
     }
 
@@ -232,29 +229,58 @@ class GameScene
         cameraController.update();
 
 		if (uiScene != null) {
-			cast(uiScene, GameUiScene).update();
+			cast(uiScene, GameUiScene).update(debugMode);
 		}
 
-        if (Key.isDown(Key.SHIFT)) {
-            var rectsString = '';
-            for (value in gameBorders.rectWrappers) {
-                rectsString += value.rect.toString() + ',\n';
-            }
-            trace(rectsString);
-        }
-
-        if (Key.isDown(Key.SPACE) && allowToSpawnRect) {
-            allowToSpawnRect = false;
+        if (Key.isDown(Key.Z) && allowToChangeDebugMode) {
+            debugMode = !debugMode;
+            allowToChangeDebugMode = false;
             haxe.Timer.delay(function callback() {
-                allowToSpawnRect = true;
+                allowToChangeDebugMode = true;
             }, 1000);
         }
 
-        if (gameBorders.rectToReplace != null) {
-            gameBorders.rectToReplace.bmp.setPosition(lastMousePos.x, lastMousePos.y);
-            gameBorders.rectToReplace.rect.setPosition(lastMousePos.x, lastMousePos.y);
-            Borders.instance.rectangles.get(gameBorders.rectToReplace.id).setPosition(lastMousePos.x, lastMousePos.y);
+        if (debugMode) {
+            cameraController.setTarget(null);
+
+            if (Key.isDown(Key.W)) {
+                camera.y -= 5;
+            }
+            if (Key.isDown(Key.A)) {
+                camera.x -= 5;
+            }
+            if (Key.isDown(Key.S)) {
+                camera.y += 5;
+            }
+            if (Key.isDown(Key.D)) {
+                camera.x += 5;
+            }
+
+            if (Key.isDown(Key.SHIFT)) {
+                var rectsString = '';
+                for (value in gameBorders.rectWrappers) {
+                    rectsString += value.rect.toString() + ',\n';
+                }
+                trace(rectsString);
+            }
+
+            if (Key.isDown(Key.SPACE) && allowToSpawnRect) {
+                allowToSpawnRect = false;
+                haxe.Timer.delay(function callback() {
+                    allowToSpawnRect = true;
+                }, 1000);
+            }
+
+            if (gameBorders.rectToReplace != null) {
+                gameBorders.rectToReplace.bmp.setPosition(lastMousePos.x, lastMousePos.y);
+                gameBorders.rectToReplace.rect.setPosition(lastMousePos.x, lastMousePos.y);
+                Borders.instance.rectangles.get(gameBorders.rectToReplace.id).setPosition(lastMousePos.x, lastMousePos.y);
+            }
+        } else {
+            cameraController.setTarget(playerCharacter);
         }
+
+        gameBorders.show(debugMode);
 	}
 
     public function absRender(e:Engine) {
@@ -263,8 +289,10 @@ class GameScene
             value.drawSight(debugGraphics);
         }
 
-        for (rect in Borders.instance.rectangles) {
-            GraphicsUtils.DrawRect(debugGraphics, rect, Colors.GreenColor);
+        if (debugMode) {
+            for (rect in Borders.instance.rectangles) {
+                GraphicsUtils.DrawRect(debugGraphics, rect, Colors.GreenColor);
+            }
         }
     }
     

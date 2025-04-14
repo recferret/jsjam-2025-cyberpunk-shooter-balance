@@ -4,7 +4,10 @@ import engine.impl.EngineDebugConfig;
 
 class GameUiScene extends h2d.Scene {
 
-    // final fui:h2d.Flow;
+    final fui:h2d.Flow;
+
+	final debugModeText:h2d.Text;
+
 	// final currentSpreadText:h2d.Text;
 
     public function new() {
@@ -12,10 +15,13 @@ class GameUiScene extends h2d.Scene {
 
         // scale(3);
 
-        // fui = new h2d.Flow(this);
-		// fui.layout = Vertical;
-		// fui.verticalSpacing = 5;
-		// fui.padding = 10;
+        fui = new h2d.Flow(this);
+		fui.layout = Vertical;
+		fui.verticalSpacing = 5;
+		fui.padding = 10;
+
+		debugModeText = addStyledText(20, 20, 6, Left, Colors.WhiteColor);
+		fui.addChild(debugModeText);
 
         // addSlider(fui, 'Speed', function() return FswDebugConfig.HeroSpeed, function(v) FswDebugConfig.HeroSpeed = v, 200, 1000);
         // addSlider(fui, 'Move delay', function() return FswDebugConfig.HeroMoveDelay, function(v) FswDebugConfig.HeroMoveDelay = v, 0.01, 0.2);
@@ -35,13 +41,26 @@ class GameUiScene extends h2d.Scene {
 		// addSlider(fui, 'Bullet speed', function() return FswDebugConfig.HeroWeaponBulletSpeed, function(v) FswDebugConfig.HeroWeaponBulletSpeed = Std.int(v), 500, 2500);
     }
 
-	public function update() {
+	public function update(debugMode:Bool) {
+		debugModeText.text = debugMode ? 'Debug active. Press Z to disable it.' : 'Debug inactive. Pres Z to enable debug mode.';
+
 		// currentSpreadText.text = 'Spread step: ' + FswDebugConfig.CurrentHeroSpreadStep;
 	} 
 
     function getFont() {
 		return hxd.res.DefaultFont.get();
 	}
+
+    function addStyledText(x:Float, y:Float, scale:Float, textAlign:h2d.Text.Align, textColor:Int) {
+        final font = getFont();
+        final text = new h2d.Text(font);
+        text.textColor = textColor;
+        text.dropShadow = { dx : 0.5, dy : 0.5, color : 0x0B0903, alpha : 0.8 };
+        text.textAlign = textAlign;
+        text.setScale(scale);
+        text.setPosition(x, y);
+        return text;
+    }
 
 	function addText(parent:h2d.Flow, text="") {
 		var tf = new h2d.Text(getFont(), parent);

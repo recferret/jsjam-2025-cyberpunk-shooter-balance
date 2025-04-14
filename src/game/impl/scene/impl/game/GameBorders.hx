@@ -213,4 +213,10 @@ class GameBorders {
             }
         }
     }
+
+    public function show(show:Bool) {
+        for (value in rectWrappers) {
+            value.bmp.alpha = show ? 0.3 : 0;
+        }
+    }
 }
