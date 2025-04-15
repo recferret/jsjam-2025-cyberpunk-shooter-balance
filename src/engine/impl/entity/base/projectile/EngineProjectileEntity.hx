@@ -7,7 +7,7 @@ import engine.impl.types.ProjectileTypes.ProjectileEntity;
 
 class EngineProjectileEntity extends AbstractEngineEntity {
 
-	public var maxDistanceTravelled = false;
+	public var destroyProjectile = false;
 
 	private final projectileEntity:ProjectileEntity;
 
@@ -21,7 +21,11 @@ class EngineProjectileEntity extends AbstractEngineEntity {
     }
 
 	public function absUpdate(dt:Float) {
-		if (!maxDistanceTravelled) {
+		if (!destroyProjectile && Borders.instance.rectIntersectsWithBorder(getBodyRectangle())) {
+			destroyProjectile = true;
+		}
+
+		if (!destroyProjectile) {
 			final dx = speed * Math.cos(projectileEntity.rotation) * lastDt;
 			final dy = speed * Math.sin(projectileEntity.rotation) * lastDt;
 			baseEntity.x += dx;
@@ -30,7 +34,7 @@ class EngineProjectileEntity extends AbstractEngineEntity {
 			distanceTravelled += MathUtils.distanceTravelled(dx, dy);
 
 			if (distanceTravelled > range) {
-				maxDistanceTravelled = true;
+				destroyProjectile = true;
 			}
 		}
 	}

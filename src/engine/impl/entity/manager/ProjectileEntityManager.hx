@@ -27,7 +27,7 @@ class ProjectileEntityManager extends AbstractEngineEntityManager<ProjectileFact
     }
 
     function entityUpdated(entity:EngineProjectileEntity) {
-        if (entity.maxDistanceTravelled) {
+        if (entity.destroyProjectile) {
             deactivateAndPrepareToDelete(entity.getId());
         }
     }

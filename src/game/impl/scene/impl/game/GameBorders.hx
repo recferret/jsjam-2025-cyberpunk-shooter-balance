@@ -8,6 +8,7 @@ class BorderWrapper {
     public final bmp:h2d.Bitmap;
     public final rect:Rectangle;
     public final id:Int;
+    public var iteraction:h2d.Interactive;
 
     public function new(bmp:h2d.Bitmap, rect:Rectangle, id:Int) {
         this.bmp = bmp;
@@ -192,25 +193,7 @@ class GameBorders {
 
     public function new(parent:h2d.Object) {
         for (rect in rects) {
-            final bmp = BitmapUtils.createFromColoredTile(32, 32, Colors.RedColor);
-            bmp.setPosition(rect.x, rect.y);
-            bmp.alpha = 0.3;
-            parent.addChild(bmp);
-
-            final borderWrapper = new BorderWrapper(bmp, rect, rectsIndex);
-            rectWrappers.set(rectsIndex, borderWrapper);
-            Borders.instance.rectangles.set(rectsIndex, borderWrapper.rect);
-
-            rectsIndex++;
-
-            final interaction = new h2d.Interactive(32, 32, bmp);
-            interaction.setPosition(bmp.x - 16, bmp.y - 16);
-            interaction.onPush = function(event:hxd.Event) {
-                rectToReplace = borderWrapper;
-            }
-            interaction.onRelease = function(event:hxd.Event) {
-                rectToReplace = null;
-            }
+            addRect(parent, rect.x, rect.y);
         }
     }
 
@@ -218,5 +201,36 @@ class GameBorders {
         for (value in rectWrappers) {
             value.bmp.alpha = show ? 0.3 : 0;
         }
+    }
+
+    public function enableDrag(enable:Bool) {
+        for (value in rectWrappers) {
+            value.iteraction.cancelEvents = enable;
+        }
+    }
+
+    public function addRect(parent:h2d.Object, x:Float, y:Float) {
+        final bmp = BitmapUtils.createFromColoredTile(32, 32, Colors.RedColor);
+        bmp.setPosition(x, y);
+        bmp.alpha = 0.3;
+        parent.addChild(bmp);
+
+        
+        final borderWrapper = new BorderWrapper(bmp, new Rectangle(x, y, 32, 32), rectsIndex);
+        rectWrappers.set(rectsIndex, borderWrapper);
+        Borders.instance.rectangles.set(rectsIndex, borderWrapper.rect);
+
+        rectsIndex++;
+
+        final interaction = new h2d.Interactive(32, 32, bmp);
+        interaction.setPosition(-16, -16);
+        interaction.cancelEvents = true;
+        interaction.onPush = function(event:hxd.Event) {
+            rectToReplace = borderWrapper;
+        }
+        interaction.onRelease = function(event:hxd.Event) {
+            rectToReplace = null;
+        }
+        borderWrapper.iteraction = interaction;
     }
 }

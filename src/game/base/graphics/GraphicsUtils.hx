@@ -13,10 +13,10 @@ class GraphicsUtils {
 		graphics.endFill();
 	}
 
-	public static function DrawLine(graphics:h2d.Graphics, x1:Float, y1:Float, x2:Float, y2:Float, color:Int) {
-		graphics.lineStyle(2, color, 0.4);
-		graphics.moveTo(x1, y1);
-		graphics.lineTo(x2, y2);
+	public static function DrawLine(graphics:h2d.Graphics, line:Line, color:Int) {
+		graphics.lineStyle(1, color, 1);
+		graphics.moveTo(line.x1, line.y1);
+		graphics.lineTo(line.x2, line.y2);
 		graphics.endFill();
 	}
 
@@ -36,12 +36,14 @@ class GraphicsUtils {
 	}
 
 	public static function DrawPolygon(graphics:h2d.Graphics, color:Int, vertexes:Array<Point>) {
+		if (vertexes.length < 3) return;
+	
 		graphics.beginFill(color, 0.4);
-		if (vertexes.length % 3 == 0) {
-			for (vertex in vertexes) {
-				graphics.lineTo(vertex.x, vertex.y);
-			}
+		graphics.moveTo(vertexes[0].x, vertexes[0].y);
+		for (i in 1...vertexes.length) {
+			graphics.lineTo(vertexes[i].x, vertexes[i].y);
 		}
+
 		graphics.endFill();
 	}
 

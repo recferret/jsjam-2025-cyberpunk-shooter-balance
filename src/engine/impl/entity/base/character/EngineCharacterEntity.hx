@@ -1,7 +1,7 @@
 package engine.impl.entity.base.character;
 
+import engine.base.geom.Line;
 import engine.base.entity.AbstractEngineEntity;
-import engine.base.geom.Point;
 import engine.base.types.EntityTypes.EntityType;
 import engine.base.MathUtils;
 
@@ -20,6 +20,8 @@ class EngineCharacterEntity extends AbstractEngineEntity {
 
 	private var currentSpreadStep = 0;
 	private var timeTillSpreadStepDecrease = 0.0;
+
+	public final movementLine = new Line(0, 0, 0, 0);
 
     public function new(entity:CharacterEntity) {
         super(entity);
@@ -46,12 +48,6 @@ class EngineCharacterEntity extends AbstractEngineEntity {
 			characterEntity.weapon.bulletSpeed = EngineDebugConfig.HeroWeaponBulletSpeed;
 
 			EngineDebugConfig.CurrentHeroSpreadStep = currentSpreadStep;
-
-			// currentSpreadStep += 1;
-			// if (currentSpreadStep > characterEntity.weapon.spreadSteps) {
-			// 	currentSpreadStep = characterEntity.weapon.spreadSteps;
-			// }
-			// timeTillSpreadStepDecrease = characterEntity.weapon.spreadDecreaseMsDelay;
 		}
 
 		if (currentSpreadStep > 0) {
@@ -67,8 +63,6 @@ class EngineCharacterEntity extends AbstractEngineEntity {
 				}
 			}
 		}
-
-		// trace(currentSpreadStep, timeTillSpreadStepDecrease);
 	}
 
 	// ------------------------------------
@@ -76,11 +70,6 @@ class EngineCharacterEntity extends AbstractEngineEntity {
 	// ------------------------------------
 
 	public function move(angle:Float) {
-		// final futurePos = getFuturePosition(1);
-
-		var intersects = false;
-		// if (Borders.instance.rectIntersectsWithBorder(getBodyRectangle())) {
-
 		final deg = MathUtils.radsToDegree(MathUtils.normalizeAngle(angle));
 		
 		var allowHorizontalMovement = false;
@@ -113,6 +102,17 @@ class EngineCharacterEntity extends AbstractEngineEntity {
 			allowHorizontalMovement = true;
 			horizontalDir = 'right';
 		}
+
+		// final rect = getBodyRectangle();
+		// final x = rect.getCenter().x;
+		// final y = rect.getCenter().y;
+
+		final p = MathUtils.rotatePointAroundCenter(baseEntity.x + 30, baseEntity.y, baseEntity.x, baseEntity.y, angle);
+
+		movementLine.x1 = baseEntity.x;
+		movementLine.y1 = baseEntity.y;
+		movementLine.x2 = p.x;
+		movementLine.y2 = p.y;
 
 		if (Borders.instance.rectIntersectsWithBorder(getFutureRectangle(2, angle))) {
 			if (allowVerticalMovement) 
@@ -193,29 +193,29 @@ class EngineCharacterEntity extends AbstractEngineEntity {
 	// -----------------------------------
 
 	public function getGunBarrelPos() {
-		final x = baseEntity.x;
+		final x = baseEntity.x - 5;
 		final y = baseEntity.y;
-        var xx = x + 10;
-        var yy = direction == 'right' ? y - 4 : y + 4;
+        // var xx = x + 10;
+        // var yy = direction == 'right' ? y - 4 : y + 4;
 		
-		final lookAtAngle = MathUtils.radsToDegree(MathUtils.normalizeAngle(characterEntity.lookAtAngle));
+		// final lookAtAngle = MathUtils.radsToDegree(MathUtils.normalizeAngle(characterEntity.lookAtAngle));
 
-		if (lookAtAngle > 280 && lookAtAngle < 350 ) {
-			yy -= 4;
-		}
-		if (lookAtAngle > 280 && lookAtAngle < 320 ) {
-			yy -= 8;
-		}
+		// if (lookAtAngle > 280 && lookAtAngle < 350 ) {
+		// 	yy -= 4;
+		// }
+		// if (lookAtAngle > 280 && lookAtAngle < 320 ) {
+		// 	yy -= 8;
+		// }
 
-		if (lookAtAngle > 8 && lookAtAngle < 40) {
-			yy += 8;
-		} else if (lookAtAngle > 8 && lookAtAngle < 60) {
-			yy += 12;
-		} else if (lookAtAngle > 8 && lookAtAngle < 90) {
-			yy += 17;
-		}
+		// if (lookAtAngle > 8 && lookAtAngle < 40) {
+		// 	yy += 8;
+		// } else if (lookAtAngle > 8 && lookAtAngle < 60) {
+		// 	yy += 12;
+		// } else if (lookAtAngle > 8 && lookAtAngle < 90) {
+		// 	yy += 17;
+		// }
 
-        final p = MathUtils.rotatePointAroundCenter(xx, yy, x, y, characterEntity.lookAtAngle);
+        final p = MathUtils.rotatePointAroundCenter(x + 10, y, x, y, characterEntity.lookAtAngle);
         return new h2d.col.Point(p.x, p.y);
     }
 

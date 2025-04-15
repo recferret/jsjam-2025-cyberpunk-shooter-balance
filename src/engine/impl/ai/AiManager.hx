@@ -22,7 +22,7 @@ class AiManager {
 
     public function new() {
         Timer.delay(function callback() {
-            spawnAiCharacter();
+            // spawnAiCharacter();
         }, 1 * 1000);
     }
 

@@ -196,13 +196,7 @@ abstract class GameCharacterEntity extends BasicGameEntity<EngineCharacterEntity
 
     public function drawSight(graphics:Graphics) {
         final line = engineEntity.getLookingAtLine(engineEntity.getCharacterEntity().weapon.range);
-        GraphicsUtils.DrawLine(graphics, 
-            line.x1,
-            line.y1,
-            line.x2,
-            line.y2,
-            Colors.RedColor
-        );
+        GraphicsUtils.DrawLine(graphics, line, Colors.RedColor);
     }
 
     public function debugDraw(graphics:Graphics) {
@@ -222,10 +216,12 @@ abstract class GameCharacterEntity extends BasicGameEntity<EngineCharacterEntity
             Colors.BlueColor
         );
 
-        GraphicsUtils.DrawCircle(graphics, engineEntity.getBodyCircle(), Colors.BlueColor);
+        GraphicsUtils.DrawLine(graphics, engineEntity.movementLine, Colors.BlueColor);
 
-        final gunPos = engineEntity.getGunBarrelPos();
-        GraphicsUtils.DrawRect(graphics, new Rectangle(gunPos.x, gunPos.y, 5, 5, 0), Colors.RedColor);
+        // GraphicsUtils.DrawCircle(graphics, engineEntity.getBodyCircle(), Colors.BlueColor);
+
+        // final gunPos = engineEntity.getGunBarrelPos();
+        // GraphicsUtils.DrawRect(graphics, new Rectangle(gunPos.x, gunPos.y, 5, 5, 0), Colors.RedColor);
     }
 
     // FX

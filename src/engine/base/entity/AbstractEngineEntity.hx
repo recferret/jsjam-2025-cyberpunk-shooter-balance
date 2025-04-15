@@ -88,7 +88,7 @@ abstract class AbstractEngineEntity {
 
 	public function getLookingAtLine(lineLength:Int) {
 		final rect = getBodyRectangle();
-		final x1 = rect.getCenter().x;
+		final x1 = rect.getCenter().x - 5;
 		final y1 = rect.getCenter().y;
 
 		final p = MathUtils.rotatePointAroundCenter(x1 + lineLength, y1, x1, y1, baseEntity.lookAtAngle);

@@ -43,8 +43,6 @@ class CameraController {
                 scene.camera.x = 0;
             }
 
-            trace(scene.camera.x, scene.camera.y);
-
             if (scene.camera.x > 360) {
                 scene.camera.x = 360   ;
             }

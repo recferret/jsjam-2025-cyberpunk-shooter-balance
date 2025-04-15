@@ -3,158 +3,259 @@ package game.impl.scene.impl.test;
 import h2d.Graphics;
 import h3d.Engine;
 import hxd.Key;
-import hxsl.Types.Vec;
-import hxsl.Types.Vec4;
 
 import engine.base.geom.Rectangle;
 import engine.base.geom.Line;
 import engine.base.geom.Point;
 import engine.base.geom.Circle;
-import engine.base.MathUtils;
 
 import game.base.graphics.GraphicsUtils;
 import game.base.scene.AbstractScene;
 
 class Environment {
-    final bmp:h2d.Bitmap;
-    public final rectangle:Rectangle;
+	final bmp:h2d.Bitmap;
 
-    public function new(parent:h2d.Object, x:Float, y:Float, w:Int, h:Int) {
-        bmp = new h2d.Bitmap(h2d.Tile.fromColor(0x6F6F77, w, h).center(), parent);
-        bmp.alpha = 0.5;
-        bmp.setPosition(x, y);
-        rectangle = new Rectangle(x, y, w, h, 0);
-    }
+	public final rectangle:Rectangle;
 
+	public function new(parent:h2d.Object, x:Float, y:Float, w:Int, h:Int) {
+		bmp = new h2d.Bitmap(h2d.Tile.fromColor(0x6F6F77, w, h).center(), parent);
+		bmp.alpha = 0.5;
+		bmp.setPosition(x, y);
+		rectangle = new Rectangle(x, y, w, h, 0);
+	}
 }
 
 class FogOfWarTestScene extends AbstractScene {
+	final moveSpeed = 100;
+	final circleSightLength = 800;
+	final raySightLength = 800.;
 
-    final moveSpeed = 100;
-    final circleSightLength = 800;
-    final raySightLength = 1200;
+	final character1:h2d.Bitmap;
+	final character2:h2d.Bitmap;
 
-    final character1:h2d.Bitmap;
-    final character2:h2d.Bitmap;
+	final fogOfWarGraphics:Graphics;
+	final debugTexts = new Array<h2d.Text>();
+	final textFont = hxd.res.DefaultFont.get();
+	var debugTextIndex = 0;
 
-    final fogOfWarGraphics:Graphics;
-
-    final envs = new Array<Environment>();
+	final envs = new Array<Environment>();
 
 	public function new() {
 		super();
 
-        character1 = new h2d.Bitmap(h2d.Tile.fromColor(0x77FF77, 70, 120).center(), this);
-        character2 = new h2d.Bitmap(h2d.Tile.fromColor(0xFE6D6D, 70, 120).center(), this);
+		character1 = new h2d.Bitmap(h2d.Tile.fromColor(0x77FF77, 70, 120).center(), this);
+		character2 = new h2d.Bitmap(h2d.Tile.fromColor(0xFE6D6D, 70, 120).center(), this);
 
-        character1.setPosition(900, 900);
-        character2.setPosition(1300, 500);
+		character1.setPosition(900, 900);
+		character2.setPosition(1300, 500);
 
-        envs.push(new Environment(this, 1300, 400, 500, 50));
-        envs.push(new Environment(this, 1300, 700, 500, 50));
+		envs.push(new Environment(this, 1300, 700, 500, 50));
 
-        fogOfWarGraphics = new Graphics(this);
+		envs.push(new Environment(this, 600, 400, 300, 80));
+
+		envs.push(new Environment(this, 200, 200, 200, 80));
+
+		fogOfWarGraphics = new Graphics(this);
+
+		// Initialize debug texts
+		for (i in 0...20) {
+			var t = new h2d.Text(textFont, this);
+			t.textColor = 0xFFFFFF;
+			t.scale(1.0);
+			t.visible = false;
+			debugTexts.push(t);
+		}
 	}
 
 	// --------------------------------------
-	// Abstraction
+	// Abstractions
 	// --------------------------------------
 
-    public function absOnEvent(event:hxd.Event) {
-    }
+	public function absOnEvent(event:hxd.Event) {}
 
-    public function absOnResize(w:Int, h:Int) {
-    }
+	public function absOnResize(w:Int, h:Int) {}
 
-	public function absStart() {
-    }
+	public function absStart() {}
 
 	public function absUpdate(dt:Float, fps:Float) {
-        if (Key.isDown(Key.W)) {
-            character1.y -= moveSpeed * dt;
-        }
-        if (Key.isDown(Key.A)) {
-            character1.x -= moveSpeed * dt;
-        }
-        if (Key.isDown(Key.S)) {
-            character1.y += moveSpeed * dt;
-        }
-        if (Key.isDown(Key.D)) {
-            character1.x += moveSpeed * dt;
-        }
+		if (Key.isDown(Key.W)) {
+			character1.y -= moveSpeed * dt;
+		}
+		if (Key.isDown(Key.A)) {
+			character1.x -= moveSpeed * dt;
+		}
+		if (Key.isDown(Key.S)) {
+			character1.y += moveSpeed * dt;
+		}
+		if (Key.isDown(Key.D)) {
+			character1.x += moveSpeed * dt;
+		}
 	}
 
-    public function absRender(e:Engine) {
-        GraphicsUtils.DrawCircle(debugGraphics, new Circle(character1.x, character1.y, circleSightLength), Colors.GreenColor);
-        fogOfWarGraphics.clear();
-        processRect(envs[0].rectangle);
-        processRect(envs[1].rectangle);
-    }
-    
-    public function absDestroy() {
-    }
+	public function absRender(e:Engine) {
+		debugTextIndex = 0;
+		// Hide all debug texts
+		for (t in debugTexts)
+			t.visible = false;
 
-    private function processRect(rect:Rectangle) {
-        final characterCenter = new Point(character1.x, character1.y);
+		castRaysAroundCharacter();
 
-        final topLeftVertex = rect.getTopLeftPoint();
-        final topRightVertex = rect.getTopRightPoint();
-        final bottomLeftVertex = rect.getBottomLeftPoint();
-        final bottomRightVertex = rect.getBottomRightPoint();
+		GraphicsUtils.DrawCircle(debugGraphics, new Circle(character1.x, character1.y, circleSightLength), Colors.GreenColor);
+		// processRect(envs[0].rectangle);
+	}
 
-        final topLeftVertexToCharAngle = MathUtils.angleBetweenPoints(topLeftVertex, characterCenter) + Math.PI - MathUtils.degreeToRads(0.1);
-        final topRightVertexToCharAngle = MathUtils.angleBetweenPoints(topRightVertex, characterCenter) + Math.PI + MathUtils.degreeToRads(0.1);
-        final bottomLeftVertexToCharAngle = MathUtils.angleBetweenPoints(bottomLeftVertex, characterCenter) + Math.PI - MathUtils.degreeToRads(0.1);
-        final bottomRightVertexToCharAngle = MathUtils.angleBetweenPoints(bottomRightVertex, characterCenter) + Math.PI + MathUtils.degreeToRads(0.1);
+	private function castRaysAroundCharacter() {
+		final characterCenter = new Point(character1.x, character1.y);
+		fogOfWarGraphics.clear();
 
-        final topLeftSightPoint = MathUtils.rotatePointAroundCenter(characterCenter.x + raySightLength, characterCenter.y, characterCenter.x, characterCenter.y, topLeftVertexToCharAngle);
-        final topRightSightPoint = MathUtils.rotatePointAroundCenter(characterCenter.x + raySightLength, characterCenter.y, characterCenter.x, characterCenter.y, topRightVertexToCharAngle);
-        final bottomLeftSightPoint = MathUtils.rotatePointAroundCenter(characterCenter.x + raySightLength, characterCenter.y, characterCenter.x, characterCenter.y, bottomLeftVertexToCharAngle);
-        final bottomRightSightPoint = MathUtils.rotatePointAroundCenter(characterCenter.x + raySightLength, characterCenter.y, characterCenter.x, characterCenter.y, bottomRightVertexToCharAngle);
+		// Собираем все отрезки препятствий для проверки пересечений
+		final allSegments = new Array<Line>();
+		final allSegmentPoints = new Array<Point>();
+		for (env in envs) {
+			final rect = env.rectangle;
+			final topLeft = rect.getTopLeftPoint();
+			final topRight = rect.getTopRightPoint();
+			final bottomLeft = rect.getBottomLeftPoint();
+			final bottomRight = rect.getBottomRightPoint();
 
-        final topLeftSightLine = new Line(characterCenter.x, characterCenter.y, topLeftSightPoint.x, topLeftSightPoint.y);
-        final topRightSightLine = new Line(characterCenter.x, characterCenter.y, topRightSightPoint.x, topRightSightPoint.y);
-        final bottomLeftSightLine = new Line(characterCenter.x, characterCenter.y, bottomLeftSightPoint.x, bottomLeftSightPoint.y);
-        final bottomRightSightLine = new Line(characterCenter.x, characterCenter.y, bottomRightSightPoint.x, bottomRightSightPoint.y);
+			allSegments.push(new Line(topLeft.x, topLeft.y, topRight.x, topRight.y));
+			allSegments.push(new Line(topRight.x, topRight.y, bottomRight.x, bottomRight.y));
+			allSegments.push(new Line(bottomRight.x, bottomRight.y, bottomLeft.x, bottomLeft.y));
+			allSegments.push(new Line(bottomLeft.x, bottomLeft.y, topLeft.x, topLeft.y));
 
-        final vertexes = new Array<Point>();
+			allSegmentPoints.push(topLeft);
+			allSegmentPoints.push(topRight);
+			allSegmentPoints.push(bottomLeft);
+			allSegmentPoints.push(bottomRight);
+		}
 
-        final lines = new Array<Line>();
+		final rayCount = 360;
+		final rayEndPoints = new Array<Point>();
 
-        var topLeftCollision = false;
-        if (!rect.intersectsWithLine(topLeftSightLine)) {
-            topLeftCollision = true;
-            lines.push(topLeftSightLine);
-            vertexes.push(topLeftVertex);
-            vertexes.push(new Point(topLeftSightLine.x2, topLeftSightLine.y2));
-        }
-        if (!rect.intersectsWithLine(topRightSightLine)) {
-            lines.push(topRightSightLine);
-        }
-        if (!rect.intersectsWithLine(bottomLeftSightLine)) {
-            lines.push(bottomLeftSightLine);
-        }
-        if (!rect.intersectsWithLine(bottomRightSightLine)) {
-            lines.push(bottomRightSightLine);
+		// Стандартная круговая сетка
+		for (i in 0...rayCount) {
+			final angle = (Math.PI * 2) * i / rayCount;
+			final rayDir = new Point(Math.cos(angle), Math.sin(angle));
+			final target = new Point(characterCenter.x + rayDir.x * raySightLength, characterCenter.y + rayDir.y * raySightLength);
+			castRayToPoint(characterCenter, target, allSegments, rayEndPoints);
+		}
 
-            if (topLeftCollision) {
-                vertexes.push(new Point(bottomRightSightLine.x2, bottomRightSightLine.y2));
-                vertexes.push(bottomRightVertex);
-                vertexes.push(topRightVertex);
-                vertexes.push(topLeftVertex);
-            }
-        }
+		// ➕ Добавляем "смещённые" лучи к вершинам препятствий
+		final delta = 0.0001;
+		for (point in allSegmentPoints) {
+			final baseAngle = Math.atan2(point.y - characterCenter.y, point.x - characterCenter.x);
+			final angles = [baseAngle - delta, baseAngle, baseAngle + delta];
 
-        for (line in lines) {
-            GraphicsUtils.DrawLine(debugGraphics, line.x1, line.y1, line.x2, line.y2, Colors.GreenColor);
-        }
-        if (vertexes.length > 0) {
-            GraphicsUtils.DrawLines(debugGraphics, Colors.RedColor, vertexes);
-            GraphicsUtils.DrawPolygon(fogOfWarGraphics, Colors.BlackColor, vertexes);
-        }
-    }
+			for (a in angles) {
+				final targetX = characterCenter.x + Math.cos(a) * raySightLength;
+				final targetY = characterCenter.y + Math.sin(a) * raySightLength;
+				castRayToPoint(characterCenter, new Point(targetX, targetY), allSegments, rayEndPoints);
+			}
+		}
+
+		// Сортировка точек по углу
+		rayEndPoints.sort(function(p1, p2) {
+			final angle1 = Math.atan2(p1.y - characterCenter.y, p1.x - characterCenter.x);
+			final angle2 = Math.atan2(p2.y - characterCenter.y, p2.x - characterCenter.x);
+			return (angle1 > angle2) ? 1 : (angle1 < angle2) ? -1 : 0;
+		});
+
+		// Рисуем полигон
+		if (rayEndPoints.length > 0) {
+			final vertices = [characterCenter].concat(rayEndPoints);
+			vertices.push(rayEndPoints[0]); // замыкаем
+			GraphicsUtils.DrawPolygon(fogOfWarGraphics, Colors.BlackColor, vertices);
+		}
+	}
+
+	// Добавляет точку в массив, если её там ещё нет
+	private function addUniquePoint(points:Array<Point>, newPoint:Point) {
+		for (p in points) {
+			if (p.x == newPoint.x && p.y == newPoint.y) {
+				return; // Точка уже есть в массиве
+			}
+		}
+		points.push(newPoint);
+	}
+
+	// Бросает луч от characterCenter к targetPoint и находит ближайшее пересечение
+	private function castRayToPoint(characterCenter:Point, targetPoint:Point, segments:Array<Line>, result:Array<Point>) {
+		var rayDirX = targetPoint.x - characterCenter.x;
+		var rayDirY = targetPoint.y - characterCenter.y;
+		final rayLength = Math.sqrt(rayDirX * rayDirX + rayDirY * rayDirY);
+		rayDirX /= rayLength;
+		rayDirY /= rayLength;
+
+		var closestIntersection:Point = null;
+		var closestDistance = raySightLength;
+
+		for (segment in segments) {
+			// Параметры луча
+			final r_px = characterCenter.x;
+			final r_py = characterCenter.y;
+			final r_dx = rayDirX;
+			final r_dy = rayDirY;
+
+			// Параметры отрезка
+			final s_px = segment.x1;
+			final s_py = segment.y1;
+			final s_dx = segment.x2 - segment.x1;
+			final s_dy = segment.y2 - segment.y1;
+
+			// Проверка на параллельность
+			final denominator = s_dx * r_dy - s_dy * r_dx;
+
+			// Если r_dx == 0 (вертикальный луч), особая обработка
+			if (Math.abs(r_dx) < 0.0001) {
+				if (Math.abs(s_dx) < 0.0001) {
+					// Если отрезок тоже вертикален, проверяем, пересекаются ли они по Y
+					if (Math.abs(s_px - r_px) < 0.0001) {
+						final t2 = (r_py - s_py) / s_dy;
+						if (t2 >= 0 && t2 <= 1) {
+							final intersection = new Point(r_px, s_py + s_dy * t2);
+							final dist = Math.sqrt((intersection.x - r_px) * (intersection.x - r_px) + (intersection.y - r_py) * (intersection.y - r_py));
+							if (dist < closestDistance) {
+								closestDistance = dist;
+								closestIntersection = intersection;
+							}
+						}
+					}
+				} else {
+					// Если отрезок не вертикален, ищем пересечение с вертикальной осью луча
+					final t2 = (r_px - s_px) / s_dx;
+					if (t2 >= 0 && t2 <= 1) {
+						final intersection = new Point(r_px, s_py + s_dy * t2);
+						final dist = Math.sqrt((intersection.x - r_px) * (intersection.x - r_px) + (intersection.y - r_py) * (intersection.y - r_py));
+						if (dist < closestDistance) {
+							closestDistance = dist;
+							closestIntersection = intersection;
+						}
+					}
+				}
+			} else if (Math.abs(denominator) > 0.0001) {
+				// Стандартная проверка для обычных лучей
+				final T2 = (r_dx * (s_py - r_py) + r_dy * (r_px - s_px)) / denominator;
+				final T1 = (s_px + s_dx * T2 - r_px) / r_dx;
+
+				if (T1 > 0 && T2 >= 0 && T2 <= 1) {
+					final intersection = new Point(r_px + r_dx * T1, r_py + r_dy * T1);
+					final dist = Math.sqrt((intersection.x - r_px) * (intersection.x - r_px) + (intersection.y - r_py) * (intersection.y - r_py));
+
+					if (dist < closestDistance) {
+						closestDistance = dist;
+						closestIntersection = intersection;
+					}
+				}
+			}
+		}
+
+		if (closestIntersection != null) {
+			result.push(closestIntersection);
+		} else {
+			// Если пересечений нет, добавляем точку на максимальном расстоянии
+			result.push(new Point(characterCenter.x + rayDirX * raySightLength, characterCenter.y + rayDirY * raySightLength));
+		}
+	}
+
+	public function absDestroy() {}
 }
-
-// короче схематично надо сделать вот что, по шагам, мб нам так проще будет
-// 1) понять, какие именно крайние вершины прямоугольника попадают в поле зрения, в примере это левая верхняя и правая нижняя
-// 2) сделать так, чтобы эти вершины определялись автоматически, вне зависимости от угла взора, положения в пространстве и тд

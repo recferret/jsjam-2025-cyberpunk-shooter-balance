@@ -78,7 +78,7 @@ class GameScene
     // LocalNetworking
     private var networking:AbstractNetworking;
     private var lastMousePos:h2d.col.Point;
-    private var allowToSpawnRect = false;
+    private var allowToSpawnRect = true;
 
     private final gameBorders:GameBorders;
 
@@ -235,6 +235,7 @@ class GameScene
         if (Key.isDown(Key.Z) && allowToChangeDebugMode) {
             debugMode = !debugMode;
             allowToChangeDebugMode = false;
+            gameBorders.enableDrag(debugMode);
             haxe.Timer.delay(function callback() {
                 allowToChangeDebugMode = true;
             }, 1000);
@@ -266,6 +267,7 @@ class GameScene
 
             if (Key.isDown(Key.SPACE) && allowToSpawnRect) {
                 allowToSpawnRect = false;
+                gameBorders.addRect(this, lastMousePos.x, lastMousePos.y);
                 haxe.Timer.delay(function callback() {
                     allowToSpawnRect = true;
                 }, 1000);
