@@ -2,6 +2,7 @@ import engine.base.Cooldown;
 
 import game.base.scene.AbstractScene;
 import game.impl.scene.SceneManager;
+import game.impl.scene.impl.test.FogOfWarTestScene;
 
 class ClientMain extends hxd.App {
 
@@ -11,7 +12,7 @@ class ClientMain extends hxd.App {
         engine.backgroundColor = 0xB0B0B0;
 
         sceneManager = new SceneManager(
-            FswScene.GameScene, 
+            FswScene.FogOfWar, 
             function callback(scene:AbstractScene) {
                 setScene2D(scene);
                 sevents.addScene(scene.getInputScene());

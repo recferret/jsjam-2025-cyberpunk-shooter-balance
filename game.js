@@ -210,7 +210,7 @@ ClientMain.prototype = $extend(hxd_App.prototype,{
 			_gthis.setScene2D(scene);
 			_gthis.sevents.addScene(scene.getInputScene());
 		};
-		this.sceneManager = new game_impl_scene_SceneManager(game_impl_scene_FswScene.GameScene,callback);
+		this.sceneManager = new game_impl_scene_SceneManager(game_impl_scene_FswScene.FogOfWar,callback);
 	}
 	,update: function(dt) {
 		if(this.sceneManager != null && this.sceneManager.getCurrentScene() != null) {
@@ -432,6 +432,20 @@ Reflect.deleteField = function(o,field) {
 	}
 	delete(o[field]);
 	return true;
+};
+Reflect.copy = function(o) {
+	if(o == null) {
+		return null;
+	}
+	var o2 = { };
+	var _g = 0;
+	var _g1 = Reflect.fields(o);
+	while(_g < _g1.length) {
+		var f = _g1[_g];
+		++_g;
+		o2[f] = Reflect.field(o,f);
+	}
+	return o2;
 };
 var Std = function() { };
 $hxClasses["Std"] = Std;
@@ -976,6 +990,11 @@ engine_base_MathUtils.randomFloatInRange = function(min,max,sign) {
 		return min + Math.random() * (max - min);
 	}
 };
+engine_base_MathUtils.distance = function(x1,y1,x2,y2) {
+	var dx = x2 - x1;
+	var dy = y2 - y1;
+	return Math.sqrt(dx * dx + dy * dy);
+};
 var engine_base_command_Command = function() { };
 $hxClasses["engine.base.command.Command"] = engine_base_command_Command;
 engine_base_command_Command.__name__ = "engine.base.command.Command";
@@ -1410,7 +1429,7 @@ engine_base_entity_AbstractEngineEntityManager_$engine_$impl_$entity_$factory_$c
 		}
 	}
 	,dispose: function() {
-		this.entities.h = Object.create(null);
+		this.entities.clear();
 	}
 	,castToAbsEntity: function(f) {
 		return js_Boot.__cast(f , engine_base_entity_AbstractEngineEntity);
@@ -1420,20 +1439,14 @@ engine_base_entity_AbstractEngineEntityManager_$engine_$impl_$entity_$factory_$c
 		while(_g < objects.length) {
 			var object = objects[_g];
 			++_g;
-			var this1 = this.entities;
-			var key = (js_Boot.__cast(object , engine_base_entity_AbstractEngineEntity)).getId();
-			this1.h[key] = object;
+			this.entities.set((js_Boot.__cast(object , engine_base_entity_AbstractEngineEntity)).getId(),object);
 		}
 	}
 	,assignEntityToOwnerAndActivate: function(entityMinDetails) {
-		var h = this.entities.h;
-		var value_h = h;
-		var value_keys = Object.keys(h);
-		var value_length = value_keys.length;
-		var value_current = 0;
-		while(value_current < value_length) {
-			var value = value_h[value_keys[value_current++]];
-			var entity = js_Boot.__cast(value , engine_base_entity_AbstractEngineEntity);
+		var value = this.entities.iterator();
+		while(value.hasNext()) {
+			var value1 = value.next();
+			var entity = js_Boot.__cast(value1 , engine_base_entity_AbstractEngineEntity);
 			if(entity.getEntityType() == entityMinDetails.entityType && !entity.poolAssigned) {
 				entity.aiControlled = entityMinDetails.aiControlled;
 				entity.poolAssigned = true;
@@ -1446,21 +1459,11 @@ engine_base_entity_AbstractEngineEntityManager_$engine_$impl_$entity_$factory_$c
 				}
 				if(entityMinDetails.id != null) {
 					entity.setId(entityMinDetails.id);
-					var this1 = this.entities;
-					var key = entity.getId();
-					var _this = this1;
-					if(Object.prototype.hasOwnProperty.call(_this.h,key)) {
-						delete(_this.h[key]);
-					}
-					var this2 = this.entities;
-					var key1 = entity.getId();
-					this2.h[key1] = value;
+					this.entities.remove(entity.getId());
+					this.entities.set(entity.getId(),value1);
 				}
-				this.entitiesToCreateNextTick.push(value);
-				var this3 = this.entityIdByOwnerId;
-				var key2 = entity.getOwnerId();
-				var value1 = entity.getId();
-				this3.h[key2] = value1;
+				this.entitiesToCreateNextTick.push(value1);
+				this.entityIdByOwnerId.set(entity.getOwnerId(),entity.getId());
 				break;
 			}
 		}
@@ -1483,73 +1486,58 @@ engine_base_entity_AbstractEngineEntityManager_$engine_$impl_$entity_$factory_$c
 			while(_g < _g1.length) {
 				var id = _g1[_g];
 				++_g;
-				this.castToAbsEntity(this.entities.h[id]).dispose();
-				var _this = this.entities;
-				if(Object.prototype.hasOwnProperty.call(_this.h,id)) {
-					delete(_this.h[id]);
-				}
+				this.castToAbsEntity(this.entities.get(id)).dispose();
+				this.entities.remove(id);
 			}
 			this.entitiesDeleted(this.entitiesToDeleteNextTick);
 			this.entitiesToDeleteNextTick = [];
 		}
 	}
 	,deactivateAndPrepareToDelete: function(id) {
-		var entity = this.castToAbsEntity(this.entities.h[id]);
+		var entity = this.castToAbsEntity(this.entities.get(id));
 		entity.active = false;
 		this.entitiesToDeleteNextTick.push(id);
 	}
 	,deactivateEntity: function(id) {
-		(js_Boot.__cast(this.entities.h[id] , engine_base_entity_AbstractEngineEntity)).active = false;
+		(js_Boot.__cast(this.entities.get(id) , engine_base_entity_AbstractEngineEntity)).active = false;
 	}
 	,getEntities: function() {
 		var result = [];
-		var h = this.entities.h;
-		var entity_h = h;
-		var entity_keys = Object.keys(h);
-		var entity_length = entity_keys.length;
-		var entity_current = 0;
-		while(entity_current < entity_length) {
-			var entity = entity_h[entity_keys[entity_current++]];
-			result.push(entity);
+		var entity = this.entities.iterator();
+		while(entity.hasNext()) {
+			var entity1 = entity.next();
+			result.push(entity1);
 		}
 		return result;
 	}
 	,getActiveEntities: function() {
 		var result = [];
-		var h = this.entities.h;
-		var entity_h = h;
-		var entity_keys = Object.keys(h);
-		var entity_length = entity_keys.length;
-		var entity_current = 0;
-		while(entity_current < entity_length) {
-			var entity = entity_h[entity_keys[entity_current++]];
-			var e = this.castToAbsEntity(entity);
+		var entity = this.entities.iterator();
+		while(entity.hasNext()) {
+			var entity1 = entity.next();
+			var e = this.castToAbsEntity(entity1);
 			if(e.isInitiatedAndActive()) {
-				result.push(entity);
+				result.push(entity1);
 			}
 		}
 		return result;
 	}
 	,getChangedEntities: function() {
 		var result = [];
-		var h = this.entities.h;
-		var entity_h = h;
-		var entity_keys = Object.keys(h);
-		var entity_length = entity_keys.length;
-		var entity_current = 0;
-		while(entity_current < entity_length) {
-			var entity = entity_h[entity_keys[entity_current++]];
-			if((js_Boot.__cast(entity , engine_base_entity_AbstractEngineEntity)).isChanged()) {
-				result.push(entity);
+		var entity = this.entities.iterator();
+		while(entity.hasNext()) {
+			var entity1 = entity.next();
+			if((js_Boot.__cast(entity1 , engine_base_entity_AbstractEngineEntity)).isChanged()) {
+				result.push(entity1);
 			}
 		}
 		return result;
 	}
 	,getEntityById: function(id) {
-		return this.entities.h[id];
+		return this.entities.get(id);
 	}
 	,getEntityByOwner: function(ownerId) {
-		return this.entities.h[this.entityIdByOwnerId.h[ownerId]];
+		return this.entities.get(this.entityIdByOwnerId.get(ownerId));
 	}
 	,__class__: engine_base_entity_AbstractEngineEntityManager_$engine_$impl_$entity_$factory_$character_$CharacterFactory_$engine_$impl_$entity_$base_$character_$EngineCharacterEntity
 };
@@ -7720,10 +7708,10 @@ h2d_Object.prototype = {
 		return this.rotation = v;
 	}
 	,move: function(dx,dy) {
-		var v = this.x + dx * Math.cos(this.rotation);
+		var v = this.x + (dx * Math.cos(this.rotation) - dy * Math.sin(this.rotation));
 		this.posChanged = true;
 		this.x = v;
-		var v = this.y + dy * Math.sin(this.rotation);
+		var v = this.y + (dx * Math.sin(this.rotation) + dy * Math.cos(this.rotation));
 		this.posChanged = true;
 		this.y = v;
 	}
@@ -9297,10 +9285,10 @@ h2d_Scene.prototype = $extend(h2d_Layers.prototype,{
 			var tex = new h3d_mat_Texture(this.width,this.height,[h3d_mat_TextureFlags.Target]);
 			target = new h2d_Tile(tex,0,0,this.width,this.height);
 		}
-		engine.begin();
-		engine.setRenderZone(target.x | 0,target.y | 0,Math.ceil(target.width),Math.ceil(target.height));
 		var tex = target.innerTex;
+		engine.begin();
 		engine.pushTarget(tex);
+		engine.setRenderZone(target.x | 0,target.y | 0,Math.ceil(target.width),Math.ceil(target.height));
 		var ow = this.width;
 		var oh = this.height;
 		var ova = this.viewportA;
@@ -10634,8 +10622,8 @@ var game_impl_scene_impl_test_FogOfWarTestScene = function() {
 	this.debugTextIndex = 0;
 	this.textFont = hxd_res_DefaultFont.get();
 	this.debugTexts = [];
-	this.raySightLength = 800.;
-	this.circleSightLength = 800;
+	this.raySightLength = 500.;
+	this.circleSightLength = 500;
 	this.moveSpeed = 100;
 	game_base_scene_AbstractScene.call(this);
 	this.character1 = new h2d_Bitmap(h2d_Tile.fromColor(7864183,70,120).center(),this);
@@ -10715,7 +10703,7 @@ game_impl_scene_impl_test_FogOfWarTestScene.prototype = $extend(game_base_scene_
 		var characterCenter = new engine_base_geom_Point(this.character1.x,this.character1.y);
 		this.fogOfWarGraphics.clear();
 		var allSegments = [];
-		var allSegmentPoints = [];
+		var allObstacles = [];
 		var _g = 0;
 		var _g1 = this.envs;
 		while(_g < _g1.length) {
@@ -10726,57 +10714,68 @@ game_impl_scene_impl_test_FogOfWarTestScene.prototype = $extend(game_base_scene_
 			var topRight = rect.getTopRightPoint();
 			var bottomLeft = rect.getBottomLeftPoint();
 			var bottomRight = rect.getBottomRightPoint();
+			var isInSight = false;
+			if(engine_base_MathUtils.distance(characterCenter.x,characterCenter.y,topLeft.x,topLeft.y) <= this.circleSightLength || engine_base_MathUtils.distance(characterCenter.x,characterCenter.y,topRight.x,topRight.y) <= this.circleSightLength || engine_base_MathUtils.distance(characterCenter.x,characterCenter.y,bottomLeft.x,bottomLeft.y) <= this.circleSightLength || engine_base_MathUtils.distance(characterCenter.x,characterCenter.y,bottomRight.x,bottomRight.y) <= this.circleSightLength) {
+				isInSight = true;
+			}
+			if(!isInSight) {
+				continue;
+			}
 			allSegments.push(new engine_base_geom_Line(topLeft.x,topLeft.y,topRight.x,topRight.y));
 			allSegments.push(new engine_base_geom_Line(topRight.x,topRight.y,bottomRight.x,bottomRight.y));
-			allSegments.push(new engine_base_geom_Line(bottomRight.x,bottomRight.y,bottomLeft.x,bottomLeft.y));
-			allSegments.push(new engine_base_geom_Line(bottomLeft.x,bottomLeft.y,topLeft.x,topLeft.y));
-			allSegmentPoints.push(topLeft);
-			allSegmentPoints.push(topRight);
-			allSegmentPoints.push(bottomLeft);
-			allSegmentPoints.push(bottomRight);
+			allSegments.push(new engine_base_geom_Line(bottomLeft.x,bottomLeft.y,bottomRight.x,bottomRight.y));
+			allSegments.push(new engine_base_geom_Line(topLeft.x,topLeft.y,bottomLeft.x,bottomLeft.y));
+			allObstacles.push([topLeft,topRight,bottomRight,bottomLeft]);
 		}
-		var rayCount = 360;
-		var rayEndPoints = [];
-		var _g = 0;
-		var _g1 = rayCount;
-		while(_g < _g1) {
-			var i = _g++;
-			var angle = Math.PI * 2 * i / rayCount;
-			var rayDir = new engine_base_geom_Point(Math.cos(angle),Math.sin(angle));
-			var target = new engine_base_geom_Point(characterCenter.x + rayDir.x * this.raySightLength,characterCenter.y + rayDir.y * this.raySightLength);
-			this.castRayToPoint(characterCenter,target,allSegments,rayEndPoints);
+		if(allObstacles.length == 0) {
+			return;
 		}
-		var delta = 0.0001;
 		var _g = 0;
-		while(_g < allSegmentPoints.length) {
-			var point = allSegmentPoints[_g];
+		while(_g < allObstacles.length) {
+			var obstacle = allObstacles[_g];
 			++_g;
-			var baseAngle = Math.atan2(point.y - characterCenter.y,point.x - characterCenter.x);
-			var angles = [baseAngle - delta,baseAngle,baseAngle + delta];
+			var rayEndPoints = [];
+			var epsilon = 0.00001;
 			var _g1 = 0;
-			while(_g1 < angles.length) {
-				var a = angles[_g1];
+			while(_g1 < obstacle.length) {
+				var point = obstacle[_g1];
 				++_g1;
-				var targetX = characterCenter.x + Math.cos(a) * this.raySightLength;
-				var targetY = characterCenter.y + Math.sin(a) * this.raySightLength;
-				this.castRayToPoint(characterCenter,new engine_base_geom_Point(targetX,targetY),allSegments,rayEndPoints);
+				this.castRayToPoint(characterCenter,point,allSegments,rayEndPoints);
+				var angle = Math.atan2(point.y - characterCenter.y,point.x - characterCenter.x);
+				var leftAngle = angle - epsilon;
+				var leftPoint = new engine_base_geom_Point(characterCenter.x + Math.cos(leftAngle) * this.raySightLength,characterCenter.y + Math.sin(leftAngle) * this.raySightLength);
+				this.castRayToPoint(characterCenter,leftPoint,allSegments,rayEndPoints);
+				var rightAngle = angle + epsilon;
+				var rightPoint = new engine_base_geom_Point(characterCenter.x + Math.cos(rightAngle) * this.raySightLength,characterCenter.y + Math.sin(rightAngle) * this.raySightLength);
+				this.castRayToPoint(characterCenter,rightPoint,allSegments,rayEndPoints);
+			}
+			rayEndPoints.sort(function(a,b) {
+				var angleA = Math.atan2(a.y - characterCenter.y,a.x - characterCenter.x);
+				var angleB = Math.atan2(b.y - characterCenter.y,b.x - characterCenter.x);
+				if(angleA < angleB) {
+					return -1;
+				} else {
+					return 1;
+				}
+			});
+			if(rayEndPoints.length > 0) {
+				var vertices = [];
+				vertices.push(characterCenter);
+				vertices = vertices.concat(rayEndPoints);
+				vertices.push(rayEndPoints[0]);
+				game_base_graphics_GraphicsUtils.DrawPolygon(this.fogOfWarGraphics,game_impl_Colors.BlackColor,vertices);
 			}
 		}
-		rayEndPoints.sort(function(p1,p2) {
-			var angle1 = Math.atan2(p1.y - characterCenter.y,p1.x - characterCenter.x);
-			var angle2 = Math.atan2(p2.y - characterCenter.y,p2.x - characterCenter.x);
-			if(angle1 > angle2) {
-				return 1;
-			} else if(angle1 < angle2) {
-				return -1;
-			} else {
-				return 0;
-			}
-		});
-		if(rayEndPoints.length > 0) {
-			var vertices = [characterCenter].concat(rayEndPoints);
-			vertices.push(rayEndPoints[0]);
-			game_base_graphics_GraphicsUtils.DrawPolygon(this.fogOfWarGraphics,game_impl_Colors.BlackColor,vertices);
+		var _g = 0;
+		var _g1 = this.envs;
+		while(_g < _g1.length) {
+			var env = _g1[_g];
+			++_g;
+			var rect = env.rectangle;
+			var topLeft = rect.getTopLeftPoint();
+			var topRight = rect.getTopRightPoint();
+			var bottomLeft = rect.getBottomLeftPoint();
+			var bottomRight = rect.getBottomRightPoint();
 		}
 	}
 	,addUniquePoint: function(points,newPoint) {
@@ -10811,40 +10810,17 @@ game_impl_scene_impl_test_FogOfWarTestScene.prototype = $extend(game_base_scene_
 			var s_dx = segment.x2 - segment.x1;
 			var s_dy = segment.y2 - segment.y1;
 			var denominator = s_dx * r_dy - s_dy * r_dx;
-			if(Math.abs(r_dx) < 0.0001) {
-				if(Math.abs(s_dx) < 0.0001) {
-					if(Math.abs(s_px - r_px) < 0.0001) {
-						var t2 = (r_py - s_py) / s_dy;
-						if(t2 >= 0 && t2 <= 1) {
-							var intersection = new engine_base_geom_Point(r_px,s_py + s_dy * t2);
-							var dist = Math.sqrt((intersection.x - r_px) * (intersection.x - r_px) + (intersection.y - r_py) * (intersection.y - r_py));
-							if(dist < closestDistance) {
-								closestDistance = dist;
-								closestIntersection = intersection;
-							}
-						}
-					}
-				} else {
-					var t21 = (r_px - s_px) / s_dx;
-					if(t21 >= 0 && t21 <= 1) {
-						var intersection1 = new engine_base_geom_Point(r_px,s_py + s_dy * t21);
-						var dist1 = Math.sqrt((intersection1.x - r_px) * (intersection1.x - r_px) + (intersection1.y - r_py) * (intersection1.y - r_py));
-						if(dist1 < closestDistance) {
-							closestDistance = dist1;
-							closestIntersection = intersection1;
-						}
-					}
-				}
-			} else if(Math.abs(denominator) > 0.0001) {
-				var T2 = (r_dx * (s_py - r_py) + r_dy * (r_px - s_px)) / denominator;
-				var T1 = (s_px + s_dx * T2 - r_px) / r_dx;
-				if(T1 > 0 && T2 >= 0 && T2 <= 1) {
-					var intersection2 = new engine_base_geom_Point(r_px + r_dx * T1,r_py + r_dy * T1);
-					var dist2 = Math.sqrt((intersection2.x - r_px) * (intersection2.x - r_px) + (intersection2.y - r_py) * (intersection2.y - r_py));
-					if(dist2 < closestDistance) {
-						closestDistance = dist2;
-						closestIntersection = intersection2;
-					}
+			if(Math.abs(denominator) < 0.0001) {
+				continue;
+			}
+			var T2 = (r_dx * (s_py - r_py) + r_dy * (r_px - s_px)) / denominator;
+			var T1 = (s_px + s_dx * T2 - r_px) / r_dx;
+			if(T1 > 0 && T2 >= 0 && T2 <= 1) {
+				var intersection = new engine_base_geom_Point(r_px + r_dx * T1,r_py + r_dy * T1);
+				var dist = Math.sqrt((intersection.x - r_px) * (intersection.x - r_px) + (intersection.y - r_py) * (intersection.y - r_py));
+				if(dist < closestDistance) {
+					closestDistance = dist;
+					closestIntersection = intersection;
 				}
 			}
 		}
@@ -10855,6 +10831,18 @@ game_impl_scene_impl_test_FogOfWarTestScene.prototype = $extend(game_base_scene_
 		}
 	}
 	,absDestroy: function() {
+	}
+	,printDebugText: function(x,y,msg) {
+		if(this.debugTextIndex >= this.debugTexts.length) {
+			return;
+		}
+		var t = this.debugTexts[this.debugTextIndex++];
+		t.set_text(msg);
+		t.posChanged = true;
+		t.x = x;
+		t.posChanged = true;
+		t.y = y;
+		t.set_visible(true);
 	}
 	,__class__: game_impl_scene_impl_test_FogOfWarTestScene
 });
@@ -11643,7 +11631,6 @@ var h2d_FlowOverflow = $hxEnums["h2d.FlowOverflow"] = { __ename__:true,__constru
 h2d_FlowOverflow.__constructs__ = [h2d_FlowOverflow.Expand,h2d_FlowOverflow.Limit,h2d_FlowOverflow.Hidden,h2d_FlowOverflow.Scroll];
 h2d_FlowOverflow.__empty_constructs__ = [h2d_FlowOverflow.Expand,h2d_FlowOverflow.Limit,h2d_FlowOverflow.Hidden,h2d_FlowOverflow.Scroll];
 var h2d_FlowProperties = function(elt) {
-	this.constraint = true;
 	this.lineBreak = false;
 	this.calculatedHeight = 0;
 	this.calculatedWidth = 0;
@@ -11794,8 +11781,9 @@ h2d_Flow.prototype = $extend(h2d_Object.prototype,{
 		if(v == h2d_FlowOverflow.Scroll) {
 			this.set_enableInteractive(true);
 			if(this.scrollBar == null) {
-				this.scrollBar = this.makeScrollBar();
-				this.addChild(this.scrollBar);
+				var s = this.makeScrollBar();
+				this.addChild(s);
+				this.scrollBar = s;
 				this.scrollBar.set_verticalAlign(h2d_FlowAlign.Top);
 				this.scrollBar.set_enableInteractive(true);
 				var setCursor = function(e) {
@@ -11803,7 +11791,7 @@ h2d_Flow.prototype = $extend(h2d_Object.prototype,{
 					if(cursorY < 0) {
 						cursorY = 0;
 					}
-					_gthis.set_scrollPosY(cursorY / (_gthis.scrollBar.minHeight - _gthis.scrollBarCursor.minHeight) * (_gthis.contentHeight - _gthis.calculatedHeight));
+					_gthis.set_scrollPosY(cursorY / (_gthis.scrollBar.minHeight - _gthis.scrollBarCursor.minHeight) * (_gthis.contentHeight - _gthis.get_scrollInnerHeight()));
 				};
 				var pushed = false;
 				this.scrollBar.interactive.set_cursor(hxd_Cursor.Button);
@@ -11926,7 +11914,7 @@ h2d_Flow.prototype = $extend(h2d_Object.prototype,{
 		}
 		var prev = this.needReflow;
 		var p = this.scrollBar.getProperties(this.scrollBarCursor);
-		p.paddingTop = this.scrollPosY * (this.calculatedHeight - this.scrollBarCursor.minHeight) / (this.contentHeight - this.calculatedHeight) | 0;
+		p.paddingTop = this.scrollPosY * (this.get_scrollInnerHeight() - this.scrollBarCursor.minHeight) / (this.contentHeight - this.calculatedHeight) | 0;
 		this.set_needReflow(prev);
 	}
 	,set_paddingHorizontal: function(v) {
@@ -11961,6 +11949,9 @@ h2d_Flow.prototype = $extend(h2d_Object.prototype,{
 		if(this.needReflow) {
 			this.reflow();
 		}
+		return Math.ceil(this.calculatedHeight - 1e-10) - (this.paddingTop + this.paddingBottom);
+	}
+	,get_scrollInnerHeight: function() {
 		return Math.ceil(this.calculatedHeight - 1e-10) - (this.paddingTop + this.paddingBottom);
 	}
 	,set_paddingLeft: function(v) {
@@ -12371,6 +12362,145 @@ h2d_Flow.prototype = $extend(h2d_Object.prototype,{
 		}
 		return this.borderBottom = v;
 	}
+	,propAt: function(i) {
+		return this.properties[this.reverse ? this.children.length - i - 1 : i];
+	}
+	,onBorderLR: function(p,dir) {
+		var tmp = this.horizontalAlign;
+		var halign = tmp != null ? tmp : h2d_FlowAlign.Left;
+		var tmp = p.horizontalAlign;
+		var align = tmp != null ? tmp : halign;
+		var ok = true;
+		if(align == h2d_FlowAlign.Middle) {
+			var _g = 0;
+			var _g1 = this.properties;
+			while(_g < _g1.length) {
+				var p2 = _g1[_g];
+				++_g;
+				var tmp;
+				if(!p2.isAbsolute && p != p2) {
+					var tmp1 = p2.horizontalAlign;
+					tmp = (tmp1 != null ? tmp1 : halign) == dir;
+				} else {
+					tmp = false;
+				}
+				if(tmp) {
+					ok = false;
+					break;
+				}
+			}
+		} else if(align != dir) {
+			var _g = 0;
+			var _g1 = this.properties;
+			while(_g < _g1.length) {
+				var p2 = _g1[_g];
+				++_g;
+				var tmp;
+				if(!p2.isAbsolute && p != p2) {
+					var tmp1 = p2.horizontalAlign;
+					tmp = (tmp1 != null ? tmp1 : halign) != align;
+				} else {
+					tmp = false;
+				}
+				if(tmp) {
+					ok = false;
+					break;
+				}
+			}
+		}
+		if(!ok) {
+			return false;
+		}
+		var isLeft = dir == h2d_FlowAlign.Left;
+		var _g = 0;
+		var _g1 = this.children.length;
+		while(_g < _g1) {
+			var i = _g++;
+			var i1 = isLeft ? i : this.children.length - 1 - i;
+			var p2 = this.properties[this.reverse ? this.children.length - i1 - 1 : i1];
+			if(p2 == p) {
+				break;
+			}
+			if(p2.isAbsolute) {
+				continue;
+			}
+			var tmp = p2.horizontalAlign;
+			var al = tmp != null ? tmp : halign;
+			if(al == align) {
+				ok = false;
+				break;
+			}
+		}
+		return ok;
+	}
+	,onBorderTB: function(p,dir) {
+		var tmp = this.verticalAlign;
+		var valign = tmp != null ? tmp : h2d_FlowAlign.Bottom;
+		var tmp = p.verticalAlign;
+		var align = tmp != null ? tmp : valign;
+		var ok = true;
+		if(align == h2d_FlowAlign.Middle) {
+			var _g = 0;
+			var _g1 = this.properties;
+			while(_g < _g1.length) {
+				var p2 = _g1[_g];
+				++_g;
+				var tmp;
+				if(!p2.isAbsolute && p != p2) {
+					var tmp1 = p2.verticalAlign;
+					tmp = (tmp1 != null ? tmp1 : valign) == dir;
+				} else {
+					tmp = false;
+				}
+				if(tmp) {
+					ok = false;
+					break;
+				}
+			}
+		} else if(align != dir) {
+			var _g = 0;
+			var _g1 = this.properties;
+			while(_g < _g1.length) {
+				var p2 = _g1[_g];
+				++_g;
+				var tmp;
+				if(!p2.isAbsolute && p != p2) {
+					var tmp1 = p2.verticalAlign;
+					tmp = (tmp1 != null ? tmp1 : valign) != align;
+				} else {
+					tmp = false;
+				}
+				if(tmp) {
+					ok = false;
+					break;
+				}
+			}
+		}
+		if(!ok) {
+			return false;
+		}
+		var isTop = dir == h2d_FlowAlign.Top;
+		var _g = 0;
+		var _g1 = this.children.length;
+		while(_g < _g1) {
+			var i = _g++;
+			var i1 = isTop ? i : this.children.length - 1 - i;
+			var p2 = this.properties[this.reverse ? this.children.length - i1 - 1 : i1];
+			if(p2 == p) {
+				break;
+			}
+			if(p2.isAbsolute) {
+				continue;
+			}
+			var tmp = p2.verticalAlign;
+			var al = tmp != null ? tmp : valign;
+			if(al == align) {
+				ok = false;
+				break;
+			}
+		}
+		return ok;
+	}
 	,reflow: function() {
 		var _gthis = this;
 		this.onBeforeReflow();
@@ -12402,43 +12532,79 @@ h2d_Flow.prototype = $extend(h2d_Object.prototype,{
 		if(this.debug) {
 			this.debugGraphics.clear();
 		}
-		var cw;
-		var ch;
+		var cw = 0;
+		var ch = 0;
+		var v = this.paddingLeft;
+		var paddingLeft = v == h2d_Flow.PADDING_IGNORE_PARENT ? 0 : v;
+		var v = this.paddingRight;
+		var paddingRight = v == h2d_Flow.PADDING_IGNORE_PARENT ? 0 : v;
+		var v = this.paddingTop;
+		var paddingTop = v == h2d_Flow.PADDING_IGNORE_PARENT ? 0 : v;
+		var v = this.paddingBottom;
+		var paddingBottom = v == h2d_Flow.PADDING_IGNORE_PARENT ? 0 : v;
 		switch(this.layout._hx_index) {
 		case 0:
 			var halign = this.horizontalAlign == null ? h2d_FlowAlign.Left : this.horizontalAlign;
 			var valign = this.verticalAlign == null ? h2d_FlowAlign.Bottom : this.verticalAlign;
-			var startX = this.paddingLeft + borderLeft;
+			var startX = paddingLeft + borderLeft;
 			var x = startX;
-			var y = this.paddingTop + borderTop;
+			var y = paddingTop + borderTop;
 			cw = x;
 			var maxLineHeight = 0;
-			var minLineHeight = this.lineHeight != null ? this.lineHeight : this.realMinHeight >= 0 && !this.multiline ? this.realMinHeight - (this.paddingTop + this.paddingBottom + borderTop + borderBottom) : 0;
+			var minLineHeight = this.lineHeight != null ? this.lineHeight : this.realMinHeight >= 0 && !this.multiline ? this.realMinHeight - (paddingTop + paddingBottom + borderTop + borderBottom) : 0;
 			var lastIndex = 0;
 			var autoWidth = maxInWidth;
 			var autoSum = 0.0;
-			var count = 0;
+			var first = true;
 			var _g = 0;
 			var _g1 = _gthis.children.length;
 			while(_g < _g1) {
 				var i = _g++;
 				var p = _gthis.properties[_gthis.reverse ? _gthis.children.length - i - 1 : i];
-				if(p.isAbsolute && p.horizontalAlign == null && p.verticalAlign == null) {
+				if(p.isAbsolute != false) {
 					continue;
 				}
 				var c = _gthis.children[_gthis.reverse ? _gthis.children.length - i - 1 : i];
 				if(!c.visible) {
 					continue;
 				}
-				if(count > 0 && !p.isAbsolute) {
+				if(first) {
+					first = false;
+				} else {
 					autoWidth -= _gthis.horizontalSpacing;
 				}
-				if(p.autoSizeWidth == null) {
-					var pw = p.paddingLeft + p.paddingRight;
-					var ph = p.paddingTop + p.paddingBottom;
-					if(!p.isAbsolute) {
-						c.constraintSize(isConstraintWidth && p.constraint ? ((p.autoSizeWidth != null ? Math.floor(autoWidth * p.autoSizeWidth / autoSum + 1e-10) : maxInWidth) - pw) / Math.abs(c.scaleX) : -1,isConstraintHeight && p.constraint ? ((p.autoSizeHeight != null ? (maxLineHeight < minLineHeight ? minLineHeight : maxLineHeight) * p.autoSizeHeight : maxInHeight) - ph) / Math.abs(c.scaleY) : -1);
+				if(p.autoSizeWidth != null) {
+					autoSum += p.autoSizeWidth;
+				} else {
+					var v = p.paddingTop;
+					var v1 = p.paddingBottom;
+					var ph = (v == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingTop : v) + (v1 == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingBottom : v1);
+					var pw;
+					pw = 0;
+					if(p.paddingLeft != h2d_Flow.PADDING_IGNORE_PARENT) {
+						pw += p.paddingLeft;
+					} else if(_gthis.onBorderLR(p,h2d_FlowAlign.Left)) {
+						pw -= paddingLeft;
 					}
+					p.calcPadding = pw;
+					if(p.paddingRight != h2d_Flow.PADDING_IGNORE_PARENT) {
+						pw += p.paddingRight;
+					} else if(_gthis.onBorderLR(p,h2d_FlowAlign.Right)) {
+						pw -= paddingRight;
+					}
+					var ccw = -1.;
+					var cch = -1.;
+					if(p.autoSizeWidth != null && isConstraintWidth) {
+						ccw = (Math.floor((p.isAbsolute ? cw * p.autoSizeWidth : autoWidth * p.autoSizeWidth / autoSum) + 1e-10) - pw) / Math.abs(c.scaleX);
+					} else if(isConstraintWidth && !p.isAbsolute) {
+						ccw = (maxInWidth - pw) / Math.abs(c.scaleX);
+					}
+					if(p.autoSizeHeight != null && isConstraintHeight) {
+						cch = ((p.isAbsolute ? ch * p.autoSizeHeight : (maxLineHeight < minLineHeight ? minLineHeight : maxLineHeight) * p.autoSizeHeight) - ph) / Math.abs(c.scaleY);
+					} else if(isConstraintHeight) {
+						cch = (maxInHeight - ph) / Math.abs(c.scaleY);
+					}
+					c.constraintSize(ccw,cch);
 					var b = tmpBounds;
 					b.xMin = 1e20;
 					b.yMin = 1e20;
@@ -12475,35 +12641,54 @@ h2d_Flow.prototype = $extend(h2d_Object.prototype,{
 					if(p.minHeight != null && p.calculatedHeight < p.minHeight) {
 						p.calculatedHeight = p.minHeight;
 					}
-					if(!p.isAbsolute) {
-						if(p.calculatedHeight > maxLineHeight) {
-							maxLineHeight = p.calculatedHeight;
-						}
-						autoWidth -= p.calculatedWidth;
+					if(p.calculatedHeight > maxLineHeight) {
+						maxLineHeight = p.calculatedHeight;
 					}
-				} else {
-					autoSum += p.autoSizeWidth;
+					autoWidth -= p.calculatedWidth;
 				}
-				++count;
 			}
 			var _g = 0;
 			var _g1 = _gthis.children.length;
 			while(_g < _g1) {
 				var i = _g++;
 				var p = _gthis.properties[_gthis.reverse ? _gthis.children.length - i - 1 : i];
-				if(p.isAbsolute && p.horizontalAlign == null && p.verticalAlign == null) {
+				if(p.isAbsolute != false) {
 					continue;
 				}
 				var c = _gthis.children[_gthis.reverse ? _gthis.children.length - i - 1 : i];
 				if(!c.visible) {
 					continue;
 				}
-				if(p.autoSizeWidth != null || p.autoSizeHeight != null) {
-					var pw = p.paddingLeft + p.paddingRight;
-					var ph = p.paddingTop + p.paddingBottom;
-					if(!p.isAbsolute) {
-						c.constraintSize(isConstraintWidth && p.constraint ? ((p.autoSizeWidth != null ? Math.floor(autoWidth * p.autoSizeWidth / autoSum + 1e-10) : maxInWidth) - pw) / Math.abs(c.scaleX) : -1,isConstraintHeight && p.constraint ? ((p.autoSizeHeight != null ? (maxLineHeight < minLineHeight ? minLineHeight : maxLineHeight) * p.autoSizeHeight : maxInHeight) - ph) / Math.abs(c.scaleY) : -1);
+				if(p.autoSizeWidth != null) {
+					var v = p.paddingTop;
+					var v1 = p.paddingBottom;
+					var ph = (v == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingTop : v) + (v1 == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingBottom : v1);
+					var pw;
+					pw = 0;
+					if(p.paddingLeft != h2d_Flow.PADDING_IGNORE_PARENT) {
+						pw += p.paddingLeft;
+					} else if(_gthis.onBorderLR(p,h2d_FlowAlign.Left)) {
+						pw -= paddingLeft;
 					}
+					p.calcPadding = pw;
+					if(p.paddingRight != h2d_Flow.PADDING_IGNORE_PARENT) {
+						pw += p.paddingRight;
+					} else if(_gthis.onBorderLR(p,h2d_FlowAlign.Right)) {
+						pw -= paddingRight;
+					}
+					var ccw = -1.;
+					var cch = -1.;
+					if(p.autoSizeWidth != null && isConstraintWidth) {
+						ccw = (Math.floor((p.isAbsolute ? cw * p.autoSizeWidth : autoWidth * p.autoSizeWidth / autoSum) + 1e-10) - pw) / Math.abs(c.scaleX);
+					} else if(isConstraintWidth && !p.isAbsolute) {
+						ccw = (maxInWidth - pw) / Math.abs(c.scaleX);
+					}
+					if(p.autoSizeHeight != null && isConstraintHeight) {
+						cch = ((p.isAbsolute ? ch * p.autoSizeHeight : (maxLineHeight < minLineHeight ? minLineHeight : maxLineHeight) * p.autoSizeHeight) - ph) / Math.abs(c.scaleY);
+					} else if(isConstraintHeight) {
+						cch = (maxInHeight - ph) / Math.abs(c.scaleY);
+					}
+					c.constraintSize(ccw,cch);
 					var b = tmpBounds;
 					b.xMin = 1e20;
 					b.yMin = 1e20;
@@ -12541,60 +12726,60 @@ h2d_Flow.prototype = $extend(h2d_Object.prototype,{
 						p.calculatedHeight = p.minHeight;
 					}
 				}
-				if(!p.isAbsolute) {
-					var br = false;
-					if((_gthis.multiline && x - startX + p.calculatedWidth > maxInWidth || p.lineBreak) && x - startX > 0) {
-						br = true;
-						if(maxLineHeight < minLineHeight) {
-							maxLineHeight = minLineHeight;
-						} else if(_gthis.overflow != h2d_FlowOverflow.Expand && minLineHeight != 0) {
-							maxLineHeight = minLineHeight;
+				var br = false;
+				if((_gthis.multiline && x - startX + p.calculatedWidth > maxInWidth || p.lineBreak) && x - startX > 0) {
+					br = true;
+					if(maxLineHeight < minLineHeight) {
+						maxLineHeight = minLineHeight;
+					} else if(_gthis.overflow != h2d_FlowOverflow.Expand && minLineHeight != 0) {
+						maxLineHeight = minLineHeight;
+					}
+					var height = maxLineHeight;
+					var _g2 = lastIndex;
+					var _g3 = i;
+					while(_g2 < _g3) {
+						var i1 = _g2++;
+						var p1 = _gthis.properties[_gthis.reverse ? _gthis.children.length - i1 - 1 : i1];
+						if(p1.isAbsolute != false) {
+							continue;
 						}
-						var absHeight = maxLineHeight > maxInHeight && _gthis.overflow != h2d_FlowOverflow.Expand ? maxInHeight : maxLineHeight;
-						var _g2 = lastIndex;
-						var _g3 = i;
-						while(_g2 < _g3) {
-							var i1 = _g2++;
-							var p1 = _gthis.properties[_gthis.reverse ? _gthis.children.length - i1 - 1 : i1];
-							if(p1.isAbsolute && p1.verticalAlign == null) {
-								continue;
-							}
-							var c1 = _gthis.children[_gthis.reverse ? _gthis.children.length - i1 - 1 : i1];
-							if(!c1.visible) {
-								continue;
-							}
-							var a = p1.verticalAlign != null ? p1.verticalAlign : valign;
-							c1.posChanged = true;
-							c1.y = y + p1.offsetY + p1.paddingTop;
-							var height = p1.isAbsolute ? absHeight : maxLineHeight;
-							if(a != null) {
-								switch(a._hx_index) {
-								case 3:
-									c1.posChanged = true;
-									c1.y += (height - p1.calculatedHeight) * 0.5 | 0;
-									break;
-								case 4:
-									c1.posChanged = true;
-									c1.y += height - (p1.calculatedHeight | 0);
-									break;
-								default:
-								}
+						var c1 = _gthis.children[_gthis.reverse ? _gthis.children.length - i1 - 1 : i1];
+						if(!c1.visible) {
+							continue;
+						}
+						var a = p1.verticalAlign != null ? p1.verticalAlign : valign;
+						var v2 = p1.paddingTop;
+						c1.posChanged = true;
+						c1.y = y + p1.offsetY + (v2 == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingTop : v2);
+						if(a != null) {
+							switch(a._hx_index) {
+							case 3:
+								c1.posChanged = true;
+								c1.y += (height - p1.calculatedHeight) * 0.5 | 0;
+								break;
+							case 4:
+								c1.posChanged = true;
+								c1.y += height - (p1.calculatedHeight | 0);
+								break;
+							default:
 							}
 						}
-						lastIndex = i;
-						y += maxLineHeight + _gthis.verticalSpacing;
-						maxLineHeight = 0;
-						x = startX;
 					}
-					p.isBreak = br;
-					x += p.calculatedWidth;
-					if(x > cw) {
-						cw = x;
-					}
-					x += _gthis.horizontalSpacing;
-					if(p.calculatedHeight > maxLineHeight) {
-						maxLineHeight = p.calculatedHeight;
-					}
+					lastIndex = i;
+					y += maxLineHeight + _gthis.verticalSpacing;
+					maxLineHeight = 0;
+					x = startX;
+				}
+				p.isBreak = br;
+				c.posChanged = true;
+				c.x = x + p.offsetY + p.calcPadding;
+				x += p.calculatedWidth;
+				if(x > cw) {
+					cw = x;
+				}
+				x += _gthis.horizontalSpacing;
+				if(p.calculatedHeight > maxLineHeight) {
+					maxLineHeight = p.calculatedHeight;
 				}
 			}
 			var maxIndex = this.children.length;
@@ -12603,13 +12788,13 @@ h2d_Flow.prototype = $extend(h2d_Object.prototype,{
 			} else if(_gthis.overflow != h2d_FlowOverflow.Expand && minLineHeight != 0) {
 				maxLineHeight = minLineHeight;
 			}
-			var absHeight = maxLineHeight > maxInHeight && _gthis.overflow != h2d_FlowOverflow.Expand ? maxInHeight : maxLineHeight;
+			var height = maxLineHeight;
 			var _g = lastIndex;
 			var _g1 = maxIndex;
 			while(_g < _g1) {
 				var i = _g++;
 				var p = _gthis.properties[_gthis.reverse ? _gthis.children.length - i - 1 : i];
-				if(p.isAbsolute && p.verticalAlign == null) {
+				if(p.isAbsolute != false) {
 					continue;
 				}
 				var c = _gthis.children[_gthis.reverse ? _gthis.children.length - i - 1 : i];
@@ -12617,9 +12802,9 @@ h2d_Flow.prototype = $extend(h2d_Object.prototype,{
 					continue;
 				}
 				var a = p.verticalAlign != null ? p.verticalAlign : valign;
+				var v = p.paddingTop;
 				c.posChanged = true;
-				c.y = y + p.offsetY + p.paddingTop;
-				var height = p.isAbsolute ? absHeight : maxLineHeight;
+				c.y = y + p.offsetY + (v == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingTop : v);
 				if(a != null) {
 					switch(a._hx_index) {
 					case 3:
@@ -12635,12 +12820,160 @@ h2d_Flow.prototype = $extend(h2d_Object.prototype,{
 				}
 			}
 			lastIndex = maxIndex;
-			cw += this.paddingRight + borderRight;
-			ch = y + maxLineHeight + this.paddingBottom + borderBottom;
-			if(this.realMinWidth >= 0 && cw < this.realMinWidth) {
-				cw = this.realMinWidth;
+			cw += paddingRight + borderRight;
+			ch = y + maxLineHeight + paddingBottom + borderBottom;
+			if(_gthis.realMinWidth >= 0 && cw < _gthis.realMinWidth) {
+				cw = _gthis.realMinWidth;
 			}
-			var endX = cw - (this.paddingRight + borderRight);
+			if(_gthis.realMinHeight >= 0 && ch < _gthis.realMinHeight) {
+				ch = _gthis.realMinHeight;
+			}
+			var absolute = true;
+			if(absolute == null) {
+				absolute = false;
+			}
+			var _g = 0;
+			var _g1 = _gthis.children.length;
+			while(_g < _g1) {
+				var i = _g++;
+				var p = _gthis.properties[_gthis.reverse ? _gthis.children.length - i - 1 : i];
+				if(p.isAbsolute != absolute) {
+					continue;
+				}
+				var c = _gthis.children[_gthis.reverse ? _gthis.children.length - i - 1 : i];
+				if(!c.visible) {
+					continue;
+				}
+				if(p.autoSizeWidth != null || p.autoSizeHeight != null || p.horizontalAlign != null || p.verticalAlign != null) {
+					var isAbsolute = true;
+					if(isAbsolute == null) {
+						isAbsolute = false;
+					}
+					var v = p.paddingTop;
+					var v1 = p.paddingBottom;
+					var ph = (v == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingTop : v) + (v1 == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingBottom : v1);
+					var pw;
+					if(isAbsolute) {
+						var v2 = p.paddingLeft;
+						var v3 = p.paddingRight;
+						pw = (v2 == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingLeft : v2) + (v3 == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingRight : v3);
+					} else {
+						pw = 0;
+						if(p.paddingLeft != h2d_Flow.PADDING_IGNORE_PARENT) {
+							pw += p.paddingLeft;
+						} else if(_gthis.onBorderLR(p,h2d_FlowAlign.Left)) {
+							pw -= paddingLeft;
+						}
+						p.calcPadding = pw;
+						if(p.paddingRight != h2d_Flow.PADDING_IGNORE_PARENT) {
+							pw += p.paddingRight;
+						} else if(_gthis.onBorderLR(p,h2d_FlowAlign.Right)) {
+							pw -= paddingRight;
+						}
+					}
+					var ccw = -1.;
+					var cch = -1.;
+					if(p.autoSizeWidth != null && (isConstraintWidth || isAbsolute)) {
+						ccw = (Math.floor((p.isAbsolute ? cw * p.autoSizeWidth : autoWidth * p.autoSizeWidth / autoSum) + 1e-10) - pw) / Math.abs(c.scaleX);
+					} else if(isConstraintWidth && !p.isAbsolute) {
+						ccw = (maxInWidth - pw) / Math.abs(c.scaleX);
+					}
+					if(p.autoSizeHeight != null && (isConstraintHeight || isAbsolute)) {
+						cch = ((p.isAbsolute ? ch * p.autoSizeHeight : (maxLineHeight < minLineHeight ? minLineHeight : maxLineHeight) * p.autoSizeHeight) - ph) / Math.abs(c.scaleY);
+					} else if(isConstraintHeight && !isAbsolute) {
+						cch = (maxInHeight - ph) / Math.abs(c.scaleY);
+					}
+					c.constraintSize(ccw,cch);
+					var b = tmpBounds;
+					b.xMin = 1e20;
+					b.yMin = 1e20;
+					b.xMax = -1e20;
+					b.yMax = -1e20;
+					c.getBoundsRec(_gthis,b,true);
+					if(b.xMax <= b.xMin || b.yMax <= b.yMin) {
+						if(0 < b.xMin) {
+							b.xMin = 0;
+						}
+						if(0 > b.xMax) {
+							b.xMax = 0;
+						}
+						if(0 < b.yMin) {
+							b.yMin = 0;
+						}
+						if(0 > b.yMax) {
+							b.yMax = 0;
+						}
+					} else {
+						var dx = -c.x;
+						var dy = -c.y;
+						b.xMin += dx;
+						b.xMax += dx;
+						b.yMin += dy;
+						b.yMax += dy;
+					}
+					var b1 = b;
+					p.calculatedWidth = Math.ceil(b1.xMax - 1e-10) + pw;
+					p.calculatedHeight = Math.ceil(b1.yMax - 1e-10) + ph;
+					if(p.minWidth != null && p.calculatedWidth < p.minWidth) {
+						p.calculatedWidth = p.minWidth;
+					}
+					if(p.minHeight != null && p.calculatedHeight < p.minHeight) {
+						p.calculatedHeight = p.minHeight;
+					}
+				}
+			}
+			lastIndex = 0;
+			maxLineHeight = ch - (paddingTop + borderTop + paddingBottom + borderBottom);
+			y = paddingTop + borderTop;
+			if(maxLineHeight > maxInHeight && this.overflow != h2d_FlowOverflow.Expand) {
+				maxLineHeight = maxInHeight;
+			}
+			var maxIndex = this.children.length;
+			var absolute = true;
+			if(absolute == null) {
+				absolute = false;
+			}
+			if(maxLineHeight < minLineHeight) {
+				maxLineHeight = minLineHeight;
+			} else if(_gthis.overflow != h2d_FlowOverflow.Expand && minLineHeight != 0) {
+				maxLineHeight = minLineHeight;
+			}
+			var height = maxLineHeight;
+			var _g = lastIndex;
+			var _g1 = maxIndex;
+			while(_g < _g1) {
+				var i = _g++;
+				var p = _gthis.properties[_gthis.reverse ? _gthis.children.length - i - 1 : i];
+				if(p.isAbsolute != absolute) {
+					continue;
+				}
+				if(absolute && p.verticalAlign == null) {
+					continue;
+				}
+				var c = _gthis.children[_gthis.reverse ? _gthis.children.length - i - 1 : i];
+				if(!c.visible) {
+					continue;
+				}
+				var a = p.verticalAlign != null ? p.verticalAlign : valign;
+				var v = p.paddingTop;
+				c.posChanged = true;
+				c.y = y + p.offsetY + (v == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingTop : v);
+				if(a != null) {
+					switch(a._hx_index) {
+					case 3:
+						c.posChanged = true;
+						c.y += (height - p.calculatedHeight) * 0.5 | 0;
+						break;
+					case 4:
+						c.posChanged = true;
+						c.y += height - (p.calculatedHeight | 0);
+						break;
+					default:
+					}
+				}
+			}
+			lastIndex = maxIndex;
+			var endX = cw - (paddingRight + borderRight);
 			var xmin = startX;
 			var xmax = endX;
 			var midSpace = 0;
@@ -12649,26 +12982,28 @@ h2d_Flow.prototype = $extend(h2d_Object.prototype,{
 			var _g1 = this.children.length;
 			while(_g < _g1) {
 				var i = _g++;
-				var p = _gthis.properties[_gthis.reverse ? _gthis.children.length - i - 1 : i];
+				var p = this.properties[this.reverse ? this.children.length - i - 1 : i];
 				var c = _gthis.children[_gthis.reverse ? _gthis.children.length - i - 1 : i];
 				if(!c.visible) {
 					continue;
 				}
 				if(p.isAbsolute) {
+					var v = p.paddingLeft;
+					var dx = (v == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingLeft : v) + p.offsetX;
 					var _g2 = p.horizontalAlign;
 					if(_g2 != null) {
 						switch(_g2._hx_index) {
 						case 1:
 							c.posChanged = true;
-							c.x = startX + p.offsetX;
+							c.x = startX + dx;
 							break;
 						case 2:
 							c.posChanged = true;
-							c.x = endX - p.calculatedWidth + p.offsetX;
+							c.x = endX - p.calculatedWidth + dx;
 							break;
 						case 3:
 							c.posChanged = true;
-							c.x = startX + ((endX - startX - p.calculatedWidth) * 0.5 | 0) + p.offsetX + startX;
+							c.x = startX + ((endX - startX - p.calculatedWidth) * 0.5 | 0) + dx;
 							break;
 						default:
 						}
@@ -12745,46 +13080,71 @@ h2d_Flow.prototype = $extend(h2d_Object.prototype,{
 					}
 				}
 				c.posChanged = true;
-				c.x = px + p.offsetX + p.paddingLeft;
-				if(p.isAbsolute) {
-					xmin = px;
-				}
+				c.x = px + p.offsetX + p.calcPadding;
 			}
 			break;
 		case 1:
 			var halign = this.horizontalAlign == null ? h2d_FlowAlign.Left : this.horizontalAlign;
 			var valign = this.verticalAlign == null ? h2d_FlowAlign.Top : this.verticalAlign;
-			var startY = this.paddingTop + borderTop;
+			var startY = paddingTop + borderTop;
 			var y = startY;
-			var x = this.paddingLeft + borderLeft;
+			var x = paddingLeft + borderLeft;
 			ch = y;
 			var maxColWidth = 0;
-			var minColWidth = this.colWidth != null ? this.colWidth : this.realMinWidth >= 0 && !this.multiline ? this.realMinWidth - (this.paddingLeft + this.paddingRight + borderLeft + borderRight) : 0;
+			var minColWidth = this.colWidth != null ? this.colWidth : this.realMinWidth >= 0 && !this.multiline ? this.realMinWidth - (paddingLeft + paddingRight + borderLeft + borderRight) : 0;
 			var lastIndex = 0;
 			var autoHeight = maxInHeight;
 			var autoSum = 0.0;
-			var count = 0;
+			var first = true;
 			var _g = 0;
 			var _g1 = _gthis.children.length;
 			while(_g < _g1) {
 				var i = _g++;
 				var p = _gthis.properties[_gthis.reverse ? _gthis.children.length - i - 1 : i];
-				if(p.isAbsolute && p.horizontalAlign == null && p.verticalAlign == null) {
+				if(p.isAbsolute != false) {
 					continue;
 				}
 				var c = _gthis.children[_gthis.reverse ? _gthis.children.length - i - 1 : i];
 				if(!c.visible) {
 					continue;
 				}
-				if(count > 0 && !p.isAbsolute) {
+				if(first) {
+					first = false;
+				} else {
 					autoHeight -= _gthis.verticalSpacing;
 				}
-				if(p.autoSizeHeight == null) {
-					var pw = p.paddingLeft + p.paddingRight;
-					var ph = p.paddingTop + p.paddingBottom;
-					if(!p.isAbsolute) {
-						c.constraintSize(isConstraintWidth && p.constraint ? ((p.autoSizeWidth != null ? (maxColWidth < minColWidth ? minColWidth : maxColWidth) * p.autoSizeWidth : maxInWidth) - pw) / Math.abs(c.scaleX) : -1,isConstraintHeight && p.constraint ? ((p.autoSizeHeight != null ? Math.floor(autoHeight * p.autoSizeHeight / autoSum + 1e-10) : maxInHeight) - ph) / Math.abs(c.scaleY) : -1);
+				if(p.autoSizeHeight != null) {
+					autoSum += p.autoSizeHeight;
+				} else {
+					var v = p.paddingLeft;
+					var v1 = p.paddingRight;
+					var pw = (v == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingLeft : v) + (v1 == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingRight : v1);
+					var ph;
+					ph = 0;
+					if(p.paddingTop != h2d_Flow.PADDING_IGNORE_PARENT) {
+						ph += p.paddingTop;
+					} else if(_gthis.onBorderTB(p,h2d_FlowAlign.Top)) {
+						ph -= paddingTop;
 					}
+					p.calcPadding = ph;
+					if(p.paddingBottom != h2d_Flow.PADDING_IGNORE_PARENT) {
+						ph += p.paddingBottom;
+					} else if(_gthis.onBorderTB(p,h2d_FlowAlign.Bottom)) {
+						ph -= paddingBottom;
+					}
+					var ccw = -1.;
+					var cch = -1.;
+					if(p.autoSizeWidth != null) {
+						ccw = ((maxColWidth < minColWidth ? minColWidth : maxColWidth) * p.autoSizeWidth - pw) / Math.abs(c.scaleX);
+					} else if(isConstraintWidth) {
+						ccw = (maxInWidth - pw) / Math.abs(c.scaleX);
+					}
+					if(p.autoSizeHeight != null) {
+						cch = (Math.floor((p.isAbsolute ? ch * p.autoSizeHeight : autoHeight * p.autoSizeHeight / autoSum) + 1e-10) - ph) / Math.abs(c.scaleY);
+					} else if(isConstraintHeight) {
+						cch = (maxInHeight - ph) / Math.abs(c.scaleY);
+					}
+					c.constraintSize(ccw,cch);
 					var b = tmpBounds;
 					b.xMin = 1e20;
 					b.yMin = 1e20;
@@ -12821,35 +13181,54 @@ h2d_Flow.prototype = $extend(h2d_Object.prototype,{
 					if(p.minHeight != null && p.calculatedHeight < p.minHeight) {
 						p.calculatedHeight = p.minHeight;
 					}
-					if(!p.isAbsolute) {
-						if(p.calculatedWidth > maxColWidth) {
-							maxColWidth = p.calculatedWidth;
-						}
-						autoHeight -= p.calculatedHeight;
+					if(p.calculatedWidth > maxColWidth) {
+						maxColWidth = p.calculatedWidth;
 					}
-				} else {
-					autoSum += p.autoSizeHeight;
+					autoHeight -= p.calculatedHeight;
 				}
-				++count;
 			}
 			var _g = 0;
 			var _g1 = _gthis.children.length;
 			while(_g < _g1) {
 				var i = _g++;
 				var p = _gthis.properties[_gthis.reverse ? _gthis.children.length - i - 1 : i];
-				if(p.isAbsolute && p.horizontalAlign == null && p.verticalAlign == null) {
+				if(p.isAbsolute != false) {
 					continue;
 				}
 				var c = _gthis.children[_gthis.reverse ? _gthis.children.length - i - 1 : i];
 				if(!c.visible) {
 					continue;
 				}
-				if(p.autoSizeWidth != null || p.autoSizeHeight != null) {
-					var pw = p.paddingLeft + p.paddingRight;
-					var ph = p.paddingTop + p.paddingBottom;
-					if(!p.isAbsolute) {
-						c.constraintSize(isConstraintWidth && p.constraint ? ((p.autoSizeWidth != null ? (maxColWidth < minColWidth ? minColWidth : maxColWidth) * p.autoSizeWidth : maxInWidth) - pw) / Math.abs(c.scaleX) : -1,isConstraintHeight && p.constraint ? ((p.autoSizeHeight != null ? Math.floor(autoHeight * p.autoSizeHeight / autoSum + 1e-10) : maxInHeight) - ph) / Math.abs(c.scaleY) : -1);
+				if(p.autoSizeHeight != null) {
+					var v = p.paddingLeft;
+					var v1 = p.paddingRight;
+					var pw = (v == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingLeft : v) + (v1 == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingRight : v1);
+					var ph;
+					ph = 0;
+					if(p.paddingTop != h2d_Flow.PADDING_IGNORE_PARENT) {
+						ph += p.paddingTop;
+					} else if(_gthis.onBorderTB(p,h2d_FlowAlign.Top)) {
+						ph -= paddingTop;
 					}
+					p.calcPadding = ph;
+					if(p.paddingBottom != h2d_Flow.PADDING_IGNORE_PARENT) {
+						ph += p.paddingBottom;
+					} else if(_gthis.onBorderTB(p,h2d_FlowAlign.Bottom)) {
+						ph -= paddingBottom;
+					}
+					var ccw = -1.;
+					var cch = -1.;
+					if(p.autoSizeWidth != null) {
+						ccw = ((maxColWidth < minColWidth ? minColWidth : maxColWidth) * p.autoSizeWidth - pw) / Math.abs(c.scaleX);
+					} else if(isConstraintWidth) {
+						ccw = (maxInWidth - pw) / Math.abs(c.scaleX);
+					}
+					if(p.autoSizeHeight != null) {
+						cch = (Math.floor((p.isAbsolute ? ch * p.autoSizeHeight : autoHeight * p.autoSizeHeight / autoSum) + 1e-10) - ph) / Math.abs(c.scaleY);
+					} else if(isConstraintHeight) {
+						cch = (maxInHeight - ph) / Math.abs(c.scaleY);
+					}
+					c.constraintSize(ccw,cch);
 					var b = tmpBounds;
 					b.xMin = 1e20;
 					b.yMin = 1e20;
@@ -12887,62 +13266,60 @@ h2d_Flow.prototype = $extend(h2d_Object.prototype,{
 						p.calculatedHeight = p.minHeight;
 					}
 				}
-				if(!p.isAbsolute) {
-					var br = false;
-					if((_gthis.multiline && y - startY + p.calculatedHeight > maxInHeight || p.lineBreak) && y - startY > 0) {
-						br = true;
-						if(maxColWidth < minColWidth) {
-							maxColWidth = minColWidth;
-						} else if(_gthis.overflow != h2d_FlowOverflow.Expand && minColWidth != 0) {
-							maxColWidth = minColWidth;
+				var br = false;
+				if((_gthis.multiline && y - startY + p.calculatedHeight > maxInHeight || p.lineBreak) && y - startY > 0) {
+					br = true;
+					if(maxColWidth < minColWidth) {
+						maxColWidth = minColWidth;
+					} else if(_gthis.overflow != h2d_FlowOverflow.Expand && minColWidth != 0) {
+						maxColWidth = minColWidth;
+					}
+					var width = maxColWidth;
+					var _g2 = lastIndex;
+					var _g3 = i;
+					while(_g2 < _g3) {
+						var i1 = _g2++;
+						var p1 = _gthis.properties[_gthis.reverse ? _gthis.children.length - i1 - 1 : i1];
+						if(p1.isAbsolute != false) {
+							continue;
 						}
-						var absWidth = maxColWidth > maxInWidth && _gthis.overflow != h2d_FlowOverflow.Expand ? maxInWidth : maxColWidth;
-						var _g2 = lastIndex;
-						var _g3 = i;
-						while(_g2 < _g3) {
-							var i1 = _g2++;
-							var p1 = _gthis.properties[_gthis.reverse ? _gthis.children.length - i1 - 1 : i1];
-							if(p1.isAbsolute && p1.horizontalAlign == null) {
-								continue;
-							}
-							var c1 = _gthis.children[_gthis.reverse ? _gthis.children.length - i1 - 1 : i1];
-							if(!c1.visible) {
-								continue;
-							}
-							var a = p1.horizontalAlign != null ? p1.horizontalAlign : halign;
-							c1.posChanged = true;
-							c1.x = x + p1.offsetX + p1.paddingLeft;
-							var width = p1.isAbsolute ? absWidth : maxColWidth;
-							if(a != null) {
-								switch(a._hx_index) {
-								case 2:
-									c1.posChanged = true;
-									c1.x += width - p1.calculatedWidth;
-									break;
-								case 3:
-									c1.posChanged = true;
-									c1.x += (width - p1.calculatedWidth) * 0.5 | 0;
-									break;
-								default:
-								}
+						var c1 = _gthis.children[_gthis.reverse ? _gthis.children.length - i1 - 1 : i1];
+						if(!c1.visible) {
+							continue;
+						}
+						var a = p1.horizontalAlign != null ? p1.horizontalAlign : halign;
+						var v2 = p1.paddingLeft;
+						c1.posChanged = true;
+						c1.x = x + p1.offsetX + (v2 == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingLeft : v2);
+						if(a != null) {
+							switch(a._hx_index) {
+							case 2:
+								c1.posChanged = true;
+								c1.x += width - p1.calculatedWidth;
+								break;
+							case 3:
+								c1.posChanged = true;
+								c1.x += (width - p1.calculatedWidth) * 0.5 | 0;
+								break;
+							default:
 							}
 						}
-						lastIndex = i;
-						x += maxColWidth + _gthis.horizontalSpacing;
-						maxColWidth = 0;
-						y = startY;
 					}
-					p.isBreak = br;
-					c.posChanged = true;
-					c.y = y + p.offsetY + p.paddingTop;
-					y += p.calculatedHeight;
-					if(y > ch) {
-						ch = y;
-					}
-					y += _gthis.verticalSpacing;
-					if(p.calculatedWidth > maxColWidth) {
-						maxColWidth = p.calculatedWidth;
-					}
+					lastIndex = i;
+					x += maxColWidth + _gthis.horizontalSpacing;
+					maxColWidth = 0;
+					y = startY;
+				}
+				p.isBreak = br;
+				c.posChanged = true;
+				c.y = y + p.offsetY + p.calcPadding;
+				y += p.calculatedHeight;
+				if(y > ch) {
+					ch = y;
+				}
+				y += _gthis.verticalSpacing;
+				if(p.calculatedWidth > maxColWidth) {
+					maxColWidth = p.calculatedWidth;
 				}
 			}
 			var maxIndex = this.children.length;
@@ -12951,13 +13328,13 @@ h2d_Flow.prototype = $extend(h2d_Object.prototype,{
 			} else if(_gthis.overflow != h2d_FlowOverflow.Expand && minColWidth != 0) {
 				maxColWidth = minColWidth;
 			}
-			var absWidth = maxColWidth > maxInWidth && _gthis.overflow != h2d_FlowOverflow.Expand ? maxInWidth : maxColWidth;
+			var width = maxColWidth;
 			var _g = lastIndex;
 			var _g1 = maxIndex;
 			while(_g < _g1) {
 				var i = _g++;
 				var p = _gthis.properties[_gthis.reverse ? _gthis.children.length - i - 1 : i];
-				if(p.isAbsolute && p.horizontalAlign == null) {
+				if(p.isAbsolute != false) {
 					continue;
 				}
 				var c = _gthis.children[_gthis.reverse ? _gthis.children.length - i - 1 : i];
@@ -12965,9 +13342,9 @@ h2d_Flow.prototype = $extend(h2d_Object.prototype,{
 					continue;
 				}
 				var a = p.horizontalAlign != null ? p.horizontalAlign : halign;
+				var v = p.paddingLeft;
 				c.posChanged = true;
-				c.x = x + p.offsetX + p.paddingLeft;
-				var width = p.isAbsolute ? absWidth : maxColWidth;
+				c.x = x + p.offsetX + (v == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingLeft : v);
 				if(a != null) {
 					switch(a._hx_index) {
 					case 2:
@@ -12983,12 +13360,160 @@ h2d_Flow.prototype = $extend(h2d_Object.prototype,{
 				}
 			}
 			lastIndex = maxIndex;
-			ch += this.paddingBottom + borderBottom;
-			cw = x + maxColWidth + this.paddingRight + borderRight;
-			if(this.realMinHeight >= 0 && ch < this.realMinHeight) {
-				ch = this.realMinHeight;
+			ch += paddingBottom + borderBottom;
+			cw = x + maxColWidth + paddingRight + borderRight;
+			if(_gthis.realMinWidth >= 0 && cw < _gthis.realMinWidth) {
+				cw = _gthis.realMinWidth;
 			}
-			var endY = ch - (this.paddingBottom + borderBottom);
+			if(_gthis.realMinHeight >= 0 && ch < _gthis.realMinHeight) {
+				ch = _gthis.realMinHeight;
+			}
+			var absolute = true;
+			if(absolute == null) {
+				absolute = false;
+			}
+			var _g = 0;
+			var _g1 = _gthis.children.length;
+			while(_g < _g1) {
+				var i = _g++;
+				var p = _gthis.properties[_gthis.reverse ? _gthis.children.length - i - 1 : i];
+				if(p.isAbsolute != absolute) {
+					continue;
+				}
+				var c = _gthis.children[_gthis.reverse ? _gthis.children.length - i - 1 : i];
+				if(!c.visible) {
+					continue;
+				}
+				if(p.autoSizeWidth != null || p.autoSizeHeight != null || p.horizontalAlign != null || p.verticalAlign != null) {
+					var isAbsolute = true;
+					if(isAbsolute == null) {
+						isAbsolute = false;
+					}
+					var v = p.paddingLeft;
+					var v1 = p.paddingRight;
+					var pw = (v == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingLeft : v) + (v1 == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingRight : v1);
+					var ph;
+					if(isAbsolute) {
+						var v2 = p.paddingTop;
+						var v3 = p.paddingBottom;
+						ph = (v2 == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingTop : v2) + (v3 == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingBottom : v3);
+					} else {
+						ph = 0;
+						if(p.paddingTop != h2d_Flow.PADDING_IGNORE_PARENT) {
+							ph += p.paddingTop;
+						} else if(_gthis.onBorderTB(p,h2d_FlowAlign.Top)) {
+							ph -= paddingTop;
+						}
+						p.calcPadding = ph;
+						if(p.paddingBottom != h2d_Flow.PADDING_IGNORE_PARENT) {
+							ph += p.paddingBottom;
+						} else if(_gthis.onBorderTB(p,h2d_FlowAlign.Bottom)) {
+							ph -= paddingBottom;
+						}
+					}
+					var ccw = -1.;
+					var cch = -1.;
+					if(p.autoSizeWidth != null) {
+						ccw = ((isAbsolute ? cw * p.autoSizeWidth : (maxColWidth < minColWidth ? minColWidth : maxColWidth) * p.autoSizeWidth) - pw) / Math.abs(c.scaleX);
+					} else if(isConstraintWidth && !isAbsolute) {
+						ccw = (maxInWidth - pw) / Math.abs(c.scaleX);
+					}
+					if(p.autoSizeHeight != null) {
+						cch = (Math.floor((p.isAbsolute ? ch * p.autoSizeHeight : autoHeight * p.autoSizeHeight / autoSum) + 1e-10) - ph) / Math.abs(c.scaleY);
+					} else if(isConstraintHeight && !isAbsolute) {
+						cch = (maxInHeight - ph) / Math.abs(c.scaleY);
+					}
+					c.constraintSize(ccw,cch);
+					var b = tmpBounds;
+					b.xMin = 1e20;
+					b.yMin = 1e20;
+					b.xMax = -1e20;
+					b.yMax = -1e20;
+					c.getBoundsRec(_gthis,b,true);
+					if(b.xMax <= b.xMin || b.yMax <= b.yMin) {
+						if(0 < b.xMin) {
+							b.xMin = 0;
+						}
+						if(0 > b.xMax) {
+							b.xMax = 0;
+						}
+						if(0 < b.yMin) {
+							b.yMin = 0;
+						}
+						if(0 > b.yMax) {
+							b.yMax = 0;
+						}
+					} else {
+						var dx = -c.x;
+						var dy = -c.y;
+						b.xMin += dx;
+						b.xMax += dx;
+						b.yMin += dy;
+						b.yMax += dy;
+					}
+					var b1 = b;
+					p.calculatedWidth = Math.ceil(b1.xMax - 1e-10) + pw;
+					p.calculatedHeight = Math.ceil(b1.yMax - 1e-10) + ph;
+					if(p.minWidth != null && p.calculatedWidth < p.minWidth) {
+						p.calculatedWidth = p.minWidth;
+					}
+					if(p.minHeight != null && p.calculatedHeight < p.minHeight) {
+						p.calculatedHeight = p.minHeight;
+					}
+				}
+			}
+			lastIndex = 0;
+			maxColWidth = cw - (paddingLeft + paddingRight + borderLeft + borderRight);
+			x = paddingLeft + borderLeft;
+			if(maxColWidth > maxInWidth && this.overflow != h2d_FlowOverflow.Expand) {
+				maxColWidth = maxInWidth;
+			}
+			var maxIndex = this.children.length;
+			var absolute = true;
+			if(absolute == null) {
+				absolute = false;
+			}
+			if(maxColWidth < minColWidth) {
+				maxColWidth = minColWidth;
+			} else if(_gthis.overflow != h2d_FlowOverflow.Expand && minColWidth != 0) {
+				maxColWidth = minColWidth;
+			}
+			var width = maxColWidth;
+			var _g = lastIndex;
+			var _g1 = maxIndex;
+			while(_g < _g1) {
+				var i = _g++;
+				var p = _gthis.properties[_gthis.reverse ? _gthis.children.length - i - 1 : i];
+				if(p.isAbsolute != absolute) {
+					continue;
+				}
+				if(absolute && p.horizontalAlign == null) {
+					continue;
+				}
+				var c = _gthis.children[_gthis.reverse ? _gthis.children.length - i - 1 : i];
+				if(!c.visible) {
+					continue;
+				}
+				var a = p.horizontalAlign != null ? p.horizontalAlign : halign;
+				var v = p.paddingLeft;
+				c.posChanged = true;
+				c.x = x + p.offsetX + (v == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingLeft : v);
+				if(a != null) {
+					switch(a._hx_index) {
+					case 2:
+						c.posChanged = true;
+						c.x += width - p.calculatedWidth;
+						break;
+					case 3:
+						c.posChanged = true;
+						c.x += (width - p.calculatedWidth) * 0.5 | 0;
+						break;
+					default:
+					}
+				}
+			}
+			lastIndex = maxIndex;
+			var endY = ch - (paddingBottom + borderBottom);
 			var ymin = startY;
 			var ymax = endY;
 			var midSpace = 0;
@@ -12997,26 +13522,28 @@ h2d_Flow.prototype = $extend(h2d_Object.prototype,{
 			var _g1 = this.children.length;
 			while(_g < _g1) {
 				var i = _g++;
-				var p = _gthis.properties[_gthis.reverse ? _gthis.children.length - i - 1 : i];
+				var p = this.properties[this.reverse ? this.children.length - i - 1 : i];
 				var c = _gthis.children[_gthis.reverse ? _gthis.children.length - i - 1 : i];
 				if(!c.visible) {
 					continue;
 				}
 				if(p.isAbsolute) {
+					var v = p.paddingTop;
+					var dy = (v == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingTop : v) + p.offsetY;
 					var _g2 = p.verticalAlign;
 					if(_g2 != null) {
 						switch(_g2._hx_index) {
 						case 0:
 							c.posChanged = true;
-							c.y = startY + p.offsetY;
+							c.y = startY + dy;
 							break;
 						case 3:
 							c.posChanged = true;
-							c.y = startY + ((endY - startY - p.calculatedHeight) * 0.5 | 0) + p.offsetY + startY;
+							c.y = startY + ((endY - startY - p.calculatedHeight) * 0.5 | 0) + dy;
 							break;
 						case 4:
 							c.posChanged = true;
-							c.y = endY - p.calculatedHeight + p.offsetY;
+							c.y = endY - p.calculatedHeight + dy;
 							break;
 						default:
 						}
@@ -13093,7 +13620,7 @@ h2d_Flow.prototype = $extend(h2d_Object.prototype,{
 					}
 				}
 				c.posChanged = true;
-				c.y = py + p.offsetY + p.paddingTop;
+				c.y = py + p.offsetY + p.calcPadding;
 			}
 			break;
 		case 2:
@@ -13109,15 +13636,19 @@ h2d_Flow.prototype = $extend(h2d_Object.prototype,{
 				if(!c.visible) {
 					continue;
 				}
-				var p = _gthis.properties[_gthis.reverse ? _gthis.children.length - i - 1 : i];
+				var p = this.properties[this.reverse ? this.children.length - i - 1 : i];
 				var isAbs = p.isAbsolute;
 				if(isAbs && p.verticalAlign == null && p.horizontalAlign == null) {
 					continue;
 				}
-				var pw = p.paddingLeft + p.paddingRight;
-				var ph = p.paddingTop + p.paddingBottom;
+				var v = p.paddingLeft;
+				var v1 = p.paddingRight;
+				var pw = (v == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingLeft : v) + (v1 == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingRight : v1);
+				var v2 = p.paddingTop;
+				var v3 = p.paddingBottom;
+				var ph = (v2 == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingTop : v2) + (v3 == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingBottom : v3);
 				if(!isAbs) {
-					c.constraintSize(isConstraintWidth && p.constraint ? (maxInWidth - pw) / Math.abs(c.scaleX) : -1,isConstraintHeight && p.constraint ? (maxInHeight - ph) / Math.abs(c.scaleY) : -1);
+					c.constraintSize(isConstraintWidth ? (maxInWidth - pw) / Math.abs(c.scaleX) : -1,isConstraintHeight ? (maxInHeight - ph) / Math.abs(c.scaleY) : -1);
 				}
 				var b = tmpBounds;
 				b.xMin = 1e20;
@@ -13165,26 +13696,32 @@ h2d_Flow.prototype = $extend(h2d_Object.prototype,{
 					maxChildH = p.calculatedHeight;
 				}
 			}
-			var xmin = this.paddingLeft + borderLeft;
-			var ymin = this.paddingTop + borderTop;
+			var xmin = paddingLeft + borderLeft;
+			var ymin = paddingTop + borderTop;
 			var xmax;
 			if(this.realMaxWidth > 0 && this.overflow != h2d_FlowOverflow.Expand) {
-				xmax = Math.floor(this.realMaxWidth - (this.paddingRight + borderRight) + 1e-10);
+				xmax = Math.floor(this.realMaxWidth - (paddingRight + borderRight) + 1e-10);
 			} else {
 				var a = xmin + maxChildW;
-				var b = this.realMinWidth - (this.paddingRight + borderRight);
+				var b = this.realMinWidth - (paddingRight + borderRight);
 				xmax = a < b ? b : a;
 			}
 			var ymax;
 			if(this.realMaxWidth > 0 && this.overflow != h2d_FlowOverflow.Expand) {
-				ymax = Math.floor(this.realMaxHeight - (this.paddingBottom + borderBottom) + 1e-10);
+				ymax = Math.floor(this.realMaxHeight - (paddingBottom + borderBottom) + 1e-10);
 			} else {
 				var a = ymin + maxChildH;
-				var b = this.realMinHeight - (this.paddingBottom + borderBottom);
+				var b = this.realMinHeight - (paddingBottom + borderBottom);
 				ymax = a < b ? b : a;
 			}
-			cw = xmax + this.paddingRight + borderRight;
-			ch = ymax + this.paddingBottom + borderBottom;
+			cw = xmax + paddingRight + borderRight;
+			ch = ymax + paddingBottom + borderBottom;
+			if(_gthis.realMinWidth >= 0 && cw < _gthis.realMinWidth) {
+				cw = _gthis.realMinWidth;
+			}
+			if(_gthis.realMinHeight >= 0 && ch < _gthis.realMinHeight) {
+				ch = _gthis.realMinHeight;
+			}
 			var _g = 0;
 			var _g1 = this.children.length;
 			while(_g < _g1) {
@@ -13193,7 +13730,7 @@ h2d_Flow.prototype = $extend(h2d_Object.prototype,{
 				if(!c.visible) {
 					continue;
 				}
-				var p = _gthis.properties[_gthis.reverse ? _gthis.children.length - i - 1 : i];
+				var p = this.properties[this.reverse ? this.children.length - i - 1 : i];
 				var isAbs = p.isAbsolute;
 				if(isAbs && p.verticalAlign == null && p.horizontalAlign == null) {
 					continue;
@@ -13231,12 +13768,14 @@ h2d_Flow.prototype = $extend(h2d_Object.prototype,{
 					}
 				}
 				if(!isAbs || p.horizontalAlign != null) {
+					var v = p.paddingLeft;
 					c.posChanged = true;
-					c.x = px + p.offsetX + p.paddingLeft;
+					c.x = px + p.offsetX + (v == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingLeft : v);
 				}
 				if(!isAbs || p.verticalAlign != null) {
+					var v1 = p.paddingTop;
 					c.posChanged = true;
-					c.y = py + p.offsetY + p.paddingTop;
+					c.y = py + p.offsetY + (v1 == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingTop : v1);
 				}
 			}
 			break;
@@ -13256,12 +13795,6 @@ h2d_Flow.prototype = $extend(h2d_Object.prototype,{
 				c.posChanged = true;
 				c.y -= sy;
 			}
-		}
-		if(this.realMinWidth >= 0 && cw < this.realMinWidth) {
-			cw = this.realMinWidth;
-		}
-		if(this.realMinHeight >= 0 && ch < this.realMinHeight) {
-			ch = this.realMinHeight;
 		}
 		this.contentWidth = cw;
 		this.contentHeight = ch;
@@ -13288,9 +13821,10 @@ h2d_Flow.prototype = $extend(h2d_Object.prototype,{
 				this.scrollBar.set_visible(false);
 			} else {
 				this.scrollBar.set_visible(true);
-				this.scrollBar.set_minHeight(Math.ceil(this.calculatedHeight - 1e-10));
-				var b = this.calculatedHeight * (1 - (this.contentHeight - this.calculatedHeight) / this.contentHeight) | 0;
-				this.scrollBarCursor.set_minHeight(1 < b ? b : 1);
+				this.scrollBar.set_minHeight(this.get_scrollInnerHeight());
+				var tmp = this.scrollBarCursor;
+				var b = this.get_scrollInnerHeight() * (1 - (this.contentHeight - this.get_scrollInnerHeight()) / this.contentHeight) | 0;
+				tmp.set_minHeight(1 < b ? b : 1);
 				this.updateScrollCursor();
 			}
 		}
@@ -13303,21 +13837,23 @@ h2d_Flow.prototype = $extend(h2d_Object.prototype,{
 				this.addChild(this.debugGraphics);
 				this.set_needReflow(false);
 			}
-			if(this.paddingLeft != 0 || this.paddingRight != 0 || this.paddingTop != 0 || this.paddingBottom != 0) {
+			if(paddingLeft != 0 || paddingRight != 0 || paddingTop != 0 || paddingBottom != 0) {
 				this.debugGraphics.lineStyle(1,65280);
-				this.debugGraphics.drawRect(this.paddingLeft,this.paddingTop,this.get_innerWidth(),this.get_innerHeight());
+				this.debugGraphics.drawRect(paddingLeft,paddingTop,this.get_innerWidth(),this.get_innerHeight());
 			}
 			this.debugGraphics.lineStyle(1,33023);
 			var _g = 0;
 			var _g1 = this.children.length;
 			while(_g < _g1) {
 				var i = _g++;
-				var p = _gthis.properties[_gthis.reverse ? _gthis.children.length - i - 1 : i];
+				var p = this.properties[this.reverse ? this.children.length - i - 1 : i];
 				var c = _gthis.children[_gthis.reverse ? _gthis.children.length - i - 1 : i];
 				if(p.isAbsolute || !c.visible) {
 					continue;
 				}
-				this.debugGraphics.drawRect(c.x - p.offsetX - p.paddingLeft,c.y - p.offsetY - p.paddingTop,p.calculatedWidth,p.calculatedHeight);
+				var v = p.paddingLeft;
+				var v1 = p.paddingTop;
+				this.debugGraphics.drawRect(c.x - p.offsetX - (v == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingLeft : v),c.y - p.offsetY - (v1 == h2d_Flow.PADDING_IGNORE_PARENT ? -paddingTop : v1),p.calculatedWidth,p.calculatedHeight);
 			}
 			this.debugGraphics.lineStyle(1,16711680);
 			this.debugGraphics.drawRect(0,0,cw,ch);
@@ -13330,7 +13866,7 @@ h2d_Flow.prototype = $extend(h2d_Object.prototype,{
 	,onAfterReflow: function() {
 	}
 	,__class__: h2d_Flow
-	,__properties__: $extend(h2d_Object.prototype.__properties__,{set_scrollPosY:"set_scrollPosY",set_fillHeight:"set_fillHeight",set_fillWidth:"set_fillWidth",set_reverse:"set_reverse",set_multiline:"set_multiline",set_debug:"set_debug",set_isVertical:"set_isVertical",get_isVertical:"get_isVertical",set_layout:"set_layout",get_outerHeight:"get_outerHeight",get_outerWidth:"get_outerWidth",get_innerHeight:"get_innerHeight",get_innerWidth:"get_innerWidth",set_borderBottom:"set_borderBottom",set_borderTop:"set_borderTop",set_borderHeight:"set_borderHeight",set_borderRight:"set_borderRight",set_borderLeft:"set_borderLeft",set_borderWidth:"set_borderWidth",set_backgroundTile:"set_backgroundTile",set_enableInteractive:"set_enableInteractive",set_verticalSpacing:"set_verticalSpacing",set_horizontalSpacing:"set_horizontalSpacing",set_paddingBottom:"set_paddingBottom",set_paddingTop:"set_paddingTop",set_paddingRight:"set_paddingRight",set_paddingLeft:"set_paddingLeft",set_paddingVertical:"set_paddingVertical",set_paddingHorizontal:"set_paddingHorizontal",set_padding:"set_padding",set_overflow:"set_overflow",set_colWidth:"set_colWidth",set_lineHeight:"set_lineHeight",set_maxHeight:"set_maxHeight",set_maxWidth:"set_maxWidth",set_minHeight:"set_minHeight",set_minWidth:"set_minWidth",set_verticalAlign:"set_verticalAlign",set_horizontalAlign:"set_horizontalAlign",set_needReflow:"set_needReflow"})
+	,__properties__: $extend(h2d_Object.prototype.__properties__,{set_scrollPosY:"set_scrollPosY",set_fillHeight:"set_fillHeight",set_fillWidth:"set_fillWidth",set_reverse:"set_reverse",set_multiline:"set_multiline",set_debug:"set_debug",set_isVertical:"set_isVertical",get_isVertical:"get_isVertical",set_layout:"set_layout",get_outerHeight:"get_outerHeight",get_outerWidth:"get_outerWidth",get_scrollInnerHeight:"get_scrollInnerHeight",get_innerHeight:"get_innerHeight",get_innerWidth:"get_innerWidth",set_borderBottom:"set_borderBottom",set_borderTop:"set_borderTop",set_borderHeight:"set_borderHeight",set_borderRight:"set_borderRight",set_borderLeft:"set_borderLeft",set_borderWidth:"set_borderWidth",set_backgroundTile:"set_backgroundTile",set_enableInteractive:"set_enableInteractive",set_verticalSpacing:"set_verticalSpacing",set_horizontalSpacing:"set_horizontalSpacing",set_paddingBottom:"set_paddingBottom",set_paddingTop:"set_paddingTop",set_paddingRight:"set_paddingRight",set_paddingLeft:"set_paddingLeft",set_paddingVertical:"set_paddingVertical",set_paddingHorizontal:"set_paddingHorizontal",set_padding:"set_padding",set_overflow:"set_overflow",set_colWidth:"set_colWidth",set_lineHeight:"set_lineHeight",set_maxHeight:"set_maxHeight",set_maxWidth:"set_maxWidth",set_minHeight:"set_minHeight",set_minWidth:"set_minWidth",set_verticalAlign:"set_verticalAlign",set_horizontalAlign:"set_horizontalAlign",set_needReflow:"set_needReflow"})
 });
 var h2d_Kerning = function(c,o) {
 	this.prevChar = c;
@@ -13516,6 +14052,7 @@ h2d_GPoint.prototype = {
 };
 var h3d_prim_Primitive = function() {
 	this.refCount = 0;
+	this.forcedLod = -1;
 };
 $hxClasses["h3d.prim.Primitive"] = h3d_prim_Primitive;
 h3d_prim_Primitive.__name__ = "h3d.prim.Primitive";
@@ -13553,8 +14090,30 @@ h3d_prim_Primitive.prototype = {
 	}
 	,selectMaterial: function(material,lod) {
 	}
-	,getMaterialIndexes: function(material) {
-		return { start : 0, count : this.indexes == null ? this.triCount() * 3 : this.indexes.vertices};
+	,getMaterialIndexes: function(material,lod) {
+		if(lod == null) {
+			lod = 0;
+		}
+		if(lod != 0) {
+			return { start : 0, count : 0};
+		}
+		return { start : this.getMaterialIndexStart(material,lod), count : this.getMaterialIndexCount(material,lod)};
+	}
+	,getMaterialIndexStart: function(material,lod) {
+		if(lod == null) {
+			lod = 0;
+		}
+		return 0;
+	}
+	,getMaterialIndexCount: function(material,lod) {
+		if(lod == null) {
+			lod = 0;
+		}
+		if(this.indexes == null) {
+			return this.triCount() * 3;
+		} else {
+			return this.indexes.vertices;
+		}
 	}
 	,buildNormalsDisplay: function() {
 		throw haxe_Exception.thrown("not implemented for " + Std.string(this));
@@ -19181,6 +19740,7 @@ h2d_Text.prototype = $extend(h2d_Drawable.prototype,{
 		var xMax = 0.;
 		var xMin = 0.;
 		var yMin = 0.;
+		var yMax = 0.;
 		var prevChar = -1;
 		var linei = 0;
 		var align = this.textAlign;
@@ -19255,6 +19815,10 @@ h2d_Text.prototype = $extend(h2d_Drawable.prototype,{
 					if(y == 0 && e.t.dy < yMin) {
 						yMin = e.t.dy;
 					}
+					var ty = y + e.t.dy + e.t.height;
+					if(ty > yMax) {
+						yMax = ty;
+					}
 					x += esize + this.letterSpacing;
 				}
 				prevChar = cc;
@@ -19266,7 +19830,7 @@ h2d_Text.prototype = $extend(h2d_Drawable.prototype,{
 		this.calcXMin = xMin;
 		this.calcYMin = yMin;
 		this.calcWidth = xMax - xMin;
-		this.calcHeight = y + this.font.lineHeight;
+		this.calcHeight = yMax - yMin;
 		this.calcSizeHeight = y + (this.font.baseLine > 0 ? this.font.baseLine : this.font.lineHeight);
 		this.calcDone = true;
 		if(rebuild) {
@@ -19294,7 +19858,11 @@ h2d_Text.prototype = $extend(h2d_Drawable.prototype,{
 		if(!this.calcDone) {
 			this.initGlyphs(this.text,this.needsRebuild);
 		}
-		return this.calcHeight;
+		if(this.font.baseLine == 0) {
+			return this.calcSizeHeight;
+		} else {
+			return this.calcSizeHeight - this.font.baseLine + this.font.lineHeight;
+		}
 	}
 	,get_textWidth: function() {
 		if(this.textChanged && this.text != this.currentText) {
@@ -19369,7 +19937,7 @@ h2d_Text.prototype = $extend(h2d_Drawable.prototype,{
 			x = this.calcXMin;
 			y = this.calcYMin;
 			w = this.calcWidth;
-			h = this.calcHeight - this.calcYMin;
+			h = this.calcHeight;
 		}
 		this.addBounds(relativeTo,out,x,y,w,h);
 	}
@@ -25051,6 +25619,32 @@ h2d_col_Polygon.intersect = function(this1,p1,q1,p2,q2) {
 	}
 	return false;
 };
+h2d_col_Polygon.getIntersectionPoint = function(this1,a,b,c,d) {
+	if(!h2d_col_Polygon.intersect(this1,a,b,c,d)) {
+		return null;
+	}
+	var a1 = b.y - a.y;
+	var b1 = a.x - b.x;
+	var c1 = a1 * a.x + b1 * a.y;
+	var a2 = d.y - c.y;
+	var b2 = c.x - d.x;
+	var c2 = a2 * c.x + b2 * c.y;
+	var determinant = a1 * b2 - a2 * b1;
+	if(determinant == 0) {
+		return null;
+	}
+	var x = (b2 * c1 - b1 * c2) / determinant;
+	var y = (a1 * c2 - a2 * c1) / determinant;
+	var x1 = x;
+	var y1 = y;
+	if(y1 == null) {
+		y1 = 0.;
+	}
+	if(x1 == null) {
+		x1 = 0.;
+	}
+	return new h2d_col_PointImpl(x1,y1);
+};
 h2d_col_Polygon.selfIntersecting = function(this1) {
 	if(this1.length < 4) {
 		return false;
@@ -25916,14 +26510,15 @@ h3d_Buffer.prototype = {
 			var bytes = new haxe_io_Bytes(new ArrayBuffer(vertices * this.format.strideBytes));
 			var bytesPos = 0;
 			var index = bufPos;
+			var inputs_current = 0;
+			var inputs_array = this.format.inputs;
 			var _g = 0;
 			var _g1 = vertices;
 			while(_g < _g1) {
-				var i = _g++;
-				var _g_current = 0;
-				var _g_array = this.format.inputs;
-				while(_g_current < _g_array.length) {
-					var input = _g_array[_g_current++];
+				var _ = _g++;
+				inputs_current = 0;
+				while(inputs_current < inputs_array.length) {
+					var input = inputs_array[inputs_current++];
 					var elementCount = input.type & 7;
 					var step = 0;
 					switch(input.precision) {
@@ -25931,7 +26526,7 @@ h3d_Buffer.prototype = {
 						var _g2 = 0;
 						var _g3 = elementCount;
 						while(_g2 < _g3) {
-							var i1 = _g2++;
+							var i = _g2++;
 							bytes.setFloat(bytesPos + step,buf.array[index++]);
 							step += 4;
 						}
@@ -25940,7 +26535,7 @@ h3d_Buffer.prototype = {
 						var _g4 = 0;
 						var _g5 = elementCount;
 						while(_g4 < _g5) {
-							var i2 = _g4++;
+							var i1 = _g4++;
 							var f = hxd_BufferFormat.float32to16(buf.array[index++]);
 							bytes.setUInt16(bytesPos + step,f);
 							step += 2;
@@ -25950,7 +26545,7 @@ h3d_Buffer.prototype = {
 						var _g6 = 0;
 						var _g7 = elementCount;
 						while(_g6 < _g7) {
-							var i3 = _g6++;
+							var i2 = _g6++;
 							var f1 = hxd_BufferFormat.float32toU8(buf.array[index++]);
 							bytes.b[bytesPos + step] = f1;
 							++step;
@@ -25960,7 +26555,7 @@ h3d_Buffer.prototype = {
 						var _g8 = 0;
 						var _g9 = elementCount;
 						while(_g8 < _g9) {
-							var i4 = _g8++;
+							var i3 = _g8++;
 							var f2 = hxd_BufferFormat.float32toS8(buf.array[index++]);
 							bytes.b[bytesPos + step] = f2;
 							++step;
@@ -27629,6 +28224,12 @@ h3d_Engine.prototype = {
 		}
 		return true;
 	}
+	,onTextureBiasChanged: function(t) {
+		if(!t.isDepth()) {
+			throw haxe_Exception.thrown("Can change texture bias on depth buffer only");
+		}
+		this.driver.onTextureBiasChanged(t);
+	}
 	,dispose: function() {
 		this.driver.dispose();
 		this.window.removeResizeEvent($bind(this,this.onWindowResize));
@@ -28948,6 +29549,178 @@ h3d_MatrixImpl.prototype = {
 		m.y = this._42;
 		return m;
 	}
+	,decomposeMatrix: function(inMatrix) {
+		this.load(inMatrix);
+		var x = 0.;
+		var y = 0.;
+		var z = 0.;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var scale_x = x;
+		var scale_y = y;
+		var scale_z = z;
+		scale_x = Math.sqrt(this._11 * this._11 + this._12 * this._12 + this._13 * this._13);
+		scale_y = Math.sqrt(this._21 * this._21 + this._22 * this._22 + this._23 * this._23);
+		scale_z = Math.sqrt(this._31 * this._31 + this._32 * this._32 + this._33 * this._33);
+		if(this._11 * (this._22 * this._33 - this._23 * this._32) + this._12 * (this._23 * this._31 - this._21 * this._33) + this._13 * (this._21 * this._32 - this._22 * this._31) < 0) {
+			scale_x *= -1;
+			scale_y *= -1;
+			scale_z *= -1;
+		}
+		this.prependScale(1.0 / scale_x,1.0 / scale_y,1.0 / scale_z);
+		var quat_x = 0.;
+		var quat_y = 0.;
+		var quat_z = 0.;
+		var quat_w = 1.;
+		var tr = this._11 + this._22 + this._33;
+		if(tr > 0) {
+			var s = Math.sqrt(tr + 1.0) * 2;
+			var ins = 1 / s;
+			quat_x = (this._23 - this._32) * ins;
+			quat_y = (this._31 - this._13) * ins;
+			quat_z = (this._12 - this._21) * ins;
+			quat_w = 0.25 * s;
+		} else if(this._11 > this._22 && this._11 > this._33) {
+			var s = Math.sqrt(1.0 + this._11 - this._22 - this._33) * 2;
+			var ins = 1 / s;
+			quat_x = 0.25 * s;
+			quat_y = (this._21 + this._12) * ins;
+			quat_z = (this._31 + this._13) * ins;
+			quat_w = (this._23 - this._32) * ins;
+		} else if(this._22 > this._33) {
+			var s = Math.sqrt(1.0 + this._22 - this._11 - this._33) * 2;
+			var ins = 1 / s;
+			quat_x = (this._21 + this._12) * ins;
+			quat_y = 0.25 * s;
+			quat_z = (this._32 + this._23) * ins;
+			quat_w = (this._31 - this._13) * ins;
+		} else {
+			var s = Math.sqrt(1.0 + this._33 - this._11 - this._22) * 2;
+			var ins = 1 / s;
+			quat_x = (this._31 + this._13) * ins;
+			quat_y = (this._32 + this._23) * ins;
+			quat_z = 0.25 * s;
+			quat_w = (this._12 - this._21) * ins;
+		}
+		this._11 = scale_x;
+		this._12 = quat_x;
+		this._13 = quat_y;
+		this._14 = 0.0;
+		this._21 = quat_z;
+		this._22 = scale_y;
+		this._23 = quat_w;
+		this._24 = 0.0;
+		this._31 = 0.0;
+		this._32 = 0.0;
+		this._33 = scale_z;
+		this._34 = 0.0;
+		this._41 = inMatrix._41;
+		this._42 = inMatrix._42;
+		this._43 = inMatrix._43;
+		this._44 = 1.0;
+	}
+	,recomposeMatrix: function(inMatrix) {
+		var _this__44;
+		var _this__43;
+		var _this__42;
+		var _this__41;
+		var _this__34;
+		var _this__33;
+		var _this__32;
+		var _this__31;
+		var _this__24;
+		var _this__23;
+		var _this__22;
+		var _this__21;
+		var _this__14;
+		var _this__13;
+		var _this__12;
+		var _this__11;
+		_this__11 = inMatrix._11;
+		_this__12 = inMatrix._12;
+		_this__13 = inMatrix._13;
+		_this__14 = inMatrix._14;
+		_this__21 = inMatrix._21;
+		_this__22 = inMatrix._22;
+		_this__23 = inMatrix._23;
+		_this__24 = inMatrix._24;
+		_this__31 = inMatrix._31;
+		_this__32 = inMatrix._32;
+		_this__33 = inMatrix._33;
+		_this__34 = inMatrix._34;
+		_this__41 = inMatrix._41;
+		_this__42 = inMatrix._42;
+		_this__43 = inMatrix._43;
+		_this__44 = inMatrix._44;
+		var x = inMatrix._12;
+		var y = inMatrix._13;
+		var z = inMatrix._21;
+		var w = inMatrix._23;
+		if(w == null) {
+			w = 1.;
+		}
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var quat_x = x;
+		var quat_y = y;
+		var quat_z = z;
+		var quat_w = w;
+		var m = this;
+		if(m == null) {
+			m = new h3d_MatrixImpl();
+		}
+		var xx = quat_x * quat_x;
+		var xy = quat_x * quat_y;
+		var xz = quat_x * quat_z;
+		var xw = quat_x * quat_w;
+		var yy = quat_y * quat_y;
+		var yz = quat_y * quat_z;
+		var yw = quat_y * quat_w;
+		var zz = quat_z * quat_z;
+		var zw = quat_z * quat_w;
+		m._11 = 1 - 2 * (yy + zz);
+		m._12 = 2 * (xy + zw);
+		m._13 = 2 * (xz - yw);
+		m._14 = 0;
+		m._21 = 2 * (xy - zw);
+		m._22 = 1 - 2 * (xx + zz);
+		m._23 = 2 * (yz + xw);
+		m._24 = 0;
+		m._31 = 2 * (xz + yw);
+		m._32 = 2 * (yz - xw);
+		m._33 = 1 - 2 * (xx + yy);
+		m._34 = 0;
+		m._41 = 0;
+		m._42 = 0;
+		m._43 = 0;
+		m._44 = 1;
+		this._11 *= _this__11;
+		this._12 *= _this__11;
+		this._13 *= _this__11;
+		this._21 *= _this__22;
+		this._22 *= _this__22;
+		this._23 *= _this__22;
+		this._31 *= _this__33;
+		this._32 *= _this__33;
+		this._33 *= _this__33;
+		this._41 = _this__41;
+		this._42 = _this__42;
+		this._43 = _this__43;
+	}
 	,__class__: h3d_MatrixImpl
 	,__properties__: {set_tz:"set_tz",get_tz:"get_tz",set_ty:"set_ty",get_ty:"get_ty",set_tx:"set_tx",get_tx:"get_tx"}
 };
@@ -29001,6 +29774,152 @@ h3d_Matrix.S = function(x,y,z) {
 	}
 	var m = new h3d_MatrixImpl();
 	m.initScale(x,y,z);
+	return m;
+};
+h3d_Matrix.lookAtXInline = function(dir,up,m) {
+	var _this = dir;
+	var k = _this.x * _this.x + _this.y * _this.y + _this.z * _this.z;
+	if(k < 1e-20) {
+		k = 0;
+	} else {
+		k = 1. / Math.sqrt(k);
+	}
+	var x = _this.x * k;
+	var y = _this.y * k;
+	var z = _this.z * k;
+	if(z == null) {
+		z = 0.;
+	}
+	if(y == null) {
+		y = 0.;
+	}
+	if(x == null) {
+		x = 0.;
+	}
+	var x1 = x;
+	var y1 = y;
+	var z1 = z;
+	if(z1 == null) {
+		z1 = 0.;
+	}
+	if(y1 == null) {
+		y1 = 0.;
+	}
+	if(x1 == null) {
+		x1 = 0.;
+	}
+	var _this_x = x1;
+	var _this_y = y1;
+	var _this_z = z1;
+	var _this = up;
+	var x = _this.y * _this_z - _this.z * _this_y;
+	var y = _this.z * _this_x - _this.x * _this_z;
+	var z = _this.x * _this_y - _this.y * _this_x;
+	if(z == null) {
+		z = 0.;
+	}
+	if(y == null) {
+		y = 0.;
+	}
+	if(x == null) {
+		x = 0.;
+	}
+	var x1 = x;
+	var y1 = y;
+	var z1 = z;
+	if(z1 == null) {
+		z1 = 0.;
+	}
+	if(y1 == null) {
+		y1 = 0.;
+	}
+	if(x1 == null) {
+		x1 = 0.;
+	}
+	var _this_x1 = x1;
+	var _this_y1 = y1;
+	var _this_z1 = z1;
+	var k = _this_x1 * _this_x1 + _this_y1 * _this_y1 + _this_z1 * _this_z1;
+	if(k < 1e-20) {
+		k = 0;
+	} else {
+		k = 1. / Math.sqrt(k);
+	}
+	var x = _this_x1 * k;
+	var y = _this_y1 * k;
+	var z = _this_z1 * k;
+	if(z == null) {
+		z = 0.;
+	}
+	if(y == null) {
+		y = 0.;
+	}
+	if(x == null) {
+		x = 0.;
+	}
+	var x1 = x;
+	var y1 = y;
+	var z1 = z;
+	if(z1 == null) {
+		z1 = 0.;
+	}
+	if(y1 == null) {
+		y1 = 0.;
+	}
+	if(x1 == null) {
+		x1 = 0.;
+	}
+	var _this_x1 = x1;
+	var _this_y1 = y1;
+	var _this_z1 = z1;
+	if(_this_x1 * _this_x1 + _this_y1 * _this_y1 + _this_z1 * _this_z1 < 1e-20) {
+		_this_x1 = _this_y;
+		_this_y1 = _this_z;
+		_this_z1 = _this_x;
+	}
+	var x = _this_y * _this_z1 - _this_z * _this_y1;
+	var y = _this_z * _this_x1 - _this_x * _this_z1;
+	var z = _this_x * _this_y1 - _this_y * _this_x1;
+	if(z == null) {
+		z = 0.;
+	}
+	if(y == null) {
+		y = 0.;
+	}
+	if(x == null) {
+		x = 0.;
+	}
+	var x1 = x;
+	var y1 = y;
+	var z1 = z;
+	if(z1 == null) {
+		z1 = 0.;
+	}
+	if(y1 == null) {
+		y1 = 0.;
+	}
+	if(x1 == null) {
+		x1 = 0.;
+	}
+	var az_x = x1;
+	var az_y = y1;
+	var az_z = z1;
+	m._11 = _this_x;
+	m._12 = _this_y;
+	m._13 = _this_z;
+	m._14 = 0;
+	m._21 = _this_x1;
+	m._22 = _this_y1;
+	m._23 = _this_z1;
+	m._24 = 0;
+	m._31 = az_x;
+	m._32 = az_y;
+	m._33 = az_z;
+	m._34 = 0;
+	m._41 = 0;
+	m._42 = 0;
+	m._43 = 0;
+	m._44 = 1;
 	return m;
 };
 h3d_Matrix.lookAtX = function(dir,up,m) {
@@ -29855,6 +30774,95 @@ h3d_Quat.prototype = {
 	,toString: function() {
 		return "{" + hxd_Math.fmt(this.x) + "," + hxd_Math.fmt(this.y) + "," + hxd_Math.fmt(this.z) + "," + hxd_Math.fmt(this.w) + "}";
 	}
+	,weightedBlend: function(sourceQuats,weights,referenceQuat) {
+		this.x = 0;
+		this.y = 0;
+		this.z = 0;
+		this.w = 0;
+		var mulRes_x = 0.;
+		var mulRes_y = 0.;
+		var mulRes_z = 0.;
+		var mulRes_w = 1.;
+		var x = referenceQuat.x;
+		var y = referenceQuat.y;
+		var z = referenceQuat.z;
+		var w = referenceQuat.w;
+		if(w == null) {
+			w = 1.;
+		}
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var invRef_x = x;
+		var invRef_y = y;
+		var invRef_z = z;
+		var invRef_w = w;
+		invRef_x = -invRef_x;
+		invRef_y = -invRef_y;
+		invRef_z = -invRef_z;
+		var _g_current = 0;
+		var _g_array = sourceQuats;
+		while(_g_current < _g_array.length) {
+			var _g_value = _g_array[_g_current];
+			var _g_key = _g_current++;
+			var index = _g_key;
+			var rotation = _g_value;
+			var weight = weights[index];
+			var x2 = invRef_x * rotation.w + invRef_w * rotation.x + invRef_y * rotation.z - invRef_z * rotation.y;
+			var y2 = invRef_w * rotation.y - invRef_x * rotation.z + invRef_y * rotation.w + invRef_z * rotation.x;
+			var z2 = invRef_w * rotation.z + invRef_x * rotation.y - invRef_y * rotation.x + invRef_z * rotation.w;
+			var w2 = invRef_w * rotation.w - invRef_x * rotation.x - invRef_y * rotation.y - invRef_z * rotation.z;
+			mulRes_x = x2;
+			mulRes_y = y2;
+			mulRes_z = z2;
+			mulRes_w = w2;
+			if(mulRes_w < 0) {
+				mulRes_x = -mulRes_x;
+				mulRes_y = -mulRes_y;
+				mulRes_z = -mulRes_z;
+				mulRes_w = -mulRes_w;
+			}
+			mulRes_w *= weight;
+			mulRes_x *= weight;
+			mulRes_y *= weight;
+			mulRes_z *= weight;
+			this.w += mulRes_w;
+			this.x += mulRes_x;
+			this.y += mulRes_y;
+			this.z += mulRes_z;
+		}
+		var len = this.x * this.x + this.y * this.y + this.z * this.z + this.w * this.w;
+		if(len < 1e-20) {
+			this.x = this.y = this.z = 0;
+			this.w = 1;
+		} else {
+			var m = 1. / Math.sqrt(len);
+			this.x *= m;
+			this.y *= m;
+			this.z *= m;
+			this.w *= m;
+		}
+		var x2 = referenceQuat.x * this.w + referenceQuat.w * this.x + referenceQuat.y * this.z - referenceQuat.z * this.y;
+		var y2 = referenceQuat.w * this.y - referenceQuat.x * this.z + referenceQuat.y * this.w + referenceQuat.z * this.x;
+		var z2 = referenceQuat.w * this.z + referenceQuat.x * this.y - referenceQuat.y * this.x + referenceQuat.z * this.w;
+		var w2 = referenceQuat.w * this.w - referenceQuat.x * this.x - referenceQuat.y * this.y - referenceQuat.z * this.z;
+		this.x = x2;
+		this.y = y2;
+		this.z = z2;
+		this.w = w2;
+		if(this.w < 0) {
+			this.x = -this.x;
+			this.y = -this.y;
+			this.z = -this.z;
+			this.w = -this.w;
+		}
+	}
 	,__class__: h3d_Quat
 };
 var h3d_VectorImpl = function(x,y,z) {
@@ -30518,6 +31526,12 @@ h3d_Vector4Impl.prototype = {
 		this.x *= f;
 		this.y *= f;
 		this.z *= f;
+	}
+	,scale4: function(f) {
+		this.x *= f;
+		this.y *= f;
+		this.z *= f;
+		this.w *= f;
 	}
 	,sub: function(v) {
 		var x = this.x - v.x;
@@ -31532,42 +32546,93 @@ h3d_anim_BufferAnimation.prototype = $extend(h3d_anim_Animation.prototype,{
 			}
 			var m = o.matrix;
 			if(m != null) {
-				if((layout & 1 << h3d_anim_DataLayout.Position._hx_index) != 0) {
-					m._41 = _gthis.data[offset1++] * k1 + _gthis.data[offset2++] * k2;
-					m._42 = _gthis.data[offset1++] * k1 + _gthis.data[offset2++] * k2;
-					m._43 = _gthis.data[offset1++] * k1 + _gthis.data[offset2++] * k2;
-				} else {
-					m._41 = m._14;
-					m._42 = m._24;
-					m._43 = m._34;
-				}
-				if((layout & 1 << h3d_anim_DataLayout.Rotation._hx_index) != 0) {
-					var q1x = this.data[offset1++];
-					var q1y = this.data[offset1++];
-					var q1z = this.data[offset1++];
-					var f = 1 - (q1x * q1x + q1y * q1y + q1z * q1z);
-					var q1w = Math.sqrt(f < 0 ? -f : f);
-					var q2x = this.data[offset2++];
-					var q2y = this.data[offset2++];
-					var q2z = this.data[offset2++];
-					var f1 = 1 - (q2x * q2x + q2y * q2y + q2z * q2z);
-					var q2w = Math.sqrt(f1 < 0 ? -f1 : f1);
-					var dot = q1x * q2x + q1y * q2y + q1z * q2z + q1w * q2w;
-					var q2 = dot < 0 ? -k2 : k2;
-					var qx = q1x * k1 + q2x * q2;
-					var qy = q1y * k1 + q2y * q2;
-					var qz = q1z * k1 + q2z * q2;
-					var qw = q1w * k1 + q2w * q2;
-					var ql = 1 / Math.sqrt(qx * qx + qy * qy + qz * qz + qw * qw);
-					qx *= ql;
-					qy *= ql;
-					qz *= ql;
-					qw *= ql;
-					if(decompose) {
-						m._12 = qx;
-						m._13 = qy;
-						m._21 = qz;
-						m._23 = qw;
+				var tmp = o.targetSkin;
+				var skinData = tmp != null ? tmp.skinData : null;
+				if(!(skinData != null && !skinData.allJoints[o.targetJoint].shouldReceiveAnimation())) {
+					if((layout & 1 << h3d_anim_DataLayout.Position._hx_index) != 0) {
+						m._41 = _gthis.data[offset1++] * k1 + _gthis.data[offset2++] * k2;
+						m._42 = _gthis.data[offset1++] * k1 + _gthis.data[offset2++] * k2;
+						m._43 = _gthis.data[offset1++] * k1 + _gthis.data[offset2++] * k2;
+					} else {
+						m._41 = m._14;
+						m._42 = m._24;
+						m._43 = m._34;
+					}
+					if((layout & 1 << h3d_anim_DataLayout.Rotation._hx_index) != 0) {
+						var q1x = this.data[offset1++];
+						var q1y = this.data[offset1++];
+						var q1z = this.data[offset1++];
+						var f = 1 - (q1x * q1x + q1y * q1y + q1z * q1z);
+						var q1w = Math.sqrt(f < 0 ? -f : f);
+						var q2x = this.data[offset2++];
+						var q2y = this.data[offset2++];
+						var q2z = this.data[offset2++];
+						var f1 = 1 - (q2x * q2x + q2y * q2y + q2z * q2z);
+						var q2w = Math.sqrt(f1 < 0 ? -f1 : f1);
+						var dot = q1x * q2x + q1y * q2y + q1z * q2z + q1w * q2w;
+						var q2 = dot < 0 ? -k2 : k2;
+						var qx = q1x * k1 + q2x * q2;
+						var qy = q1y * k1 + q2y * q2;
+						var qz = q1z * k1 + q2z * q2;
+						var qw = q1w * k1 + q2w * q2;
+						var ql = 1 / Math.sqrt(qx * qx + qy * qy + qz * qz + qw * qw);
+						qx *= ql;
+						qy *= ql;
+						qz *= ql;
+						qw *= ql;
+						if(decompose) {
+							m._12 = qx;
+							m._13 = qy;
+							m._21 = qz;
+							m._23 = qw;
+							if((layout & 1 << h3d_anim_DataLayout.Scale._hx_index) != 0) {
+								m._11 = _gthis.data[offset1++] * k1 + _gthis.data[offset2++] * k2;
+								m._22 = _gthis.data[offset1++] * k1 + _gthis.data[offset2++] * k2;
+								m._33 = _gthis.data[offset1++] * k1 + _gthis.data[offset2++] * k2;
+							} else {
+								m._11 = 1;
+								m._22 = 1;
+								m._33 = 1;
+							}
+						} else {
+							var xx = qx * qx;
+							var xy = qx * qy;
+							var xz = qx * qz;
+							var xw = qx * qw;
+							var yy = qy * qy;
+							var yz = qy * qz;
+							var yw = qy * qw;
+							var zz = qz * qz;
+							var zw = qz * qw;
+							m._11 = 1 - 2 * (yy + zz);
+							m._12 = 2 * (xy + zw);
+							m._13 = 2 * (xz - yw);
+							m._21 = 2 * (xy - zw);
+							m._22 = 1 - 2 * (xx + zz);
+							m._23 = 2 * (yz + xw);
+							m._31 = 2 * (xz + yw);
+							m._32 = 2 * (yz - xw);
+							m._33 = 1 - 2 * (xx + yy);
+							if((layout & 1 << h3d_anim_DataLayout.Scale._hx_index) != 0) {
+								var sx = _gthis.data[offset1++] * k1 + _gthis.data[offset2++] * k2;
+								var sy = _gthis.data[offset1++] * k1 + _gthis.data[offset2++] * k2;
+								var sz = _gthis.data[offset1++] * k1 + _gthis.data[offset2++] * k2;
+								m._11 *= sx;
+								m._12 *= sx;
+								m._13 *= sx;
+								m._21 *= sy;
+								m._22 *= sy;
+								m._23 *= sy;
+								m._31 *= sz;
+								m._32 *= sz;
+								m._33 *= sz;
+							}
+						}
+					} else {
+						m._12 = 0;
+						m._13 = 0;
+						m._21 = 0;
+						m._23 = decompose ? 1 : 0;
 						if((layout & 1 << h3d_anim_DataLayout.Scale._hx_index) != 0) {
 							m._11 = _gthis.data[offset1++] * k1 + _gthis.data[offset2++] * k2;
 							m._22 = _gthis.data[offset1++] * k1 + _gthis.data[offset2++] * k2;
@@ -31577,57 +32642,10 @@ h3d_anim_BufferAnimation.prototype = $extend(h3d_anim_Animation.prototype,{
 							m._22 = 1;
 							m._33 = 1;
 						}
-					} else {
-						var xx = qx * qx;
-						var xy = qx * qy;
-						var xz = qx * qz;
-						var xw = qx * qw;
-						var yy = qy * qy;
-						var yz = qy * qz;
-						var yw = qy * qw;
-						var zz = qz * qz;
-						var zw = qz * qw;
-						m._11 = 1 - 2 * (yy + zz);
-						m._12 = 2 * (xy + zw);
-						m._13 = 2 * (xz - yw);
-						m._21 = 2 * (xy - zw);
-						m._22 = 1 - 2 * (xx + zz);
-						m._23 = 2 * (yz + xw);
-						m._31 = 2 * (xz + yw);
-						m._32 = 2 * (yz - xw);
-						m._33 = 1 - 2 * (xx + yy);
-						if((layout & 1 << h3d_anim_DataLayout.Scale._hx_index) != 0) {
-							var sx = _gthis.data[offset1++] * k1 + _gthis.data[offset2++] * k2;
-							var sy = _gthis.data[offset1++] * k1 + _gthis.data[offset2++] * k2;
-							var sz = _gthis.data[offset1++] * k1 + _gthis.data[offset2++] * k2;
-							m._11 *= sx;
-							m._12 *= sx;
-							m._13 *= sx;
-							m._21 *= sy;
-							m._22 *= sy;
-							m._23 *= sy;
-							m._31 *= sz;
-							m._32 *= sz;
-							m._33 *= sz;
-						}
-					}
-				} else {
-					m._12 = 0;
-					m._13 = 0;
-					m._21 = 0;
-					m._23 = decompose ? 1 : 0;
-					if((layout & 1 << h3d_anim_DataLayout.Scale._hx_index) != 0) {
-						m._11 = _gthis.data[offset1++] * k1 + _gthis.data[offset2++] * k2;
-						m._22 = _gthis.data[offset1++] * k1 + _gthis.data[offset2++] * k2;
-						m._33 = _gthis.data[offset1++] * k1 + _gthis.data[offset2++] * k2;
-					} else {
-						m._11 = 1;
-						m._22 = 1;
-						m._33 = 1;
 					}
 				}
 				if(o.targetSkin != null) {
-					o.targetSkin.currentRelPose[o.targetJoint] = m;
+					o.targetSkin.jointsData[o.targetJoint].currentRelPose = m;
 					o.targetSkin.jointsUpdated = true;
 				} else {
 					var _this = o.targetObject;
@@ -31638,6 +32656,11 @@ h3d_anim_BufferAnimation.prototype = $extend(h3d_anim_Animation.prototype,{
 						_this.flags |= f2;
 					} else {
 						_this.flags &= ~f2;
+					}
+					var c = b;
+					if(c && (_this.flags & 131072) != 0) {
+						var f3 = 262144;
+						_this.flags |= f3;
 					}
 				}
 			}
@@ -31998,7 +33021,7 @@ h3d_anim_LinearAnimation.prototype = $extend(h3d_anim_Animation.prototype,{
 				}
 			}
 			if(o.targetSkin != null) {
-				o.targetSkin.currentRelPose[o.targetJoint] = o.matrix;
+				o.targetSkin.jointsData[o.targetJoint].currentRelPose = o.matrix;
 				o.targetSkin.jointsUpdated = true;
 			} else {
 				var _this = o.targetObject;
@@ -32010,6 +33033,11 @@ h3d_anim_LinearAnimation.prototype = $extend(h3d_anim_Animation.prototype,{
 					_this.flags |= f;
 				} else {
 					_this.flags &= ~f;
+				}
+				var c = b;
+				if(c && (_this.flags & 131072) != 0) {
+					var f3 = 262144;
+					_this.flags |= f3;
 				}
 			}
 		}
@@ -32027,8 +33055,60 @@ var h3d_anim_Joint = function() {
 $hxClasses["h3d.anim.Joint"] = h3d_anim_Joint;
 h3d_anim_Joint.__name__ = "h3d.anim.Joint";
 h3d_anim_Joint.prototype = {
-	__class__: h3d_anim_Joint
+	shouldReceiveAnimation: function() {
+		return true;
+	}
+	,makeRuntimeData: function() {
+		return new h3d_scene_JointData();
+	}
+	,__class__: h3d_anim_Joint
 };
+var h3d_anim_DynamicJoint = function() {
+	this.slackness = 0;
+	this.resistance = 1;
+	this.stiffness = 1;
+	this.damping = 1;
+	var x = 0;
+	var y = 0;
+	var z = 0;
+	if(z == null) {
+		z = 0.;
+	}
+	if(y == null) {
+		y = 0.;
+	}
+	if(x == null) {
+		x = 0.;
+	}
+	this.lockAxis = new h3d_VectorImpl(x,y,z);
+	this.additive = false;
+	var x = 0.0;
+	var y = 0.0;
+	var z = 0.0;
+	if(z == null) {
+		z = 0.;
+	}
+	if(y == null) {
+		y = 0.;
+	}
+	if(x == null) {
+		x = 0.;
+	}
+	this.globalForce = new h3d_VectorImpl(x,y,z);
+	h3d_anim_Joint.call(this);
+};
+$hxClasses["h3d.anim.DynamicJoint"] = h3d_anim_DynamicJoint;
+h3d_anim_DynamicJoint.__name__ = "h3d.anim.DynamicJoint";
+h3d_anim_DynamicJoint.__super__ = h3d_anim_Joint;
+h3d_anim_DynamicJoint.prototype = $extend(h3d_anim_Joint.prototype,{
+	shouldReceiveAnimation: function() {
+		return this.additive;
+	}
+	,makeRuntimeData: function() {
+		return new h3d_scene_DynamicJointData();
+	}
+	,__class__: h3d_anim_DynamicJoint
+});
 var h3d_anim__$Skin_Permut = function() {
 };
 $hxClasses["h3d.anim._Skin.Permut"] = h3d_anim__$Skin_Permut;
@@ -33749,6 +34829,9 @@ h3d_col_Bounds.prototype = $extend(h3d_col_Collider.prototype,{
 			return a;
 		}
 	}
+	,closestPoint: function(p) {
+		throw haxe_Exception.thrown("Not implemented");
+	}
 	,makeDebugObj: function() {
 		var prim = new h3d_prim_Cube(this.xMax - this.xMin,this.yMax - this.yMin,this.zMax - this.zMin);
 		prim.translate(this.xMin,this.yMin,this.zMin);
@@ -33812,6 +34895,9 @@ h3d_col_OptimizedCollider.prototype = $extend(h3d_col_Collider.prototype,{
 	}
 	,dimension: function() {
 		return Math.max(this.a.dimension(),this.b.dimension());
+	}
+	,closestPoint: function(p) {
+		return this.b.closestPoint(p);
 	}
 	,makeDebugObj: function() {
 		var bobj = this.b.makeDebugObj();
@@ -33903,6 +34989,27 @@ h3d_col_GroupCollider.prototype = $extend(h3d_col_Collider.prototype,{
 		}
 		return d;
 	}
+	,closestPoint: function(p) {
+		var result = null;
+		var lengthSq = Infinity;
+		var _g = 0;
+		var _g1 = this.colliders;
+		while(_g < _g1.length) {
+			var c = _g1[_g];
+			++_g;
+			var closest = c.closestPoint(p);
+			var _this = closest;
+			var dx = p.x - _this.x;
+			var dy = p.y - _this.y;
+			var dz = p.z - _this.z;
+			var lSq = dx * dx + dy * dy + dz * dz;
+			if(lSq < lengthSq) {
+				result = closest;
+				lengthSq = lSq;
+			}
+		}
+		return result;
+	}
 	,makeDebugObj: function() {
 		var ret = null;
 		var _g = 0;
@@ -33965,6 +35072,27 @@ h3d_col_FPoint.prototype = {
 	}
 	,dot: function(p) {
 		return this.x * p.x + this.y * p.y + this.z * p.z;
+	}
+	,distanceSq: function(v) {
+		var dx = v.x - this.x;
+		var dy = v.y - this.y;
+		var dz = v.z - this.z;
+		return dx * dx + dy * dy + dz * dz;
+	}
+	,lengthSq: function() {
+		return this.x * this.x + this.y * this.y + this.z * this.z;
+	}
+	,normalized: function() {
+		var k = this.x * this.x + this.y * this.y + this.z * this.z;
+		if(k < 1e-20) {
+			k = 0;
+		} else {
+			k = 1. / Math.sqrt(k);
+		}
+		return new h3d_col_FPoint(this.x * k,this.y * k,this.z * k);
+	}
+	,scaled: function(v) {
+		return new h3d_col_FPoint(this.x * v,this.y * v,this.z * v);
 	}
 	,toString: function() {
 		return "FPoint{" + hxd_Math.fmt(this.x) + "," + hxd_Math.fmt(this.y) + "," + hxd_Math.fmt(this.z) + "}";
@@ -34987,6 +36115,875 @@ h3d_col_Frustum.prototype = {
 		}
 		return true;
 	}
+	,hasOrientedBounds: function(b) {
+		var p = this.pleft;
+		var x = p.nx;
+		var y = p.ny;
+		var z = p.nz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var _this_x = x1;
+		var _this_y = y1;
+		var _this_z = z1;
+		var x = b.xx;
+		var y = b.xy;
+		var z = b.xz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ax_x = x1;
+		var ax_y = y1;
+		var ax_z = z1;
+		var x = b.yx;
+		var y = b.yy;
+		var z = b.yz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ay_x = x1;
+		var ay_y = y1;
+		var ay_z = z1;
+		var x = b.zx;
+		var y = b.zy;
+		var z = b.zz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var az_x = x1;
+		var az_y = y1;
+		var az_z = z1;
+		var x = b.centerX;
+		var y = b.centerY;
+		var z = b.centerZ;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var c_x = x1;
+		var c_y = y1;
+		var c_z = z1;
+		var f = _this_x * ax_x + _this_y * ax_y + _this_z * ax_z;
+		var f1 = _this_x * ay_x + _this_y * ay_y + _this_z * ay_z;
+		var f2 = _this_x * az_x + _this_y * az_y + _this_z * az_z;
+		var r = b.hx * (f < 0 ? -f : f) + b.hy * (f1 < 0 ? -f1 : f1) + b.hz * (f2 < 0 ? -f2 : f2);
+		var s = _this_x * c_x + _this_y * c_y + _this_z * c_z - p.d;
+		if(s + r < 0) {
+			return false;
+		}
+		var p = this.pright;
+		var x = p.nx;
+		var y = p.ny;
+		var z = p.nz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var _this_x = x1;
+		var _this_y = y1;
+		var _this_z = z1;
+		var x = b.xx;
+		var y = b.xy;
+		var z = b.xz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ax_x = x1;
+		var ax_y = y1;
+		var ax_z = z1;
+		var x = b.yx;
+		var y = b.yy;
+		var z = b.yz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ay_x = x1;
+		var ay_y = y1;
+		var ay_z = z1;
+		var x = b.zx;
+		var y = b.zy;
+		var z = b.zz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var az_x = x1;
+		var az_y = y1;
+		var az_z = z1;
+		var x = b.centerX;
+		var y = b.centerY;
+		var z = b.centerZ;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var c_x = x1;
+		var c_y = y1;
+		var c_z = z1;
+		var f = _this_x * ax_x + _this_y * ax_y + _this_z * ax_z;
+		var f1 = _this_x * ay_x + _this_y * ay_y + _this_z * ay_z;
+		var f2 = _this_x * az_x + _this_y * az_y + _this_z * az_z;
+		var r = b.hx * (f < 0 ? -f : f) + b.hy * (f1 < 0 ? -f1 : f1) + b.hz * (f2 < 0 ? -f2 : f2);
+		var s = _this_x * c_x + _this_y * c_y + _this_z * c_z - p.d;
+		if(s + r < 0) {
+			return false;
+		}
+		var p = this.ptop;
+		var x = p.nx;
+		var y = p.ny;
+		var z = p.nz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var _this_x = x1;
+		var _this_y = y1;
+		var _this_z = z1;
+		var x = b.xx;
+		var y = b.xy;
+		var z = b.xz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ax_x = x1;
+		var ax_y = y1;
+		var ax_z = z1;
+		var x = b.yx;
+		var y = b.yy;
+		var z = b.yz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ay_x = x1;
+		var ay_y = y1;
+		var ay_z = z1;
+		var x = b.zx;
+		var y = b.zy;
+		var z = b.zz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var az_x = x1;
+		var az_y = y1;
+		var az_z = z1;
+		var x = b.centerX;
+		var y = b.centerY;
+		var z = b.centerZ;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var c_x = x1;
+		var c_y = y1;
+		var c_z = z1;
+		var f = _this_x * ax_x + _this_y * ax_y + _this_z * ax_z;
+		var f1 = _this_x * ay_x + _this_y * ay_y + _this_z * ay_z;
+		var f2 = _this_x * az_x + _this_y * az_y + _this_z * az_z;
+		var r = b.hx * (f < 0 ? -f : f) + b.hy * (f1 < 0 ? -f1 : f1) + b.hz * (f2 < 0 ? -f2 : f2);
+		var s = _this_x * c_x + _this_y * c_y + _this_z * c_z - p.d;
+		if(s + r < 0) {
+			return false;
+		}
+		var p = this.pbottom;
+		var x = p.nx;
+		var y = p.ny;
+		var z = p.nz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var _this_x = x1;
+		var _this_y = y1;
+		var _this_z = z1;
+		var x = b.xx;
+		var y = b.xy;
+		var z = b.xz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ax_x = x1;
+		var ax_y = y1;
+		var ax_z = z1;
+		var x = b.yx;
+		var y = b.yy;
+		var z = b.yz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ay_x = x1;
+		var ay_y = y1;
+		var ay_z = z1;
+		var x = b.zx;
+		var y = b.zy;
+		var z = b.zz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var az_x = x1;
+		var az_y = y1;
+		var az_z = z1;
+		var x = b.centerX;
+		var y = b.centerY;
+		var z = b.centerZ;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var c_x = x1;
+		var c_y = y1;
+		var c_z = z1;
+		var f = _this_x * ax_x + _this_y * ax_y + _this_z * ax_z;
+		var f1 = _this_x * ay_x + _this_y * ay_y + _this_z * ay_z;
+		var f2 = _this_x * az_x + _this_y * az_y + _this_z * az_z;
+		var r = b.hx * (f < 0 ? -f : f) + b.hy * (f1 < 0 ? -f1 : f1) + b.hz * (f2 < 0 ? -f2 : f2);
+		var s = _this_x * c_x + _this_y * c_y + _this_z * c_z - p.d;
+		if(s + r < 0) {
+			return false;
+		}
+		if(this.checkNearFar) {
+			var p = this.pnear;
+			var x = p.nx;
+			var y = p.ny;
+			var z = p.nz;
+			if(z == null) {
+				z = 0.;
+			}
+			if(y == null) {
+				y = 0.;
+			}
+			if(x == null) {
+				x = 0.;
+			}
+			var x1 = x;
+			var y1 = y;
+			var z1 = z;
+			if(z1 == null) {
+				z1 = 0.;
+			}
+			if(y1 == null) {
+				y1 = 0.;
+			}
+			if(x1 == null) {
+				x1 = 0.;
+			}
+			var _this_x = x1;
+			var _this_y = y1;
+			var _this_z = z1;
+			var x = b.xx;
+			var y = b.xy;
+			var z = b.xz;
+			if(z == null) {
+				z = 0.;
+			}
+			if(y == null) {
+				y = 0.;
+			}
+			if(x == null) {
+				x = 0.;
+			}
+			var x1 = x;
+			var y1 = y;
+			var z1 = z;
+			if(z1 == null) {
+				z1 = 0.;
+			}
+			if(y1 == null) {
+				y1 = 0.;
+			}
+			if(x1 == null) {
+				x1 = 0.;
+			}
+			var ax_x = x1;
+			var ax_y = y1;
+			var ax_z = z1;
+			var x = b.yx;
+			var y = b.yy;
+			var z = b.yz;
+			if(z == null) {
+				z = 0.;
+			}
+			if(y == null) {
+				y = 0.;
+			}
+			if(x == null) {
+				x = 0.;
+			}
+			var x1 = x;
+			var y1 = y;
+			var z1 = z;
+			if(z1 == null) {
+				z1 = 0.;
+			}
+			if(y1 == null) {
+				y1 = 0.;
+			}
+			if(x1 == null) {
+				x1 = 0.;
+			}
+			var ay_x = x1;
+			var ay_y = y1;
+			var ay_z = z1;
+			var x = b.zx;
+			var y = b.zy;
+			var z = b.zz;
+			if(z == null) {
+				z = 0.;
+			}
+			if(y == null) {
+				y = 0.;
+			}
+			if(x == null) {
+				x = 0.;
+			}
+			var x1 = x;
+			var y1 = y;
+			var z1 = z;
+			if(z1 == null) {
+				z1 = 0.;
+			}
+			if(y1 == null) {
+				y1 = 0.;
+			}
+			if(x1 == null) {
+				x1 = 0.;
+			}
+			var az_x = x1;
+			var az_y = y1;
+			var az_z = z1;
+			var x = b.centerX;
+			var y = b.centerY;
+			var z = b.centerZ;
+			if(z == null) {
+				z = 0.;
+			}
+			if(y == null) {
+				y = 0.;
+			}
+			if(x == null) {
+				x = 0.;
+			}
+			var x1 = x;
+			var y1 = y;
+			var z1 = z;
+			if(z1 == null) {
+				z1 = 0.;
+			}
+			if(y1 == null) {
+				y1 = 0.;
+			}
+			if(x1 == null) {
+				x1 = 0.;
+			}
+			var c_x = x1;
+			var c_y = y1;
+			var c_z = z1;
+			var f = _this_x * ax_x + _this_y * ax_y + _this_z * ax_z;
+			var f1 = _this_x * ay_x + _this_y * ay_y + _this_z * ay_z;
+			var f2 = _this_x * az_x + _this_y * az_y + _this_z * az_z;
+			var r = b.hx * (f < 0 ? -f : f) + b.hy * (f1 < 0 ? -f1 : f1) + b.hz * (f2 < 0 ? -f2 : f2);
+			var s = _this_x * c_x + _this_y * c_y + _this_z * c_z - p.d;
+			if(s + r < 0) {
+				return false;
+			}
+			var p = this.pfar;
+			var x = p.nx;
+			var y = p.ny;
+			var z = p.nz;
+			if(z == null) {
+				z = 0.;
+			}
+			if(y == null) {
+				y = 0.;
+			}
+			if(x == null) {
+				x = 0.;
+			}
+			var x1 = x;
+			var y1 = y;
+			var z1 = z;
+			if(z1 == null) {
+				z1 = 0.;
+			}
+			if(y1 == null) {
+				y1 = 0.;
+			}
+			if(x1 == null) {
+				x1 = 0.;
+			}
+			var _this_x = x1;
+			var _this_y = y1;
+			var _this_z = z1;
+			var x = b.xx;
+			var y = b.xy;
+			var z = b.xz;
+			if(z == null) {
+				z = 0.;
+			}
+			if(y == null) {
+				y = 0.;
+			}
+			if(x == null) {
+				x = 0.;
+			}
+			var x1 = x;
+			var y1 = y;
+			var z1 = z;
+			if(z1 == null) {
+				z1 = 0.;
+			}
+			if(y1 == null) {
+				y1 = 0.;
+			}
+			if(x1 == null) {
+				x1 = 0.;
+			}
+			var ax_x = x1;
+			var ax_y = y1;
+			var ax_z = z1;
+			var x = b.yx;
+			var y = b.yy;
+			var z = b.yz;
+			if(z == null) {
+				z = 0.;
+			}
+			if(y == null) {
+				y = 0.;
+			}
+			if(x == null) {
+				x = 0.;
+			}
+			var x1 = x;
+			var y1 = y;
+			var z1 = z;
+			if(z1 == null) {
+				z1 = 0.;
+			}
+			if(y1 == null) {
+				y1 = 0.;
+			}
+			if(x1 == null) {
+				x1 = 0.;
+			}
+			var ay_x = x1;
+			var ay_y = y1;
+			var ay_z = z1;
+			var x = b.zx;
+			var y = b.zy;
+			var z = b.zz;
+			if(z == null) {
+				z = 0.;
+			}
+			if(y == null) {
+				y = 0.;
+			}
+			if(x == null) {
+				x = 0.;
+			}
+			var x1 = x;
+			var y1 = y;
+			var z1 = z;
+			if(z1 == null) {
+				z1 = 0.;
+			}
+			if(y1 == null) {
+				y1 = 0.;
+			}
+			if(x1 == null) {
+				x1 = 0.;
+			}
+			var az_x = x1;
+			var az_y = y1;
+			var az_z = z1;
+			var x = b.centerX;
+			var y = b.centerY;
+			var z = b.centerZ;
+			if(z == null) {
+				z = 0.;
+			}
+			if(y == null) {
+				y = 0.;
+			}
+			if(x == null) {
+				x = 0.;
+			}
+			var x1 = x;
+			var y1 = y;
+			var z1 = z;
+			if(z1 == null) {
+				z1 = 0.;
+			}
+			if(y1 == null) {
+				y1 = 0.;
+			}
+			if(x1 == null) {
+				x1 = 0.;
+			}
+			var c_x = x1;
+			var c_y = y1;
+			var c_z = z1;
+			var f = _this_x * ax_x + _this_y * ax_y + _this_z * ax_z;
+			var f1 = _this_x * ay_x + _this_y * ay_y + _this_z * ay_z;
+			var f2 = _this_x * az_x + _this_y * az_y + _this_z * az_z;
+			var r = b.hx * (f < 0 ? -f : f) + b.hy * (f1 < 0 ? -f1 : f1) + b.hz * (f2 < 0 ? -f2 : f2);
+			var s = _this_x * c_x + _this_y * c_y + _this_z * c_z - p.d;
+			if(s + r < 0) {
+				return false;
+			}
+		}
+		return true;
+	}
 	,__class__: h3d_col_Frustum
 };
 var h3d_col_Ray = function() {
@@ -35718,6 +37715,9 @@ h3d_col_ObjectCollider.prototype = $extend(h3d_col_Collider.prototype,{
 		}
 		return this.collider.dimension() * Math.max(Math.max(scale_x,scale_y),scale_z);
 	}
+	,closestPoint: function(p) {
+		throw haxe_Exception.thrown("Not implemented");
+	}
 	,makeDebugObj: function() {
 		var ret = this.collider.makeDebugObj();
 		if(ret != null) {
@@ -35726,6 +37726,4166 @@ h3d_col_ObjectCollider.prototype = $extend(h3d_col_Collider.prototype,{
 		return ret;
 	}
 	,__class__: h3d_col_ObjectCollider
+});
+var h3d_col_OrientedBounds = function() {
+	this.hz = 0.5;
+	this.hy = 0.5;
+	this.hx = 0.5;
+	this.zz = 1.0;
+	this.zy = 0.0;
+	this.zx = 0.0;
+	this.yz = 0.0;
+	this.yy = 1.0;
+	this.yx = 0.0;
+	this.xz = 0.0;
+	this.xy = 0.0;
+	this.xx = 1.0;
+	this.centerZ = 0.0;
+	this.centerY = 0.0;
+	this.centerX = 0.0;
+};
+$hxClasses["h3d.col.OrientedBounds"] = h3d_col_OrientedBounds;
+h3d_col_OrientedBounds.__name__ = "h3d.col.OrientedBounds";
+h3d_col_OrientedBounds.__super__ = h3d_col_Collider;
+h3d_col_OrientedBounds.prototype = $extend(h3d_col_Collider.prototype,{
+	setMatrix: function(m) {
+		var _this = m;
+		var x = 0.;
+		var y = 0.;
+		var z = 0.;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var s_x = x;
+		var s_y = y;
+		var s_z = z;
+		s_x = Math.sqrt(_this._11 * _this._11 + _this._12 * _this._12 + _this._13 * _this._13);
+		s_y = Math.sqrt(_this._21 * _this._21 + _this._22 * _this._22 + _this._23 * _this._23);
+		s_z = Math.sqrt(_this._31 * _this._31 + _this._32 * _this._32 + _this._33 * _this._33);
+		if(_this._11 * (_this._22 * _this._33 - _this._23 * _this._32) + _this._12 * (_this._23 * _this._31 - _this._21 * _this._33) + _this._13 * (_this._21 * _this._32 - _this._22 * _this._31) < 0) {
+			s_x *= -1;
+			s_y *= -1;
+			s_z *= -1;
+		}
+		var isx = 1.0 / s_x;
+		var isy = 1.0 / s_y;
+		var isz = 1.0 / s_z;
+		this.centerX = m._41;
+		this.centerY = m._42;
+		this.centerZ = m._43;
+		this.hx = s_x / 2.0;
+		this.hy = s_y / 2.0;
+		this.hz = s_z / 2.0;
+		this.xx = m._11 * isx;
+		this.xy = m._12 * isx;
+		this.xz = m._13 * isx;
+		this.yx = m._21 * isy;
+		this.yy = m._22 * isy;
+		this.yz = m._23 * isy;
+		this.zx = m._31 * isz;
+		this.zy = m._32 * isz;
+		this.zz = m._33 * isz;
+	}
+	,setEulerAngles: function(x,y,z) {
+		var cx = Math.cos(x);
+		var sx = Math.sin(x);
+		var cy = Math.cos(y);
+		var sy = Math.sin(y);
+		var cz = Math.cos(z);
+		var sz = Math.sin(z);
+		this.xx = cy * cz;
+		this.xy = sx * sy * cz + cx * sz;
+		this.xz = -cx * sy * cz + sx * sz;
+		this.yx = -cy * sz;
+		this.yy = -sx * sy * sz + cx * cz;
+		this.yz = cx * sy * sz + sx * cz;
+		this.zx = sy;
+		this.zy = -sx * cy;
+		this.zz = cx * cy;
+	}
+	,collideOrientedBounds: function(other) {
+		var x = this.xx;
+		var y = this.xy;
+		var z = this.xz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var _this_x = x1;
+		var _this_y = y1;
+		var _this_z = z1;
+		var x = this.yx;
+		var y = this.yy;
+		var z = this.yz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var _this_x1 = x1;
+		var _this_y1 = y1;
+		var _this_z1 = z1;
+		var x = this.zx;
+		var y = this.zy;
+		var z = this.zz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var _this_x2 = x1;
+		var _this_y2 = y1;
+		var _this_z2 = z1;
+		var x = other.xx;
+		var y = other.xy;
+		var z = other.xz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var bx_x = x1;
+		var bx_y = y1;
+		var bx_z = z1;
+		var x = other.yx;
+		var y = other.yy;
+		var z = other.yz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var by_x = x1;
+		var by_y = y1;
+		var by_z = z1;
+		var x = other.zx;
+		var y = other.zy;
+		var z = other.zz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var bz_x = x1;
+		var bz_y = y1;
+		var bz_z = z1;
+		var R00 = _this_x * bx_x + _this_y * bx_y + _this_z * bx_z;
+		var R01 = _this_x * by_x + _this_y * by_y + _this_z * by_z;
+		var R02 = _this_x * bz_x + _this_y * bz_y + _this_z * bz_z;
+		var R10 = _this_x1 * bx_x + _this_y1 * bx_y + _this_z1 * bx_z;
+		var R11 = _this_x1 * by_x + _this_y1 * by_y + _this_z1 * by_z;
+		var R12 = _this_x1 * bz_x + _this_y1 * bz_y + _this_z1 * bz_z;
+		var R20 = _this_x2 * bx_x + _this_y2 * bx_y + _this_z2 * bx_z;
+		var R21 = _this_x2 * by_x + _this_y2 * by_y + _this_z2 * by_z;
+		var R22 = _this_x2 * bz_x + _this_y2 * bz_y + _this_z2 * bz_z;
+		var x = this.centerX;
+		var y = this.centerY;
+		var z = this.centerZ;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ac_x = x1;
+		var ac_y = y1;
+		var ac_z = z1;
+		var x = other.centerX;
+		var y = other.centerY;
+		var z = other.centerZ;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var bc_x = x1;
+		var bc_y = y1;
+		var bc_z = z1;
+		var x = bc_x - ac_x;
+		var y = bc_y - ac_y;
+		var z = bc_z - ac_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var _this_x3 = x1;
+		var _this_y3 = y1;
+		var _this_z3 = z1;
+		var tx = _this_x3 * _this_x + _this_y3 * _this_y + _this_z3 * _this_z;
+		var ty = _this_x3 * _this_x1 + _this_y3 * _this_y1 + _this_z3 * _this_z1;
+		var tz = _this_x3 * _this_x2 + _this_y3 * _this_y2 + _this_z3 * _this_z2;
+		_this_x3 = tx;
+		_this_y3 = ty;
+		_this_z3 = tz;
+		var absR00 = (R00 < 0 ? -R00 : R00) + 1e-10;
+		var absR01 = (R01 < 0 ? -R01 : R01) + 1e-10;
+		var absR02 = (R02 < 0 ? -R02 : R02) + 1e-10;
+		var absR10 = (R10 < 0 ? -R10 : R10) + 1e-10;
+		var absR11 = (R11 < 0 ? -R11 : R11) + 1e-10;
+		var absR12 = (R12 < 0 ? -R12 : R12) + 1e-10;
+		var absR20 = (R20 < 0 ? -R20 : R20) + 1e-10;
+		var absR21 = (R21 < 0 ? -R21 : R21) + 1e-10;
+		var absR22 = (R22 < 0 ? -R22 : R22) + 1e-10;
+		var ra = this.hx;
+		var rb = other.hx * absR00 + other.hy * absR01 + other.hz * absR02;
+		var f = _this_x3;
+		if((f < 0 ? -f : f) > ra + rb) {
+			return false;
+		}
+		var ra = this.hy;
+		var rb = other.hx * absR10 + other.hy * absR11 + other.hz * absR12;
+		var f = _this_y3;
+		if((f < 0 ? -f : f) > ra + rb) {
+			return false;
+		}
+		var ra = this.hz;
+		var rb = other.hx * absR20 + other.hy * absR21 + other.hz * absR22;
+		var f = _this_z3;
+		if((f < 0 ? -f : f) > ra + rb) {
+			return false;
+		}
+		var ra = this.hx * absR00 + this.hy * absR10 + this.hz * absR20;
+		var rb = other.hx;
+		var f = _this_x3 * R00 + _this_y3 * R10 + _this_z3 * R20;
+		if((f < 0 ? -f : f) > ra + rb) {
+			return false;
+		}
+		var ra = this.hx * absR01 + this.hy * absR11 + this.hz * absR21;
+		var rb = other.hy;
+		var f = _this_x3 * R01 + _this_y3 * R11 + _this_z3 * R21;
+		if((f < 0 ? -f : f) > ra + rb) {
+			return false;
+		}
+		var ra = this.hx * absR02 + this.hy * absR12 + this.hz * absR22;
+		var rb = other.hz;
+		var f = _this_x3 * R02 + _this_y3 * R12 + _this_z3 * R22;
+		if((f < 0 ? -f : f) > ra + rb) {
+			return false;
+		}
+		var ra = this.hy * absR20 + this.hz * absR10;
+		var rb = other.hy * absR02 + other.hz * absR01;
+		var f = _this_z3 * R10 - _this_y3 * R20;
+		if((f < 0 ? -f : f) > ra + rb) {
+			return false;
+		}
+		var ra = this.hy * absR21 + this.hz * absR11;
+		var rb = other.hx * absR02 + other.hz * absR00;
+		var f = _this_z3 * R11 - _this_y3 * R21;
+		if((f < 0 ? -f : f) > ra + rb) {
+			return false;
+		}
+		var ra = this.hy * absR22 + this.hz * absR12;
+		var rb = other.hx * absR01 + other.hy * absR00;
+		var f = _this_z3 * R12 - _this_y3 * R22;
+		if((f < 0 ? -f : f) > ra + rb) {
+			return false;
+		}
+		var ra = this.hx * absR20 + this.hz * absR00;
+		var rb = other.hy * absR12 + other.hz * absR11;
+		var f = _this_x3 * R20 - _this_z3 * R00;
+		if((f < 0 ? -f : f) > ra + rb) {
+			return false;
+		}
+		var ra = this.hx * absR21 + this.hz * absR01;
+		var rb = other.hx * absR12 + other.hz * absR10;
+		var f = _this_x3 * R21 - _this_z3 * R01;
+		if((f < 0 ? -f : f) > ra + rb) {
+			return false;
+		}
+		var ra = this.hx * absR22 + this.hz * absR02;
+		var rb = other.hx * absR11 + other.hy * absR10;
+		var f = _this_x3 * R22 - _this_z3 * R02;
+		if((f < 0 ? -f : f) > ra + rb) {
+			return false;
+		}
+		var ra = this.hx * absR10 + this.hy * absR00;
+		var rb = other.hy * absR22 + other.hz * absR21;
+		var f = _this_y3 * R00 - _this_x3 * R10;
+		if((f < 0 ? -f : f) > ra + rb) {
+			return false;
+		}
+		var ra = this.hx * absR11 + this.hy * absR01;
+		var rb = other.hx * absR22 + other.hz * absR20;
+		var f = _this_y3 * R01 - _this_x3 * R11;
+		if((f < 0 ? -f : f) > ra + rb) {
+			return false;
+		}
+		var ra = this.hx * absR12 + this.hy * absR02;
+		var rb = other.hx * absR21 + other.hy * absR20;
+		var f = _this_y3 * R02 - _this_x3 * R12;
+		if((f < 0 ? -f : f) > ra + rb) {
+			return false;
+		}
+		return true;
+	}
+	,rayIntersection: function(r,bestMatch) {
+		var dx = r.px - this.centerX;
+		var dy = r.py - this.centerY;
+		var dz = r.pz - this.centerZ;
+		var rpx = dx * this.xx + dy * this.xy + dz * this.xz;
+		var rpy = dx * this.yx + dy * this.yy + dz * this.yz;
+		var rpz = dx * this.zx + dy * this.zy + dz * this.zz;
+		var rlx = r.lx * this.xx + r.ly * this.xy + r.lz * this.xz;
+		var rly = r.lx * this.yx + r.ly * this.yy + r.lz * this.yz;
+		var rlz = r.lx * this.zx + r.ly * this.zy + r.lz * this.zz;
+		var tmin = 0.0;
+		var tmax = Infinity;
+		if((rlx < 0 ? -rlx : rlx) < 1e-10) {
+			if(rpx < -this.hx || rpx > this.hx) {
+				return -1.0;
+			}
+		} else {
+			var ood = 1.0 / rlx;
+			var t1 = (-this.hx - rpx) * ood;
+			var t2 = (this.hx - rpx) * ood;
+			if(t1 > t2) {
+				var tmp = t2;
+				t2 = t1;
+				t1 = tmp;
+			}
+			if(t1 > tmin) {
+				tmin = t1;
+			}
+			if(t2 < tmax) {
+				tmax = t2;
+			}
+			if(tmin > tmax) {
+				return -1.0;
+			}
+		}
+		if((rly < 0 ? -rly : rly) < 1e-10) {
+			if(rpy < -this.hy || rpy > this.hy) {
+				return -1.0;
+			}
+		} else {
+			var ood = 1.0 / rly;
+			var t1 = (-this.hy - rpy) * ood;
+			var t2 = (this.hy - rpy) * ood;
+			if(t1 > t2) {
+				var tmp = t2;
+				t2 = t1;
+				t1 = tmp;
+			}
+			if(t1 > tmin) {
+				tmin = t1;
+			}
+			if(t2 < tmax) {
+				tmax = t2;
+			}
+			if(tmin > tmax) {
+				return -1.0;
+			}
+		}
+		if((rlz < 0 ? -rlz : rlz) < 1e-10) {
+			if(rpz < -this.hz || rpz > this.hz) {
+				return -1.0;
+			}
+		} else {
+			var ood = 1.0 / rlz;
+			var t1 = (-this.hz - rpz) * ood;
+			var t2 = (this.hz - rpz) * ood;
+			if(t1 > t2) {
+				var tmp = t2;
+				t2 = t1;
+				t1 = tmp;
+			}
+			if(t1 > tmin) {
+				tmin = t1;
+			}
+			if(t2 < tmax) {
+				tmax = t2;
+			}
+			if(tmin > tmax) {
+				return -1.0;
+			}
+		}
+		return tmin;
+	}
+	,contains: function(p) {
+		var dx = p.x - this.centerX;
+		var dy = p.y - this.centerY;
+		var dz = p.z - this.centerZ;
+		var rpx = dx * this.xx + dy * this.xy + dz * this.xz;
+		var rpy = dx * this.yx + dy * this.yy + dz * this.yz;
+		var rpz = dx * this.zx + dy * this.zy + dz * this.zz;
+		var tmp;
+		var f = this.hx;
+		if((f < 0 ? -f : f) - (rpx < 0 ? -rpx : rpx) > -1e-010) {
+			var f = this.hy;
+			tmp = (f < 0 ? -f : f) - (rpy < 0 ? -rpy : rpy) > -1e-010;
+		} else {
+			tmp = false;
+		}
+		if(tmp) {
+			var f = this.hz;
+			return (f < 0 ? -f : f) - (rpz < 0 ? -rpz : rpz) > -1e-010;
+		} else {
+			return false;
+		}
+	}
+	,inFrustum: function(f,m) {
+		if(m != null) {
+			throw haxe_Exception.thrown("Not implemented");
+		}
+		return f.hasOrientedBounds(this);
+	}
+	,inSphere: function(s) {
+		var x = s.x;
+		var y = s.y;
+		var z = s.z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var sp_x = x1;
+		var sp_y = y1;
+		var sp_z = z1;
+		var rr = s.r * s.r;
+		var sx = -1;
+		var sy = -1;
+		var sz = -1;
+		var x = this.xx;
+		var y = this.xy;
+		var z = this.xz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ax_x = x1;
+		var ax_y = y1;
+		var ax_z = z1;
+		var x = this.yx;
+		var y = this.yy;
+		var z = this.yz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ay_x = x1;
+		var ay_y = y1;
+		var ay_z = z1;
+		var x = this.zx;
+		var y = this.zy;
+		var z = this.zz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var az_x = x1;
+		var az_y = y1;
+		var az_z = z1;
+		var x = this.centerX;
+		var y = this.centerY;
+		var z = this.centerZ;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var c_x = x1;
+		var c_y = y1;
+		var c_z = z1;
+		var v = sx * this.hx;
+		ax_x *= v;
+		ax_y *= v;
+		ax_z *= v;
+		var v = sy * this.hy;
+		ay_x *= v;
+		ay_y *= v;
+		ay_z *= v;
+		var v = sz * this.hz;
+		az_x *= v;
+		az_y *= v;
+		az_z *= v;
+		var x = c_x + ax_x;
+		var y = c_y + ax_y;
+		var z = c_z + ax_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + ay_x;
+		var y = this_y + ay_y;
+		var z = this_z + ay_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + az_x;
+		var y = this_y + az_y;
+		var z = this_z + az_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var _this_x = x1;
+		var _this_y = y1;
+		var _this_z = z1;
+		var dx = sp_x - _this_x;
+		var dy = sp_y - _this_y;
+		var dz = sp_z - _this_z;
+		if(dx * dx + dy * dy + dz * dz > rr) {
+			return false;
+		}
+		var sx = 1;
+		var sy = -1;
+		var sz = -1;
+		var x = this.xx;
+		var y = this.xy;
+		var z = this.xz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ax_x = x1;
+		var ax_y = y1;
+		var ax_z = z1;
+		var x = this.yx;
+		var y = this.yy;
+		var z = this.yz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ay_x = x1;
+		var ay_y = y1;
+		var ay_z = z1;
+		var x = this.zx;
+		var y = this.zy;
+		var z = this.zz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var az_x = x1;
+		var az_y = y1;
+		var az_z = z1;
+		var x = this.centerX;
+		var y = this.centerY;
+		var z = this.centerZ;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var c_x = x1;
+		var c_y = y1;
+		var c_z = z1;
+		var v = sx * this.hx;
+		ax_x *= v;
+		ax_y *= v;
+		ax_z *= v;
+		var v = sy * this.hy;
+		ay_x *= v;
+		ay_y *= v;
+		ay_z *= v;
+		var v = sz * this.hz;
+		az_x *= v;
+		az_y *= v;
+		az_z *= v;
+		var x = c_x + ax_x;
+		var y = c_y + ax_y;
+		var z = c_z + ax_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + ay_x;
+		var y = this_y + ay_y;
+		var z = this_z + ay_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + az_x;
+		var y = this_y + az_y;
+		var z = this_z + az_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var _this_x = x1;
+		var _this_y = y1;
+		var _this_z = z1;
+		var dx = sp_x - _this_x;
+		var dy = sp_y - _this_y;
+		var dz = sp_z - _this_z;
+		if(dx * dx + dy * dy + dz * dz > rr) {
+			return false;
+		}
+		var sx = -1;
+		var sy = 1;
+		var sz = -1;
+		var x = this.xx;
+		var y = this.xy;
+		var z = this.xz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ax_x = x1;
+		var ax_y = y1;
+		var ax_z = z1;
+		var x = this.yx;
+		var y = this.yy;
+		var z = this.yz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ay_x = x1;
+		var ay_y = y1;
+		var ay_z = z1;
+		var x = this.zx;
+		var y = this.zy;
+		var z = this.zz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var az_x = x1;
+		var az_y = y1;
+		var az_z = z1;
+		var x = this.centerX;
+		var y = this.centerY;
+		var z = this.centerZ;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var c_x = x1;
+		var c_y = y1;
+		var c_z = z1;
+		var v = sx * this.hx;
+		ax_x *= v;
+		ax_y *= v;
+		ax_z *= v;
+		var v = sy * this.hy;
+		ay_x *= v;
+		ay_y *= v;
+		ay_z *= v;
+		var v = sz * this.hz;
+		az_x *= v;
+		az_y *= v;
+		az_z *= v;
+		var x = c_x + ax_x;
+		var y = c_y + ax_y;
+		var z = c_z + ax_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + ay_x;
+		var y = this_y + ay_y;
+		var z = this_z + ay_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + az_x;
+		var y = this_y + az_y;
+		var z = this_z + az_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var _this_x = x1;
+		var _this_y = y1;
+		var _this_z = z1;
+		var dx = sp_x - _this_x;
+		var dy = sp_y - _this_y;
+		var dz = sp_z - _this_z;
+		if(dx * dx + dy * dy + dz * dz > rr) {
+			return false;
+		}
+		var sx = 1;
+		var sy = 1;
+		var sz = -1;
+		var x = this.xx;
+		var y = this.xy;
+		var z = this.xz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ax_x = x1;
+		var ax_y = y1;
+		var ax_z = z1;
+		var x = this.yx;
+		var y = this.yy;
+		var z = this.yz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ay_x = x1;
+		var ay_y = y1;
+		var ay_z = z1;
+		var x = this.zx;
+		var y = this.zy;
+		var z = this.zz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var az_x = x1;
+		var az_y = y1;
+		var az_z = z1;
+		var x = this.centerX;
+		var y = this.centerY;
+		var z = this.centerZ;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var c_x = x1;
+		var c_y = y1;
+		var c_z = z1;
+		var v = sx * this.hx;
+		ax_x *= v;
+		ax_y *= v;
+		ax_z *= v;
+		var v = sy * this.hy;
+		ay_x *= v;
+		ay_y *= v;
+		ay_z *= v;
+		var v = sz * this.hz;
+		az_x *= v;
+		az_y *= v;
+		az_z *= v;
+		var x = c_x + ax_x;
+		var y = c_y + ax_y;
+		var z = c_z + ax_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + ay_x;
+		var y = this_y + ay_y;
+		var z = this_z + ay_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + az_x;
+		var y = this_y + az_y;
+		var z = this_z + az_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var _this_x = x1;
+		var _this_y = y1;
+		var _this_z = z1;
+		var dx = sp_x - _this_x;
+		var dy = sp_y - _this_y;
+		var dz = sp_z - _this_z;
+		if(dx * dx + dy * dy + dz * dz > rr) {
+			return false;
+		}
+		var sx = -1;
+		var sy = -1;
+		var sz = 1;
+		var x = this.xx;
+		var y = this.xy;
+		var z = this.xz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ax_x = x1;
+		var ax_y = y1;
+		var ax_z = z1;
+		var x = this.yx;
+		var y = this.yy;
+		var z = this.yz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ay_x = x1;
+		var ay_y = y1;
+		var ay_z = z1;
+		var x = this.zx;
+		var y = this.zy;
+		var z = this.zz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var az_x = x1;
+		var az_y = y1;
+		var az_z = z1;
+		var x = this.centerX;
+		var y = this.centerY;
+		var z = this.centerZ;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var c_x = x1;
+		var c_y = y1;
+		var c_z = z1;
+		var v = sx * this.hx;
+		ax_x *= v;
+		ax_y *= v;
+		ax_z *= v;
+		var v = sy * this.hy;
+		ay_x *= v;
+		ay_y *= v;
+		ay_z *= v;
+		var v = sz * this.hz;
+		az_x *= v;
+		az_y *= v;
+		az_z *= v;
+		var x = c_x + ax_x;
+		var y = c_y + ax_y;
+		var z = c_z + ax_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + ay_x;
+		var y = this_y + ay_y;
+		var z = this_z + ay_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + az_x;
+		var y = this_y + az_y;
+		var z = this_z + az_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var _this_x = x1;
+		var _this_y = y1;
+		var _this_z = z1;
+		var dx = sp_x - _this_x;
+		var dy = sp_y - _this_y;
+		var dz = sp_z - _this_z;
+		if(dx * dx + dy * dy + dz * dz > rr) {
+			return false;
+		}
+		var sx = 1;
+		var sy = -1;
+		var sz = 1;
+		var x = this.xx;
+		var y = this.xy;
+		var z = this.xz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ax_x = x1;
+		var ax_y = y1;
+		var ax_z = z1;
+		var x = this.yx;
+		var y = this.yy;
+		var z = this.yz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ay_x = x1;
+		var ay_y = y1;
+		var ay_z = z1;
+		var x = this.zx;
+		var y = this.zy;
+		var z = this.zz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var az_x = x1;
+		var az_y = y1;
+		var az_z = z1;
+		var x = this.centerX;
+		var y = this.centerY;
+		var z = this.centerZ;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var c_x = x1;
+		var c_y = y1;
+		var c_z = z1;
+		var v = sx * this.hx;
+		ax_x *= v;
+		ax_y *= v;
+		ax_z *= v;
+		var v = sy * this.hy;
+		ay_x *= v;
+		ay_y *= v;
+		ay_z *= v;
+		var v = sz * this.hz;
+		az_x *= v;
+		az_y *= v;
+		az_z *= v;
+		var x = c_x + ax_x;
+		var y = c_y + ax_y;
+		var z = c_z + ax_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + ay_x;
+		var y = this_y + ay_y;
+		var z = this_z + ay_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + az_x;
+		var y = this_y + az_y;
+		var z = this_z + az_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var _this_x = x1;
+		var _this_y = y1;
+		var _this_z = z1;
+		var dx = sp_x - _this_x;
+		var dy = sp_y - _this_y;
+		var dz = sp_z - _this_z;
+		if(dx * dx + dy * dy + dz * dz > rr) {
+			return false;
+		}
+		var sx = -1;
+		var sy = 1;
+		var sz = 1;
+		var x = this.xx;
+		var y = this.xy;
+		var z = this.xz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ax_x = x1;
+		var ax_y = y1;
+		var ax_z = z1;
+		var x = this.yx;
+		var y = this.yy;
+		var z = this.yz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ay_x = x1;
+		var ay_y = y1;
+		var ay_z = z1;
+		var x = this.zx;
+		var y = this.zy;
+		var z = this.zz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var az_x = x1;
+		var az_y = y1;
+		var az_z = z1;
+		var x = this.centerX;
+		var y = this.centerY;
+		var z = this.centerZ;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var c_x = x1;
+		var c_y = y1;
+		var c_z = z1;
+		var v = sx * this.hx;
+		ax_x *= v;
+		ax_y *= v;
+		ax_z *= v;
+		var v = sy * this.hy;
+		ay_x *= v;
+		ay_y *= v;
+		ay_z *= v;
+		var v = sz * this.hz;
+		az_x *= v;
+		az_y *= v;
+		az_z *= v;
+		var x = c_x + ax_x;
+		var y = c_y + ax_y;
+		var z = c_z + ax_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + ay_x;
+		var y = this_y + ay_y;
+		var z = this_z + ay_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + az_x;
+		var y = this_y + az_y;
+		var z = this_z + az_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var _this_x = x1;
+		var _this_y = y1;
+		var _this_z = z1;
+		var dx = sp_x - _this_x;
+		var dy = sp_y - _this_y;
+		var dz = sp_z - _this_z;
+		if(dx * dx + dy * dy + dz * dz > rr) {
+			return false;
+		}
+		var sx = 1;
+		var sy = 1;
+		var sz = 1;
+		var x = this.xx;
+		var y = this.xy;
+		var z = this.xz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ax_x = x1;
+		var ax_y = y1;
+		var ax_z = z1;
+		var x = this.yx;
+		var y = this.yy;
+		var z = this.yz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ay_x = x1;
+		var ay_y = y1;
+		var ay_z = z1;
+		var x = this.zx;
+		var y = this.zy;
+		var z = this.zz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var az_x = x1;
+		var az_y = y1;
+		var az_z = z1;
+		var x = this.centerX;
+		var y = this.centerY;
+		var z = this.centerZ;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var c_x = x1;
+		var c_y = y1;
+		var c_z = z1;
+		var v = sx * this.hx;
+		ax_x *= v;
+		ax_y *= v;
+		ax_z *= v;
+		var v = sy * this.hy;
+		ay_x *= v;
+		ay_y *= v;
+		ay_z *= v;
+		var v = sz * this.hz;
+		az_x *= v;
+		az_y *= v;
+		az_z *= v;
+		var x = c_x + ax_x;
+		var y = c_y + ax_y;
+		var z = c_z + ax_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + ay_x;
+		var y = this_y + ay_y;
+		var z = this_z + ay_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + az_x;
+		var y = this_y + az_y;
+		var z = this_z + az_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var _this_x = x1;
+		var _this_y = y1;
+		var _this_z = z1;
+		var dx = sp_x - _this_x;
+		var dy = sp_y - _this_y;
+		var dz = sp_z - _this_z;
+		if(dx * dx + dy * dy + dz * dz > rr) {
+			return false;
+		}
+		return true;
+	}
+	,dimension: function() {
+		var a = this.hx;
+		var a1 = this.hy;
+		var b = this.hz;
+		var b1 = a1 < b ? b : a1;
+		return 2.0 * (a < b1 ? b1 : a);
+	}
+	,getVertice: function(i) {
+		var sx = (i & 1) * 2 - 1;
+		var sy = (i >> 1 & 1) * 2 - 1;
+		var sz = (i >> 2 & 1) * 2 - 1;
+		var x = this.xx;
+		var y = this.xy;
+		var z = this.xz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ax_x = x1;
+		var ax_y = y1;
+		var ax_z = z1;
+		var x = this.yx;
+		var y = this.yy;
+		var z = this.yz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ay_x = x1;
+		var ay_y = y1;
+		var ay_z = z1;
+		var x = this.zx;
+		var y = this.zy;
+		var z = this.zz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var az_x = x1;
+		var az_y = y1;
+		var az_z = z1;
+		var x = this.centerX;
+		var y = this.centerY;
+		var z = this.centerZ;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var c_x = x1;
+		var c_y = y1;
+		var c_z = z1;
+		var v = sx * this.hx;
+		ax_x *= v;
+		ax_y *= v;
+		ax_z *= v;
+		var v = sy * this.hy;
+		ay_x *= v;
+		ay_y *= v;
+		ay_z *= v;
+		var v = sz * this.hz;
+		az_x *= v;
+		az_y *= v;
+		az_z *= v;
+		var x = c_x + ax_x;
+		var y = c_y + ax_y;
+		var z = c_z + ax_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + ay_x;
+		var y = this_y + ay_y;
+		var z = this_z + ay_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + az_x;
+		var y = this_y + az_y;
+		var z = this_z + az_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		return new h3d_VectorImpl(x,y,z);
+	}
+	,getVertices: function(out) {
+		var tmp = out;
+		out = tmp != null ? tmp : [];
+		var sx = -1;
+		var sy = -1;
+		var sz = -1;
+		var x = this.xx;
+		var y = this.xy;
+		var z = this.xz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ax_x = x1;
+		var ax_y = y1;
+		var ax_z = z1;
+		var x = this.yx;
+		var y = this.yy;
+		var z = this.yz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ay_x = x1;
+		var ay_y = y1;
+		var ay_z = z1;
+		var x = this.zx;
+		var y = this.zy;
+		var z = this.zz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var az_x = x1;
+		var az_y = y1;
+		var az_z = z1;
+		var x = this.centerX;
+		var y = this.centerY;
+		var z = this.centerZ;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var c_x = x1;
+		var c_y = y1;
+		var c_z = z1;
+		var v = sx * this.hx;
+		ax_x *= v;
+		ax_y *= v;
+		ax_z *= v;
+		var v = sy * this.hy;
+		ay_x *= v;
+		ay_y *= v;
+		ay_z *= v;
+		var v = sz * this.hz;
+		az_x *= v;
+		az_y *= v;
+		az_z *= v;
+		var x = c_x + ax_x;
+		var y = c_y + ax_y;
+		var z = c_z + ax_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + ay_x;
+		var y = this_y + ay_y;
+		var z = this_z + ay_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + az_x;
+		var y = this_y + az_y;
+		var z = this_z + az_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		out.push(new h3d_VectorImpl(x,y,z));
+		var sx = 1;
+		var sy = -1;
+		var sz = -1;
+		var x = this.xx;
+		var y = this.xy;
+		var z = this.xz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ax_x = x1;
+		var ax_y = y1;
+		var ax_z = z1;
+		var x = this.yx;
+		var y = this.yy;
+		var z = this.yz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ay_x = x1;
+		var ay_y = y1;
+		var ay_z = z1;
+		var x = this.zx;
+		var y = this.zy;
+		var z = this.zz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var az_x = x1;
+		var az_y = y1;
+		var az_z = z1;
+		var x = this.centerX;
+		var y = this.centerY;
+		var z = this.centerZ;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var c_x = x1;
+		var c_y = y1;
+		var c_z = z1;
+		var v = sx * this.hx;
+		ax_x *= v;
+		ax_y *= v;
+		ax_z *= v;
+		var v = sy * this.hy;
+		ay_x *= v;
+		ay_y *= v;
+		ay_z *= v;
+		var v = sz * this.hz;
+		az_x *= v;
+		az_y *= v;
+		az_z *= v;
+		var x = c_x + ax_x;
+		var y = c_y + ax_y;
+		var z = c_z + ax_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + ay_x;
+		var y = this_y + ay_y;
+		var z = this_z + ay_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + az_x;
+		var y = this_y + az_y;
+		var z = this_z + az_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		out.push(new h3d_VectorImpl(x,y,z));
+		var sx = -1;
+		var sy = 1;
+		var sz = -1;
+		var x = this.xx;
+		var y = this.xy;
+		var z = this.xz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ax_x = x1;
+		var ax_y = y1;
+		var ax_z = z1;
+		var x = this.yx;
+		var y = this.yy;
+		var z = this.yz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ay_x = x1;
+		var ay_y = y1;
+		var ay_z = z1;
+		var x = this.zx;
+		var y = this.zy;
+		var z = this.zz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var az_x = x1;
+		var az_y = y1;
+		var az_z = z1;
+		var x = this.centerX;
+		var y = this.centerY;
+		var z = this.centerZ;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var c_x = x1;
+		var c_y = y1;
+		var c_z = z1;
+		var v = sx * this.hx;
+		ax_x *= v;
+		ax_y *= v;
+		ax_z *= v;
+		var v = sy * this.hy;
+		ay_x *= v;
+		ay_y *= v;
+		ay_z *= v;
+		var v = sz * this.hz;
+		az_x *= v;
+		az_y *= v;
+		az_z *= v;
+		var x = c_x + ax_x;
+		var y = c_y + ax_y;
+		var z = c_z + ax_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + ay_x;
+		var y = this_y + ay_y;
+		var z = this_z + ay_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + az_x;
+		var y = this_y + az_y;
+		var z = this_z + az_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		out.push(new h3d_VectorImpl(x,y,z));
+		var sx = 1;
+		var sy = 1;
+		var sz = -1;
+		var x = this.xx;
+		var y = this.xy;
+		var z = this.xz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ax_x = x1;
+		var ax_y = y1;
+		var ax_z = z1;
+		var x = this.yx;
+		var y = this.yy;
+		var z = this.yz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ay_x = x1;
+		var ay_y = y1;
+		var ay_z = z1;
+		var x = this.zx;
+		var y = this.zy;
+		var z = this.zz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var az_x = x1;
+		var az_y = y1;
+		var az_z = z1;
+		var x = this.centerX;
+		var y = this.centerY;
+		var z = this.centerZ;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var c_x = x1;
+		var c_y = y1;
+		var c_z = z1;
+		var v = sx * this.hx;
+		ax_x *= v;
+		ax_y *= v;
+		ax_z *= v;
+		var v = sy * this.hy;
+		ay_x *= v;
+		ay_y *= v;
+		ay_z *= v;
+		var v = sz * this.hz;
+		az_x *= v;
+		az_y *= v;
+		az_z *= v;
+		var x = c_x + ax_x;
+		var y = c_y + ax_y;
+		var z = c_z + ax_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + ay_x;
+		var y = this_y + ay_y;
+		var z = this_z + ay_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + az_x;
+		var y = this_y + az_y;
+		var z = this_z + az_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		out.push(new h3d_VectorImpl(x,y,z));
+		var sx = -1;
+		var sy = -1;
+		var sz = 1;
+		var x = this.xx;
+		var y = this.xy;
+		var z = this.xz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ax_x = x1;
+		var ax_y = y1;
+		var ax_z = z1;
+		var x = this.yx;
+		var y = this.yy;
+		var z = this.yz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ay_x = x1;
+		var ay_y = y1;
+		var ay_z = z1;
+		var x = this.zx;
+		var y = this.zy;
+		var z = this.zz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var az_x = x1;
+		var az_y = y1;
+		var az_z = z1;
+		var x = this.centerX;
+		var y = this.centerY;
+		var z = this.centerZ;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var c_x = x1;
+		var c_y = y1;
+		var c_z = z1;
+		var v = sx * this.hx;
+		ax_x *= v;
+		ax_y *= v;
+		ax_z *= v;
+		var v = sy * this.hy;
+		ay_x *= v;
+		ay_y *= v;
+		ay_z *= v;
+		var v = sz * this.hz;
+		az_x *= v;
+		az_y *= v;
+		az_z *= v;
+		var x = c_x + ax_x;
+		var y = c_y + ax_y;
+		var z = c_z + ax_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + ay_x;
+		var y = this_y + ay_y;
+		var z = this_z + ay_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + az_x;
+		var y = this_y + az_y;
+		var z = this_z + az_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		out.push(new h3d_VectorImpl(x,y,z));
+		var sx = 1;
+		var sy = -1;
+		var sz = 1;
+		var x = this.xx;
+		var y = this.xy;
+		var z = this.xz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ax_x = x1;
+		var ax_y = y1;
+		var ax_z = z1;
+		var x = this.yx;
+		var y = this.yy;
+		var z = this.yz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ay_x = x1;
+		var ay_y = y1;
+		var ay_z = z1;
+		var x = this.zx;
+		var y = this.zy;
+		var z = this.zz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var az_x = x1;
+		var az_y = y1;
+		var az_z = z1;
+		var x = this.centerX;
+		var y = this.centerY;
+		var z = this.centerZ;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var c_x = x1;
+		var c_y = y1;
+		var c_z = z1;
+		var v = sx * this.hx;
+		ax_x *= v;
+		ax_y *= v;
+		ax_z *= v;
+		var v = sy * this.hy;
+		ay_x *= v;
+		ay_y *= v;
+		ay_z *= v;
+		var v = sz * this.hz;
+		az_x *= v;
+		az_y *= v;
+		az_z *= v;
+		var x = c_x + ax_x;
+		var y = c_y + ax_y;
+		var z = c_z + ax_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + ay_x;
+		var y = this_y + ay_y;
+		var z = this_z + ay_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + az_x;
+		var y = this_y + az_y;
+		var z = this_z + az_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		out.push(new h3d_VectorImpl(x,y,z));
+		var sx = -1;
+		var sy = 1;
+		var sz = 1;
+		var x = this.xx;
+		var y = this.xy;
+		var z = this.xz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ax_x = x1;
+		var ax_y = y1;
+		var ax_z = z1;
+		var x = this.yx;
+		var y = this.yy;
+		var z = this.yz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ay_x = x1;
+		var ay_y = y1;
+		var ay_z = z1;
+		var x = this.zx;
+		var y = this.zy;
+		var z = this.zz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var az_x = x1;
+		var az_y = y1;
+		var az_z = z1;
+		var x = this.centerX;
+		var y = this.centerY;
+		var z = this.centerZ;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var c_x = x1;
+		var c_y = y1;
+		var c_z = z1;
+		var v = sx * this.hx;
+		ax_x *= v;
+		ax_y *= v;
+		ax_z *= v;
+		var v = sy * this.hy;
+		ay_x *= v;
+		ay_y *= v;
+		ay_z *= v;
+		var v = sz * this.hz;
+		az_x *= v;
+		az_y *= v;
+		az_z *= v;
+		var x = c_x + ax_x;
+		var y = c_y + ax_y;
+		var z = c_z + ax_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + ay_x;
+		var y = this_y + ay_y;
+		var z = this_z + ay_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + az_x;
+		var y = this_y + az_y;
+		var z = this_z + az_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		out.push(new h3d_VectorImpl(x,y,z));
+		var sx = 1;
+		var sy = 1;
+		var sz = 1;
+		var x = this.xx;
+		var y = this.xy;
+		var z = this.xz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ax_x = x1;
+		var ax_y = y1;
+		var ax_z = z1;
+		var x = this.yx;
+		var y = this.yy;
+		var z = this.yz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ay_x = x1;
+		var ay_y = y1;
+		var ay_z = z1;
+		var x = this.zx;
+		var y = this.zy;
+		var z = this.zz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var az_x = x1;
+		var az_y = y1;
+		var az_z = z1;
+		var x = this.centerX;
+		var y = this.centerY;
+		var z = this.centerZ;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var c_x = x1;
+		var c_y = y1;
+		var c_z = z1;
+		var v = sx * this.hx;
+		ax_x *= v;
+		ax_y *= v;
+		ax_z *= v;
+		var v = sy * this.hy;
+		ay_x *= v;
+		ay_y *= v;
+		ay_z *= v;
+		var v = sz * this.hz;
+		az_x *= v;
+		az_y *= v;
+		az_z *= v;
+		var x = c_x + ax_x;
+		var y = c_y + ax_y;
+		var z = c_z + ax_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + ay_x;
+		var y = this_y + ay_y;
+		var z = this_z + ay_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + az_x;
+		var y = this_y + az_y;
+		var z = this_z + az_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		out.push(new h3d_VectorImpl(x,y,z));
+		return out;
+	}
+	,closestPoint: function(p) {
+		throw haxe_Exception.thrown("not implemented");
+	}
+	,testPlane: function(p) {
+		var x = p.nx;
+		var y = p.ny;
+		var z = p.nz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var _this_x = x1;
+		var _this_y = y1;
+		var _this_z = z1;
+		var x = this.xx;
+		var y = this.xy;
+		var z = this.xz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ax_x = x1;
+		var ax_y = y1;
+		var ax_z = z1;
+		var x = this.yx;
+		var y = this.yy;
+		var z = this.yz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var ay_x = x1;
+		var ay_y = y1;
+		var ay_z = z1;
+		var x = this.zx;
+		var y = this.zy;
+		var z = this.zz;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var az_x = x1;
+		var az_y = y1;
+		var az_z = z1;
+		var x = this.centerX;
+		var y = this.centerY;
+		var z = this.centerZ;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var c_x = x1;
+		var c_y = y1;
+		var c_z = z1;
+		var f = _this_x * ax_x + _this_y * ax_y + _this_z * ax_z;
+		var f1 = _this_x * ay_x + _this_y * ay_y + _this_z * ay_z;
+		var f2 = _this_x * az_x + _this_y * az_y + _this_z * az_z;
+		var r = this.hx * (f < 0 ? -f : f) + this.hy * (f1 < 0 ? -f1 : f1) + this.hz * (f2 < 0 ? -f2 : f2);
+		var s = _this_x * c_x + _this_y * c_y + _this_z * c_z - p.d;
+		return s + r;
+	}
+	,makeDebugObj: function() {
+		var g = new h3d_scene_Graphics();
+		var verts = this.getVertices();
+		g.lineStyle(1.0,16777215,1.0);
+		g.moveTo(verts[0].x,verts[0].y,verts[0].z);
+		g.lineTo(verts[4].x,verts[4].y,verts[4].z);
+		g.moveTo(verts[1].x,verts[1].y,verts[1].z);
+		g.lineTo(verts[5].x,verts[5].y,verts[5].z);
+		g.moveTo(verts[2].x,verts[2].y,verts[2].z);
+		g.lineTo(verts[6].x,verts[6].y,verts[6].z);
+		g.moveTo(verts[3].x,verts[3].y,verts[3].z);
+		g.lineTo(verts[7].x,verts[7].y,verts[7].z);
+		g.moveTo(verts[0].x,verts[0].y,verts[0].z);
+		g.lineTo(verts[1].x,verts[1].y,verts[1].z);
+		g.lineTo(verts[3].x,verts[3].y,verts[3].z);
+		g.lineTo(verts[2].x,verts[2].y,verts[2].z);
+		g.lineTo(verts[0].x,verts[0].y,verts[0].z);
+		g.moveTo(verts[4].x,verts[4].y,verts[4].z);
+		g.lineTo(verts[5].x,verts[5].y,verts[5].z);
+		g.lineTo(verts[7].x,verts[7].y,verts[7].z);
+		g.lineTo(verts[6].x,verts[6].y,verts[6].z);
+		g.lineTo(verts[4].x,verts[4].y,verts[4].z);
+		return g;
+	}
+	,__class__: h3d_col_OrientedBounds
 });
 var h3d_col_Plane = function(nx,ny,nz,d) {
 	this.nx = nx;
@@ -36092,8 +42252,12 @@ h3d_col_Plane.prototype = {
 	}
 	,__class__: h3d_col_Plane
 };
-var h3d_col_TriPlane = function() {
+var h3d_col_TriPlane = function(o) {
+	if(o == null) {
+		o = false;
+	}
 	this.next = null;
+	this.oriented = o;
 };
 $hxClasses["h3d.col.TriPlane"] = h3d_col_TriPlane;
 h3d_col_TriPlane.__name__ = "h3d.col.TriPlane";
@@ -36200,7 +42364,7 @@ h3d_col_TriPlane.prototype = $extend(h3d_col_Collider.prototype,{
 		this.invDenom = 1 / (this.dot00 * this.dot11 - this.dot01 * this.dot01);
 	}
 	,clone: function() {
-		var clone = new h3d_col_TriPlane();
+		var clone = new h3d_col_TriPlane(this.oriented);
 		clone.p0x = this.p0x;
 		clone.p0y = this.p0y;
 		clone.p0z = this.p0z;
@@ -36488,14 +42652,656 @@ h3d_col_TriPlane.prototype = $extend(h3d_col_Collider.prototype,{
 	,inSphere: function(s) {
 		throw haxe_Exception.thrown("Not implemented");
 	}
+	,closestPoint: function(p) {
+		var x = this.p0x;
+		var y = this.p0y;
+		var z = this.p0z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var p0_x = x1;
+		var p0_y = y1;
+		var p0_z = z1;
+		var x = p.x - this.p0x;
+		var y = p.y - this.p0y;
+		var z = p.z - this.p0z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var v2_x = x1;
+		var v2_y = y1;
+		var v2_z = z1;
+		var dot02 = this.d1x * v2_x + this.d1y * v2_y + this.d1z * v2_z;
+		var dot12 = this.d2x * v2_x + this.d2y * v2_y + this.d2z * v2_z;
+		var u = (this.dot11 * dot02 - this.dot01 * dot12) * this.invDenom;
+		var v = (this.dot00 * dot12 - this.dot01 * dot02) * this.invDenom;
+		if(u >= 0 && v >= 0 && u + v < 1) {
+			var x = p.x - p0_x;
+			var y = p.y - p0_y;
+			var z = p.z - p0_z;
+			if(z == null) {
+				z = 0.;
+			}
+			if(y == null) {
+				y = 0.;
+			}
+			if(x == null) {
+				x = 0.;
+			}
+			var x1 = x;
+			var y1 = y;
+			var z1 = z;
+			if(z1 == null) {
+				z1 = 0.;
+			}
+			if(y1 == null) {
+				y1 = 0.;
+			}
+			if(x1 == null) {
+				x1 = 0.;
+			}
+			var _this_x = x1;
+			var _this_y = y1;
+			var _this_z = z1;
+			var x = this.nx;
+			var y = this.ny;
+			var z = this.nz;
+			if(z == null) {
+				z = 0.;
+			}
+			if(y == null) {
+				y = 0.;
+			}
+			if(x == null) {
+				x = 0.;
+			}
+			var x1 = x;
+			var y1 = y;
+			var z1 = z;
+			if(z1 == null) {
+				z1 = 0.;
+			}
+			if(y1 == null) {
+				y1 = 0.;
+			}
+			if(x1 == null) {
+				x1 = 0.;
+			}
+			var _this_x1 = x1;
+			var _this_y1 = y1;
+			var _this_z1 = z1;
+			var k = _this_x1 * _this_x1 + _this_y1 * _this_y1 + _this_z1 * _this_z1;
+			if(k < 1e-20) {
+				k = 0;
+			} else {
+				k = 1. / Math.sqrt(k);
+			}
+			_this_x1 *= k;
+			_this_y1 *= k;
+			_this_z1 *= k;
+			var v = _this_x * _this_x1 + _this_y * _this_y1 + _this_z * _this_z1;
+			var x = _this_x1 * v;
+			var y = _this_y1 * v;
+			var z = _this_z1 * v;
+			if(z == null) {
+				z = 0.;
+			}
+			if(y == null) {
+				y = 0.;
+			}
+			if(x == null) {
+				x = 0.;
+			}
+			var x1 = x;
+			var y1 = y;
+			var z1 = z;
+			if(z1 == null) {
+				z1 = 0.;
+			}
+			if(y1 == null) {
+				y1 = 0.;
+			}
+			if(x1 == null) {
+				x1 = 0.;
+			}
+			var v_x = x1;
+			var v_y = y1;
+			var v_z = z1;
+			var x = _this_x - v_x;
+			var y = _this_y - v_y;
+			var z = _this_z - v_z;
+			if(z == null) {
+				z = 0.;
+			}
+			if(y == null) {
+				y = 0.;
+			}
+			if(x == null) {
+				x = 0.;
+			}
+			var x1 = x;
+			var y1 = y;
+			var z1 = z;
+			if(z1 == null) {
+				z1 = 0.;
+			}
+			if(y1 == null) {
+				y1 = 0.;
+			}
+			if(x1 == null) {
+				x1 = 0.;
+			}
+			var dProj_x = x1;
+			var dProj_y = y1;
+			var dProj_z = z1;
+			var x = p0_x + dProj_x;
+			var y = p0_y + dProj_y;
+			var z = p0_z + dProj_z;
+			if(z == null) {
+				z = 0.;
+			}
+			if(y == null) {
+				y = 0.;
+			}
+			if(x == null) {
+				x = 0.;
+			}
+			return new h3d_VectorImpl(x,y,z);
+		}
+		var x = this.d1x;
+		var y = this.d1y;
+		var z = this.d1z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var _this_x = x1;
+		var _this_y = y1;
+		var _this_z = z1;
+		var x = this.d2x;
+		var y = this.d2y;
+		var z = this.d2z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var _this_x1 = x1;
+		var _this_y1 = y1;
+		var _this_z1 = z1;
+		var x = this.p0x;
+		var y = this.p0y;
+		var z = this.p0z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x + _this_x;
+		var y = this_y + _this_y;
+		var z = this_z + _this_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var p1_x = x1;
+		var p1_y = y1;
+		var p1_z = z1;
+		var x = p.x - p0_x;
+		var y = p.y - p0_y;
+		var z = p.z - p0_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var _this_x2 = x1;
+		var _this_y2 = y1;
+		var _this_z2 = z1;
+		var t = (_this_x2 * _this_x + _this_y2 * _this_y + _this_z2 * _this_z) / (_this_x * _this_x + _this_y * _this_y + _this_z * _this_z);
+		if(t < 0.) {
+			t = 0.;
+		} else if(t > 1.) {
+			t = 1.;
+		}
+		var x = _this_x * t;
+		var y = _this_y * t;
+		var z = _this_z * t;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var v_x = x1;
+		var v_y = y1;
+		var v_z = z1;
+		var x = p0_x + v_x;
+		var y = p0_y + v_y;
+		var z = p0_z + v_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var c1 = new h3d_VectorImpl(x,y,z);
+		var x = _this_x1 - _this_x;
+		var y = _this_y1 - _this_y;
+		var z = _this_z1 - _this_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var _this_x = x1;
+		var _this_y = y1;
+		var _this_z = z1;
+		var x = p.x - p1_x;
+		var y = p.y - p1_y;
+		var z = p.z - p1_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var _this_x2 = x1;
+		var _this_y2 = y1;
+		var _this_z2 = z1;
+		var t = (_this_x2 * _this_x + _this_y2 * _this_y + _this_z2 * _this_z) / (_this_x * _this_x + _this_y * _this_y + _this_z * _this_z);
+		if(t < 0.) {
+			t = 0.;
+		} else if(t > 1.) {
+			t = 1.;
+		}
+		var x = _this_x * t;
+		var y = _this_y * t;
+		var z = _this_z * t;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var v_x = x1;
+		var v_y = y1;
+		var v_z = z1;
+		var x = p1_x + v_x;
+		var y = p1_y + v_y;
+		var z = p1_z + v_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var c2 = new h3d_VectorImpl(x,y,z);
+		var x = p.x - p0_x;
+		var y = p.y - p0_y;
+		var z = p.z - p0_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var _this_x = x1;
+		var _this_y = y1;
+		var _this_z = z1;
+		var t = (_this_x * _this_x1 + _this_y * _this_y1 + _this_z * _this_z1) / (_this_x1 * _this_x1 + _this_y1 * _this_y1 + _this_z1 * _this_z1);
+		if(t < 0.) {
+			t = 0.;
+		} else if(t > 1.) {
+			t = 1.;
+		}
+		var x = _this_x1 * t;
+		var y = _this_y1 * t;
+		var z = _this_z1 * t;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var v_x = x1;
+		var v_y = y1;
+		var v_z = z1;
+		var x = p0_x + v_x;
+		var y = p0_y + v_y;
+		var z = p0_z + v_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var c3 = new h3d_VectorImpl(x,y,z);
+		var x = p.x - c1.x;
+		var y = p.y - c1.y;
+		var z = p.z - c1.z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var _this_x = x1;
+		var _this_y = y1;
+		var _this_z = z1;
+		var mag1 = _this_x * _this_x + _this_y * _this_y + _this_z * _this_z;
+		var x = p.x - c2.x;
+		var y = p.y - c2.y;
+		var z = p.z - c2.z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var _this_x = x1;
+		var _this_y = y1;
+		var _this_z = z1;
+		var mag2 = _this_x * _this_x + _this_y * _this_y + _this_z * _this_z;
+		var x = p.x - c3.x;
+		var y = p.y - c3.y;
+		var z = p.z - c3.z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var _this_x = x1;
+		var _this_y = y1;
+		var _this_z = z1;
+		var mag3 = _this_x * _this_x + _this_y * _this_y + _this_z * _this_z;
+		var min = mag1;
+		var c = c1;
+		if(mag2 < min) {
+			min = mag2;
+			c = c2;
+		}
+		if(mag3 < min) {
+			min = mag3;
+			c = c3;
+		}
+		return c;
+	}
 	,rayIntersection: function(r,bestMatch) {
 		var dr = r.lx * this.nx + r.ly * this.ny + r.lz * this.nz;
-		if(dr >= 0) {
+		if(dr >= 0 && this.oriented) {
 			return -1.;
 		}
 		var nd = this.d - (r.px * this.nx + r.py * this.ny + r.pz * this.nz);
 		var k = nd / dr;
-		if(k < 0) {
+		if(k < 0 && this.oriented) {
 			return -1;
 		}
 		var px = r.px + r.lx * k;
@@ -36719,11 +43525,18 @@ h3d_col_TriPlane.prototype = $extend(h3d_col_Collider.prototype,{
 	}
 	,__class__: h3d_col_TriPlane
 });
-var h3d_col_Polygon = function() {
+var h3d_col_Polygon = function(o) {
+	if(o == null) {
+		o = false;
+	}
+	this.oriented = o;
 };
 $hxClasses["h3d.col.Polygon"] = h3d_col_Polygon;
 h3d_col_Polygon.__name__ = "h3d.col.Polygon";
-h3d_col_Polygon.fromPolygon2D = function(p,z) {
+h3d_col_Polygon.fromPolygon2D = function(p,z,oriented) {
+	if(oriented == null) {
+		oriented = true;
+	}
 	if(z == null) {
 		z = 0.;
 	}
@@ -36736,7 +43549,7 @@ h3d_col_Polygon.fromPolygon2D = function(p,z) {
 			var i = _g++;
 			var p1 = p[i + 1];
 			var p2 = p[i + 2];
-			var t = new h3d_col_TriPlane();
+			var t = new h3d_col_TriPlane(oriented);
 			var x = p0.x;
 			var y = p0.y;
 			var z1 = z;
@@ -36928,7 +43741,7 @@ h3d_col_Polygon.fromPolygon2D = function(p,z) {
 			var p0 = p[idx[i * 3]];
 			var p1 = p[idx[i * 3 + 1]];
 			var p2 = p[idx[i * 3 + 2]];
-			var t = new h3d_col_TriPlane();
+			var t = new h3d_col_TriPlane(oriented);
 			var x = p0.x;
 			var y = p0.y;
 			var z1 = z;
@@ -37125,7 +43938,7 @@ h3d_col_Polygon.prototype = $extend(h3d_col_Collider.prototype,{
 		while(_g < _g1) {
 			var i = _g++;
 			var k = i * 3;
-			var t = new h3d_col_TriPlane();
+			var t = new h3d_col_TriPlane(this.oriented);
 			var i0 = indexes[k] * stride;
 			var i1 = indexes[k + 1] * stride;
 			var i2 = indexes[k + 2] * stride;
@@ -37316,9 +44129,9 @@ h3d_col_Polygon.prototype = $extend(h3d_col_Collider.prototype,{
 		return true;
 	}
 	,clone: function() {
-		var clone = new h3d_col_Polygon();
+		var clone = new h3d_col_Polygon(this.oriented);
 		var _this = this.triPlanes;
-		var clone1 = new h3d_col_TriPlane();
+		var clone1 = new h3d_col_TriPlane(_this.oriented);
 		clone1.p0x = _this.p0x;
 		clone1.p0y = _this.p0y;
 		clone1.p0z = _this.p0z;
@@ -37338,7 +44151,7 @@ h3d_col_Polygon.prototype = $extend(h3d_col_Collider.prototype,{
 		clone1.d = _this.d;
 		if(_this.next != null) {
 			var _this1 = _this.next;
-			var clone2 = new h3d_col_TriPlane();
+			var clone2 = new h3d_col_TriPlane(_this1.oriented);
 			clone2.p0x = _this1.p0x;
 			clone2.p0y = _this1.p0y;
 			clone2.p0z = _this1.p0z;
@@ -37478,12 +44291,12 @@ h3d_col_Polygon.prototype = $extend(h3d_col_Collider.prototype,{
 		while(t != null) {
 			var dr = r.lx * t.nx + r.ly * t.ny + r.lz * t.nz;
 			var d;
-			if(dr >= 0) {
+			if(dr >= 0 && t.oriented) {
 				d = -1.;
 			} else {
 				var nd = t.d - (r.px * t.nx + r.py * t.ny + r.pz * t.nz);
 				var k = nd / dr;
-				if(k < 0) {
+				if(k < 0 && t.oriented) {
 					d = -1;
 				} else {
 					var px = r.px + r.lx * k;
@@ -37540,6 +44353,25 @@ h3d_col_Polygon.prototype = $extend(h3d_col_Collider.prototype,{
 	}
 	,inSphere: function(s) {
 		throw haxe_Exception.thrown("Not implemented");
+	}
+	,closestPoint: function(p) {
+		var t = this.triPlanes;
+		var minDistSq = Infinity;
+		var closest = null;
+		while(t != null) {
+			var c = t.closestPoint(p);
+			var _this = p;
+			var dx = c.x - _this.x;
+			var dy = c.y - _this.y;
+			var dz = c.z - _this.z;
+			var distSq = dx * dx + dy * dy + dz * dz;
+			if(distSq < minDistSq) {
+				minDistSq = distSq;
+				closest = c;
+			}
+			t = t.next;
+		}
+		return closest;
 	}
 	,dimension: function() {
 		var _this = this.getBounds();
@@ -37656,7 +44488,11 @@ h3d_col_Polygon.prototype = $extend(h3d_col_Collider.prototype,{
 		}
 		var prim = new h3d_prim_Polygon(points);
 		prim.addNormals();
-		return new h3d_scene_Mesh(prim);
+		var mesh = new h3d_scene_Mesh(prim);
+		if(!this.oriented) {
+			mesh.material.passes.set_culling(h3d_mat_Face.None);
+		}
+		return mesh;
 	}
 	,__class__: h3d_col_Polygon
 });
@@ -37880,6 +44716,463 @@ h3d_col_PolygonBuffer.prototype = $extend(h3d_col_Collider.prototype,{
 		} else {
 			return a;
 		}
+	}
+	,isPointInTriangle: function(d,d1,d2) {
+		var dot02 = d1.x * d.x + d1.y * d.y + d1.z * d.z;
+		var dot12 = d2.x * d.x + d2.y * d.y + d2.z * d.z;
+		var dot00 = d1.x * d1.x + d1.y * d1.y + d1.z * d1.z;
+		var dot01 = d1.x * d2.x + d1.y * d2.y + d1.z * d2.z;
+		var dot11 = d2.x * d2.x + d2.y * d2.y + d2.z * d2.z;
+		var invDenom = 1 / (dot00 * dot11 - dot01 * dot01);
+		var u = (dot11 * dot02 - dot01 * dot12) * invDenom;
+		var v = (dot00 * dot12 - dot01 * dot02) * invDenom;
+		if(u >= 0 && v >= 0) {
+			return u + v < 1;
+		} else {
+			return false;
+		}
+	}
+	,closestPointLine: function(p,start,d) {
+		var x = p.x - start.x;
+		var y = p.y - start.y;
+		var z = p.z - start.z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var _this_x = x;
+		var _this_y = y;
+		var _this_z = z;
+		var t = (_this_x * d.x + _this_y * d.y + _this_z * d.z) / (d.x * d.x + d.y * d.y + d.z * d.z);
+		if(t < 0.) {
+			t = 0.;
+		} else if(t > 1.) {
+			t = 1.;
+		}
+		var x = d.x * t;
+		var y = d.y * t;
+		var z = d.z * t;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var p_x = x;
+		var p_y = y;
+		var p_z = z;
+		return new h3d_col_FPoint(start.x + p_x,start.y + p_y,start.z + p_z);
+	}
+	,closestPoint: function(p) {
+		var x = p.x;
+		var y = p.y;
+		var z = p.z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var p_x = x;
+		var p_y = y;
+		var p_z = z;
+		var minDistSq = Infinity;
+		var closest = null;
+		var i = this.startIndex;
+		var _g = 0;
+		var _g1 = this.triCount;
+		while(_g < _g1) {
+			var t = _g++;
+			var i0 = this.indexes[i++] * 3;
+			var x = this.buffer[i0++];
+			var y = this.buffer[i0++];
+			var z = this.buffer[i0];
+			if(z == null) {
+				z = 0.;
+			}
+			if(y == null) {
+				y = 0.;
+			}
+			if(x == null) {
+				x = 0.;
+			}
+			var p0_x = x;
+			var p0_y = y;
+			var p0_z = z;
+			var i1 = this.indexes[i++] * 3;
+			var x1 = this.buffer[i1++];
+			var y1 = this.buffer[i1++];
+			var z1 = this.buffer[i1];
+			if(z1 == null) {
+				z1 = 0.;
+			}
+			if(y1 == null) {
+				y1 = 0.;
+			}
+			if(x1 == null) {
+				x1 = 0.;
+			}
+			var p1_x = x1;
+			var p1_y = y1;
+			var p1_z = z1;
+			var i2 = this.indexes[i++] * 3;
+			var x2 = this.buffer[i2++];
+			var y2 = this.buffer[i2++];
+			var z2 = this.buffer[i2];
+			if(z2 == null) {
+				z2 = 0.;
+			}
+			if(y2 == null) {
+				y2 = 0.;
+			}
+			if(x2 == null) {
+				x2 = 0.;
+			}
+			var p2_x = x2;
+			var p2_y = y2;
+			var p2_z = z2;
+			var c = null;
+			var x3 = p1_x - p0_x;
+			var y3 = p1_y - p0_y;
+			var z3 = p1_z - p0_z;
+			if(z3 == null) {
+				z3 = 0.;
+			}
+			if(y3 == null) {
+				y3 = 0.;
+			}
+			if(x3 == null) {
+				x3 = 0.;
+			}
+			var d1_x = x3;
+			var d1_y = y3;
+			var d1_z = z3;
+			var x4 = p2_x - p0_x;
+			var y4 = p2_y - p0_y;
+			var z4 = p2_z - p0_z;
+			if(z4 == null) {
+				z4 = 0.;
+			}
+			if(y4 == null) {
+				y4 = 0.;
+			}
+			if(x4 == null) {
+				x4 = 0.;
+			}
+			var d2_x = x4;
+			var d2_y = y4;
+			var d2_z = z4;
+			var x5 = p_x - p0_x;
+			var y5 = p_y - p0_y;
+			var z5 = p_z - p0_z;
+			if(z5 == null) {
+				z5 = 0.;
+			}
+			if(y5 == null) {
+				y5 = 0.;
+			}
+			if(x5 == null) {
+				x5 = 0.;
+			}
+			var d_x = x5;
+			var d_y = y5;
+			var d_z = z5;
+			var dot02 = d1_x * d_x + d1_y * d_y + d1_z * d_z;
+			var dot12 = d2_x * d_x + d2_y * d_y + d2_z * d_z;
+			var dot00 = d1_x * d1_x + d1_y * d1_y + d1_z * d1_z;
+			var dot01 = d1_x * d2_x + d1_y * d2_y + d1_z * d2_z;
+			var dot11 = d2_x * d2_x + d2_y * d2_y + d2_z * d2_z;
+			var invDenom = 1 / (dot00 * dot11 - dot01 * dot01);
+			var u = (dot11 * dot02 - dot01 * dot12) * invDenom;
+			var v = (dot00 * dot12 - dot01 * dot02) * invDenom;
+			if(u >= 0 && v >= 0 && u + v < 1) {
+				var x6 = d1_y * d2_z - d1_z * d2_y;
+				var y6 = d1_z * d2_x - d1_x * d2_z;
+				var z6 = d1_x * d2_y - d1_y * d2_x;
+				if(z6 == null) {
+					z6 = 0.;
+				}
+				if(y6 == null) {
+					y6 = 0.;
+				}
+				if(x6 == null) {
+					x6 = 0.;
+				}
+				var _this_x = x6;
+				var _this_y = y6;
+				var _this_z = z6;
+				var k = _this_x * _this_x + _this_y * _this_y + _this_z * _this_z;
+				if(k < 1e-20) {
+					k = 0;
+				} else {
+					k = 1. / Math.sqrt(k);
+				}
+				var x7 = _this_x * k;
+				var y7 = _this_y * k;
+				var z7 = _this_z * k;
+				if(z7 == null) {
+					z7 = 0.;
+				}
+				if(y7 == null) {
+					y7 = 0.;
+				}
+				if(x7 == null) {
+					x7 = 0.;
+				}
+				var n_x = x7;
+				var n_y = y7;
+				var n_z = z7;
+				var v1 = d_x * n_x + d_y * n_y + d_z * n_z;
+				var x8 = n_x * v1;
+				var y8 = n_y * v1;
+				var z8 = n_z * v1;
+				if(z8 == null) {
+					z8 = 0.;
+				}
+				if(y8 == null) {
+					y8 = 0.;
+				}
+				if(x8 == null) {
+					x8 = 0.;
+				}
+				var p_x1 = x8;
+				var p_y1 = y8;
+				var p_z1 = z8;
+				var x9 = d_x - p_x1;
+				var y9 = d_y - p_y1;
+				var z9 = d_z - p_z1;
+				if(z9 == null) {
+					z9 = 0.;
+				}
+				if(y9 == null) {
+					y9 = 0.;
+				}
+				if(x9 == null) {
+					x9 = 0.;
+				}
+				var dProj_x = x9;
+				var dProj_y = y9;
+				var dProj_z = z9;
+				c = new h3d_col_FPoint(p0_x + dProj_x,p0_y + dProj_y,p0_z + dProj_z);
+			} else {
+				var x10 = p_x - p0_x;
+				var y10 = p_y - p0_y;
+				var z10 = p_z - p0_z;
+				if(z10 == null) {
+					z10 = 0.;
+				}
+				if(y10 == null) {
+					y10 = 0.;
+				}
+				if(x10 == null) {
+					x10 = 0.;
+				}
+				var _this_x1 = x10;
+				var _this_y1 = y10;
+				var _this_z1 = z10;
+				var t1 = (_this_x1 * d1_x + _this_y1 * d1_y + _this_z1 * d1_z) / (d1_x * d1_x + d1_y * d1_y + d1_z * d1_z);
+				if(t1 < 0.) {
+					t1 = 0.;
+				} else if(t1 > 1.) {
+					t1 = 1.;
+				}
+				var x11 = d1_x * t1;
+				var y11 = d1_y * t1;
+				var z11 = d1_z * t1;
+				if(z11 == null) {
+					z11 = 0.;
+				}
+				if(y11 == null) {
+					y11 = 0.;
+				}
+				if(x11 == null) {
+					x11 = 0.;
+				}
+				var p_x2 = x11;
+				var p_y2 = y11;
+				var p_z2 = z11;
+				var c1 = new h3d_col_FPoint(p0_x + p_x2,p0_y + p_y2,p0_z + p_z2);
+				var x12 = d2_x - d1_x;
+				var y12 = d2_y - d1_y;
+				var z12 = d2_z - d1_z;
+				if(z12 == null) {
+					z12 = 0.;
+				}
+				if(y12 == null) {
+					y12 = 0.;
+				}
+				if(x12 == null) {
+					x12 = 0.;
+				}
+				var d_x1 = x12;
+				var d_y1 = y12;
+				var d_z1 = z12;
+				var x13 = p_x - p1_x;
+				var y13 = p_y - p1_y;
+				var z13 = p_z - p1_z;
+				if(z13 == null) {
+					z13 = 0.;
+				}
+				if(y13 == null) {
+					y13 = 0.;
+				}
+				if(x13 == null) {
+					x13 = 0.;
+				}
+				var _this_x2 = x13;
+				var _this_y2 = y13;
+				var _this_z2 = z13;
+				var t2 = (_this_x2 * d_x1 + _this_y2 * d_y1 + _this_z2 * d_z1) / (d_x1 * d_x1 + d_y1 * d_y1 + d_z1 * d_z1);
+				if(t2 < 0.) {
+					t2 = 0.;
+				} else if(t2 > 1.) {
+					t2 = 1.;
+				}
+				var x14 = d_x1 * t2;
+				var y14 = d_y1 * t2;
+				var z14 = d_z1 * t2;
+				if(z14 == null) {
+					z14 = 0.;
+				}
+				if(y14 == null) {
+					y14 = 0.;
+				}
+				if(x14 == null) {
+					x14 = 0.;
+				}
+				var p_x3 = x14;
+				var p_y3 = y14;
+				var p_z3 = z14;
+				var c2 = new h3d_col_FPoint(p1_x + p_x3,p1_y + p_y3,p1_z + p_z3);
+				var x15 = p_x - p0_x;
+				var y15 = p_y - p0_y;
+				var z15 = p_z - p0_z;
+				if(z15 == null) {
+					z15 = 0.;
+				}
+				if(y15 == null) {
+					y15 = 0.;
+				}
+				if(x15 == null) {
+					x15 = 0.;
+				}
+				var _this_x3 = x15;
+				var _this_y3 = y15;
+				var _this_z3 = z15;
+				var t3 = (_this_x3 * d2_x + _this_y3 * d2_y + _this_z3 * d2_z) / (d2_x * d2_x + d2_y * d2_y + d2_z * d2_z);
+				if(t3 < 0.) {
+					t3 = 0.;
+				} else if(t3 > 1.) {
+					t3 = 1.;
+				}
+				var x16 = d2_x * t3;
+				var y16 = d2_y * t3;
+				var z16 = d2_z * t3;
+				if(z16 == null) {
+					z16 = 0.;
+				}
+				if(y16 == null) {
+					y16 = 0.;
+				}
+				if(x16 == null) {
+					x16 = 0.;
+				}
+				var p_x4 = x16;
+				var p_y4 = y16;
+				var p_z4 = z16;
+				var c3 = new h3d_col_FPoint(p0_x + p_x4,p0_y + p_y4,p0_z + p_z4);
+				var x17 = p_x - c1.x;
+				var y17 = p_y - c1.y;
+				var z17 = p_z - c1.z;
+				if(z17 == null) {
+					z17 = 0.;
+				}
+				if(y17 == null) {
+					y17 = 0.;
+				}
+				if(x17 == null) {
+					x17 = 0.;
+				}
+				var _this_x4 = x17;
+				var _this_y4 = y17;
+				var _this_z4 = z17;
+				var mag1 = _this_x4 * _this_x4 + _this_y4 * _this_y4 + _this_z4 * _this_z4;
+				var x18 = p_x - c2.x;
+				var y18 = p_y - c2.y;
+				var z18 = p_z - c2.z;
+				if(z18 == null) {
+					z18 = 0.;
+				}
+				if(y18 == null) {
+					y18 = 0.;
+				}
+				if(x18 == null) {
+					x18 = 0.;
+				}
+				var _this_x5 = x18;
+				var _this_y5 = y18;
+				var _this_z5 = z18;
+				var mag2 = _this_x5 * _this_x5 + _this_y5 * _this_y5 + _this_z5 * _this_z5;
+				var x19 = p_x - c3.x;
+				var y19 = p_y - c3.y;
+				var z19 = p_z - c3.z;
+				if(z19 == null) {
+					z19 = 0.;
+				}
+				if(y19 == null) {
+					y19 = 0.;
+				}
+				if(x19 == null) {
+					x19 = 0.;
+				}
+				var _this_x6 = x19;
+				var _this_y6 = y19;
+				var _this_z6 = z19;
+				var mag3 = _this_x6 * _this_x6 + _this_y6 * _this_y6 + _this_z6 * _this_z6;
+				var min = mag1;
+				c = c1;
+				if(mag2 < min) {
+					min = mag2;
+					c = c2;
+				}
+				if(mag3 < min) {
+					min = mag3;
+					c = c3;
+				}
+			}
+			var dx = c.x - p_x;
+			var dy = c.y - p_y;
+			var dz = c.z - p_z;
+			var distSq = dx * dx + dy * dy + dz * dz;
+			if(distSq < minDistSq) {
+				closest = c;
+				minDistSq = distSq;
+			}
+		}
+		var x = closest.x;
+		var y = closest.y;
+		var z = closest.z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		return new h3d_VectorImpl(x,y,z);
 	}
 	,rayIntersection: function(r,bestMatch) {
 		var i = this.startIndex;
@@ -38351,6 +45644,9 @@ h3d_col_SkinCollider.prototype = $extend(h3d_col_Collider.prototype,{
 			this.transform.buffer[v++] = pz;
 		}
 	}
+	,closestPoint: function(p) {
+		throw haxe_Exception.thrown("Not implemented");
+	}
 	,makeDebugObj: function() {
 		return new h3d_col_SkinColliderDebugObj(this);
 	}
@@ -38369,6 +45665,11 @@ var h3d_scene_Object = function(parent) {
 	} else {
 		this.flags &= ~f;
 	}
+	var c = b;
+	if(c && (this.flags & 131072) != 0) {
+		var f = 262144;
+		this.flags |= f;
+	}
 	this.y = 0;
 	var f = 1;
 	var b = true;
@@ -38376,6 +45677,11 @@ var h3d_scene_Object = function(parent) {
 		this.flags |= f;
 	} else {
 		this.flags &= ~f;
+	}
+	var c = b;
+	if(c && (this.flags & 131072) != 0) {
+		var f = 262144;
+		this.flags |= f;
 	}
 	this.z = 0;
 	var f = 1;
@@ -38385,6 +45691,11 @@ var h3d_scene_Object = function(parent) {
 	} else {
 		this.flags &= ~f;
 	}
+	var c = b;
+	if(c && (this.flags & 131072) != 0) {
+		var f = 262144;
+		this.flags |= f;
+	}
 	this.scaleX = 1;
 	var f = 1;
 	var b = true;
@@ -38392,6 +45703,11 @@ var h3d_scene_Object = function(parent) {
 		this.flags |= f;
 	} else {
 		this.flags &= ~f;
+	}
+	var c = b;
+	if(c && (this.flags & 131072) != 0) {
+		var f = 262144;
+		this.flags |= f;
 	}
 	this.scaleY = 1;
 	var f = 1;
@@ -38401,6 +45717,11 @@ var h3d_scene_Object = function(parent) {
 	} else {
 		this.flags &= ~f;
 	}
+	var c = b;
+	if(c && (this.flags & 131072) != 0) {
+		var f = 262144;
+		this.flags |= f;
+	}
 	this.scaleZ = 1;
 	var f = 1;
 	var b = true;
@@ -38409,6 +45730,11 @@ var h3d_scene_Object = function(parent) {
 	} else {
 		this.flags &= ~f;
 	}
+	var c = b;
+	if(c && (this.flags & 131072) != 0) {
+		var f = 262144;
+		this.flags |= f;
+	}
 	this.qRot = new h3d_Quat();
 	var f = 1;
 	var b = this.follow != null;
@@ -38416,6 +45742,11 @@ var h3d_scene_Object = function(parent) {
 		this.flags |= f;
 	} else {
 		this.flags &= ~f;
+	}
+	var c = b;
+	if(c && (this.flags & 131072) != 0) {
+		var f = 262144;
+		this.flags |= f;
 	}
 	var f = 2;
 	this.flags |= f;
@@ -38489,7 +45820,12 @@ h3d_scene_Object.prototype = {
 		} else {
 			this.flags &= ~f;
 		}
-		return b1;
+		var c = b1;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
+		}
+		return c;
 	}
 	,set_culled: function(b) {
 		var f = 4;
@@ -38589,6 +45925,11 @@ h3d_scene_Object.prototype = {
 				this.flags |= f;
 			} else {
 				this.flags &= ~f;
+			}
+			var c = b1;
+			if(c && (this.flags & 131072) != 0) {
+				var f = 262144;
+				this.flags |= f;
 			}
 		}
 		var f = 2048;
@@ -38694,6 +46035,11 @@ h3d_scene_Object.prototype = {
 			} else {
 				this.flags &= ~f;
 			}
+			var c = b;
+			if(c && (this.flags & 131072) != 0) {
+				var f = 262144;
+				this.flags |= f;
+			}
 			var v = s_y;
 			this.scaleY = v;
 			var f = 1;
@@ -38703,6 +46049,11 @@ h3d_scene_Object.prototype = {
 			} else {
 				this.flags &= ~f;
 			}
+			var c = b;
+			if(c && (this.flags & 131072) != 0) {
+				var f = 262144;
+				this.flags |= f;
+			}
 			var v = s_z;
 			this.scaleZ = v;
 			var f = 1;
@@ -38711,6 +46062,11 @@ h3d_scene_Object.prototype = {
 				this.flags |= f;
 			} else {
 				this.flags &= ~f;
+			}
+			var c = b;
+			if(c && (this.flags & 131072) != 0) {
+				var f = 262144;
+				this.flags |= f;
 			}
 			this.qRot.initRotateMatrix(this.defaultTransform);
 			var v = this.defaultTransform._41;
@@ -38722,6 +46078,11 @@ h3d_scene_Object.prototype = {
 			} else {
 				this.flags &= ~f;
 			}
+			var c = b;
+			if(c && (this.flags & 131072) != 0) {
+				var f = 262144;
+				this.flags |= f;
+			}
 			var v = this.defaultTransform._42;
 			this.y = v;
 			var f = 1;
@@ -38730,6 +46091,11 @@ h3d_scene_Object.prototype = {
 				this.flags |= f;
 			} else {
 				this.flags &= ~f;
+			}
+			var c = b;
+			if(c && (this.flags & 131072) != 0) {
+				var f = 262144;
+				this.flags |= f;
 			}
 			var v = this.defaultTransform._43;
 			this.z = v;
@@ -38740,6 +46106,11 @@ h3d_scene_Object.prototype = {
 			} else {
 				this.flags &= ~f;
 			}
+			var c = b;
+			if(c && (this.flags & 131072) != 0) {
+				var f = 262144;
+				this.flags |= f;
+			}
 			var v = null;
 			this.defaultTransform = v;
 			var f = 1;
@@ -38748,6 +46119,11 @@ h3d_scene_Object.prototype = {
 				this.flags |= f;
 			} else {
 				this.flags &= ~f;
+			}
+			var c = b;
+			if(c && (this.flags & 131072) != 0) {
+				var f = 262144;
+				this.flags |= f;
 			}
 		}
 		if(recursive) {
@@ -38904,6 +46280,11 @@ h3d_scene_Object.prototype = {
 				} else {
 					c.flags &= ~f;
 				}
+				var c1 = b1;
+				if(c1 && (c.flags & 131072) != 0) {
+					var f1 = 262144;
+					c.flags |= f1;
+				}
 			}
 			var f = 1;
 			var b1 = this.follow != null;
@@ -38911,6 +46292,11 @@ h3d_scene_Object.prototype = {
 				this.flags |= f;
 			} else {
 				this.flags &= ~f;
+			}
+			var c = b1;
+			if(c && (this.flags & 131072) != 0) {
+				var f = 262144;
+				this.flags |= f;
 			}
 			this.calcAbsPos();
 		}
@@ -38979,6 +46365,11 @@ h3d_scene_Object.prototype = {
 		} else {
 			o.flags &= ~f;
 		}
+		var c = b;
+		if(c && (o.flags & 131072) != 0) {
+			var f = 262144;
+			o.flags |= f;
+		}
 		var v = this.y;
 		o.y = v;
 		var f = 1;
@@ -38987,6 +46378,11 @@ h3d_scene_Object.prototype = {
 			o.flags |= f;
 		} else {
 			o.flags &= ~f;
+		}
+		var c = b;
+		if(c && (o.flags & 131072) != 0) {
+			var f = 262144;
+			o.flags |= f;
 		}
 		var v = this.z;
 		o.z = v;
@@ -38997,6 +46393,11 @@ h3d_scene_Object.prototype = {
 		} else {
 			o.flags &= ~f;
 		}
+		var c = b;
+		if(c && (o.flags & 131072) != 0) {
+			var f = 262144;
+			o.flags |= f;
+		}
 		var v = this.scaleX;
 		o.scaleX = v;
 		var f = 1;
@@ -39005,6 +46406,11 @@ h3d_scene_Object.prototype = {
 			o.flags |= f;
 		} else {
 			o.flags &= ~f;
+		}
+		var c = b;
+		if(c && (o.flags & 131072) != 0) {
+			var f = 262144;
+			o.flags |= f;
 		}
 		var v = this.scaleY;
 		o.scaleY = v;
@@ -39015,6 +46421,11 @@ h3d_scene_Object.prototype = {
 		} else {
 			o.flags &= ~f;
 		}
+		var c = b;
+		if(c && (o.flags & 131072) != 0) {
+			var f = 262144;
+			o.flags |= f;
+		}
 		var v = this.scaleZ;
 		o.scaleZ = v;
 		var f = 1;
@@ -39023,6 +46434,11 @@ h3d_scene_Object.prototype = {
 			o.flags |= f;
 		} else {
 			o.flags &= ~f;
+		}
+		var c = b;
+		if(c && (o.flags & 131072) != 0) {
+			var f = 262144;
+			o.flags |= f;
 		}
 		var _this = o.qRot;
 		var q = this.qRot;
@@ -39055,6 +46471,11 @@ h3d_scene_Object.prototype = {
 				o.flags |= f;
 			} else {
 				o.flags &= ~f;
+			}
+			var c = b;
+			if(c && (o.flags & 131072) != 0) {
+				var f = 262144;
+				o.flags |= f;
 			}
 		}
 		var _g = 0;
@@ -39108,6 +46529,11 @@ h3d_scene_Object.prototype = {
 			o.flags |= f;
 		} else {
 			o.flags &= ~f;
+		}
+		var c = b;
+		if(c && (o.flags & 131072) != 0) {
+			var f = 262144;
+			o.flags |= f;
 		}
 		if((this.flags & 32) != 0) {
 			if((o.flags & 32) == 0) {
@@ -39173,6 +46599,11 @@ h3d_scene_Object.prototype = {
 				o.flags |= f;
 			} else {
 				o.flags &= ~f;
+			}
+			var c = b;
+			if(c && (o.flags & 131072) != 0) {
+				var f = 262144;
+				o.flags |= f;
 			}
 		}
 	}
@@ -39279,10 +46710,18 @@ h3d_scene_Object.prototype = {
 		} else {
 			this.flags &= ~f;
 		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
+		}
 		return this.follow = v;
 	}
+	,computeVelocity: function() {
+		return this.prevAbsPosFrame != -1;
+	}
 	,calcPrevAbsPos: function() {
-		if(this.prevAbsPosFrame == -1) {
+		if(!this.computeVelocity()) {
 			this.prevAbsPos = null;
 		} else if(this.prevAbsPosFrame < hxd_Timer.frameCount) {
 			this.prevAbsPosFrame = hxd_Timer.frameCount;
@@ -39499,13 +46938,28 @@ h3d_scene_Object.prototype = {
 			var f = 16384;
 			this.flags |= f;
 		}
+		var f = 262144;
+		this.flags &= ~f;
+		var f = 131072;
+		this.flags |= f;
 		this.sync(ctx);
+		var f = 131072;
+		this.flags &= ~f;
+		changed = changed || (this.flags & 262144) != 0;
+		if((this.flags & 262144) != 0) {
+			this.calcAbsPos();
+		}
 		var f = 1;
 		var b = this.follow != null;
 		if(b) {
 			this.flags |= f;
 		} else {
 			this.flags &= ~f;
+		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
 		}
 		this.lastFrame = ctx.frame;
 		var p = 0;
@@ -39523,6 +46977,11 @@ h3d_scene_Object.prototype = {
 						c.flags |= f;
 					} else {
 						c.flags &= ~f;
+					}
+					var c1 = b;
+					if(c1 && (c.flags & 131072) != 0) {
+						var f1 = 262144;
+						c.flags |= f1;
 					}
 				}
 				c.syncRec(ctx);
@@ -39549,6 +47008,11 @@ h3d_scene_Object.prototype = {
 			} else {
 				this.flags &= ~f;
 			}
+			var c = b;
+			if(c && (this.flags & 131072) != 0) {
+				var f = 262144;
+				this.flags |= f;
+			}
 			this.calcAbsPos();
 			var _g = 0;
 			var _g1 = this.children;
@@ -39561,6 +47025,11 @@ h3d_scene_Object.prototype = {
 					c.flags |= f;
 				} else {
 					c.flags &= ~f;
+				}
+				var c1 = b;
+				if(c1 && (c.flags & 131072) != 0) {
+					var f1 = 262144;
+					c.flags |= f1;
 				}
 			}
 		}
@@ -39582,6 +47051,11 @@ h3d_scene_Object.prototype = {
 			} else {
 				this.flags &= ~f;
 			}
+			var c = b;
+			if(c && (this.flags & 131072) != 0) {
+				var f = 262144;
+				this.flags |= f;
+			}
 			this.calcAbsPos();
 			var _g = 0;
 			var _g1 = this.children;
@@ -39595,12 +47069,17 @@ h3d_scene_Object.prototype = {
 				} else {
 					c.flags &= ~f;
 				}
+				var c1 = b;
+				if(c1 && (c.flags & 131072) != 0) {
+					var f1 = 262144;
+					c.flags |= f1;
+				}
 			}
 		}
 		var prevForcedScreenRatio = ctx.forcedScreenRatio;
 		if((this.flags & 65536) == 0 || !ctx.computeVelocity || (this.flags & 8192) != 0 || (this.flags & 4) != 0) {
 			this.prevAbsPosFrame = -1;
-		} else if(this.prevAbsPosFrame == -1) {
+		} else if(!this.computeVelocity()) {
 			this.prevAbsPosFrame = 0;
 		}
 		this.calcPrevAbsPos();
@@ -39627,6 +47106,11 @@ h3d_scene_Object.prototype = {
 		} else {
 			this.flags &= ~f;
 		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
+		}
 		return v;
 	}
 	,set_y: function(v) {
@@ -39637,6 +47121,11 @@ h3d_scene_Object.prototype = {
 			this.flags |= f;
 		} else {
 			this.flags &= ~f;
+		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
 		}
 		return v;
 	}
@@ -39649,6 +47138,11 @@ h3d_scene_Object.prototype = {
 		} else {
 			this.flags &= ~f;
 		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
+		}
 		return v;
 	}
 	,set_scaleX: function(v) {
@@ -39659,6 +47153,11 @@ h3d_scene_Object.prototype = {
 			this.flags |= f;
 		} else {
 			this.flags &= ~f;
+		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
 		}
 		return v;
 	}
@@ -39671,6 +47170,11 @@ h3d_scene_Object.prototype = {
 		} else {
 			this.flags &= ~f;
 		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
+		}
 		return v;
 	}
 	,set_scaleZ: function(v) {
@@ -39681,6 +47185,11 @@ h3d_scene_Object.prototype = {
 			this.flags |= f;
 		} else {
 			this.flags &= ~f;
+		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
 		}
 		return v;
 	}
@@ -39693,6 +47202,11 @@ h3d_scene_Object.prototype = {
 		} else {
 			this.flags &= ~f;
 		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
+		}
 		return v;
 	}
 	,setPosition: function(x,y,z) {
@@ -39704,6 +47218,11 @@ h3d_scene_Object.prototype = {
 		} else {
 			this.flags &= ~f;
 		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
+		}
 		this.y = y;
 		var f = 1;
 		var b = true;
@@ -39711,6 +47230,11 @@ h3d_scene_Object.prototype = {
 			this.flags |= f;
 		} else {
 			this.flags &= ~f;
+		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
 		}
 		this.z = z;
 		var f = 1;
@@ -39720,12 +47244,22 @@ h3d_scene_Object.prototype = {
 		} else {
 			this.flags &= ~f;
 		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
+		}
 		var f = 1;
 		var b = true;
 		if(b) {
 			this.flags |= f;
 		} else {
 			this.flags &= ~f;
+		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
 		}
 	}
 	,setTransform: function(mat) {
@@ -39762,6 +47296,11 @@ h3d_scene_Object.prototype = {
 		} else {
 			this.flags &= ~f;
 		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
+		}
 		var v = mat._42;
 		this.y = v;
 		var f = 1;
@@ -39770,6 +47309,11 @@ h3d_scene_Object.prototype = {
 			this.flags |= f;
 		} else {
 			this.flags &= ~f;
+		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
 		}
 		var v = mat._43;
 		this.z = v;
@@ -39780,6 +47324,11 @@ h3d_scene_Object.prototype = {
 		} else {
 			this.flags &= ~f;
 		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
+		}
 		var v = s_x;
 		this.scaleX = v;
 		var f = 1;
@@ -39788,6 +47337,11 @@ h3d_scene_Object.prototype = {
 			this.flags |= f;
 		} else {
 			this.flags &= ~f;
+		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
 		}
 		var v = s_y;
 		this.scaleY = v;
@@ -39798,6 +47352,11 @@ h3d_scene_Object.prototype = {
 		} else {
 			this.flags &= ~f;
 		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
+		}
 		var v = s_z;
 		this.scaleZ = v;
 		var f = 1;
@@ -39806,6 +47365,11 @@ h3d_scene_Object.prototype = {
 			this.flags |= f;
 		} else {
 			this.flags &= ~f;
+		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
 		}
 		h3d_scene_Object.tmpMat.load(mat);
 		h3d_scene_Object.tmpMat.prependScale(1.0 / s_x,1.0 / s_y,1.0 / s_z);
@@ -39816,6 +47380,11 @@ h3d_scene_Object.prototype = {
 			this.flags |= f;
 		} else {
 			this.flags &= ~f;
+		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
 		}
 	}
 	,getTransform: function(mat) {
@@ -39843,6 +47412,11 @@ h3d_scene_Object.prototype = {
 		} else {
 			this.flags &= ~f;
 		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
+		}
 	}
 	,setRotation: function(rx,ry,rz) {
 		this.qRot.initRotation(rx,ry,rz);
@@ -39852,6 +47426,11 @@ h3d_scene_Object.prototype = {
 			this.flags |= f;
 		} else {
 			this.flags &= ~f;
+		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
 		}
 	}
 	,setRotationAxis: function(ax,ay,az,angle) {
@@ -39863,6 +47442,11 @@ h3d_scene_Object.prototype = {
 		} else {
 			this.flags &= ~f;
 		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
+		}
 	}
 	,setDirection: function(v,up) {
 		this.qRot.initDirection(v,up);
@@ -39872,6 +47456,11 @@ h3d_scene_Object.prototype = {
 			this.flags |= f;
 		} else {
 			this.flags &= ~f;
+		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
 		}
 	}
 	,getLocalDirection: function() {
@@ -39902,6 +47491,11 @@ h3d_scene_Object.prototype = {
 		} else {
 			this.flags &= ~f;
 		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
+		}
 	}
 	,scale: function(v) {
 		var v1 = this.scaleX * v;
@@ -39913,6 +47507,11 @@ h3d_scene_Object.prototype = {
 		} else {
 			this.flags &= ~f;
 		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
+		}
 		var v1 = this.scaleY * v;
 		this.scaleY = v1;
 		var f = 1;
@@ -39921,6 +47520,11 @@ h3d_scene_Object.prototype = {
 			this.flags |= f;
 		} else {
 			this.flags &= ~f;
+		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
 		}
 		var v1 = this.scaleZ * v;
 		this.scaleZ = v1;
@@ -39931,12 +47535,22 @@ h3d_scene_Object.prototype = {
 		} else {
 			this.flags &= ~f;
 		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
+		}
 		var f = 1;
 		var b = true;
 		if(b) {
 			this.flags |= f;
 		} else {
 			this.flags &= ~f;
+		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
 		}
 	}
 	,setScale: function(v) {
@@ -39948,6 +47562,11 @@ h3d_scene_Object.prototype = {
 		} else {
 			this.flags &= ~f;
 		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
+		}
 		this.scaleY = v;
 		var f = 1;
 		var b = true;
@@ -39955,6 +47574,11 @@ h3d_scene_Object.prototype = {
 			this.flags |= f;
 		} else {
 			this.flags &= ~f;
+		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
 		}
 		this.scaleZ = v;
 		var f = 1;
@@ -39964,12 +47588,22 @@ h3d_scene_Object.prototype = {
 		} else {
 			this.flags &= ~f;
 		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
+		}
 		var f = 1;
 		var b = true;
 		if(b) {
 			this.flags |= f;
 		} else {
 			this.flags &= ~f;
+		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
 		}
 	}
 	,toString: function() {
@@ -39997,7 +47631,7 @@ h3d_scene_Object.prototype = {
 		return new hxd_impl_ArrayIterator_$h3d_$scene_$Object(this.children);
 	}
 	,__class__: h3d_scene_Object
-	,__properties__: {set_posChanged:"set_posChanged",get_posChanged:"get_posChanged",set_cullingColliderInherited:"set_cullingColliderInherited",get_cullingColliderInherited:"get_cullingColliderInherited",set_cullingCollider:"set_cullingCollider",set_drawn:"set_drawn",get_drawn:"get_drawn",set_alwaysSync:"set_alwaysSync",get_alwaysSync:"get_alwaysSync",set_fixedPosition:"set_fixedPosition",get_fixedPosition:"get_fixedPosition",set_lightCameraCenter:"set_lightCameraCenter",get_lightCameraCenter:"get_lightCameraCenter",set_ignoreParentTransform:"set_ignoreParentTransform",get_ignoreParentTransform:"get_ignoreParentTransform",set_modelRoot:"set_modelRoot",get_modelRoot:"get_modelRoot",set_ignoreCollide:"set_ignoreCollide",get_ignoreCollide:"get_ignoreCollide",set_ignoreBounds:"set_ignoreBounds",get_ignoreBounds:"get_ignoreBounds",set_inheritCulled:"set_inheritCulled",get_inheritCulled:"get_inheritCulled",set_alwaysSyncAnimation:"set_alwaysSyncAnimation",get_alwaysSyncAnimation:"get_alwaysSyncAnimation",set_culled:"set_culled",get_culled:"get_culled",set_defaultTransform:"set_defaultTransform",set_followPositionOnly:"set_followPositionOnly",get_followPositionOnly:"get_followPositionOnly",set_follow:"set_follow",set_allocated:"set_allocated",get_allocated:"get_allocated",set_visible:"set_visible",get_visible:"get_visible",set_scaleZ:"set_scaleZ",set_scaleY:"set_scaleY",set_scaleX:"set_scaleX",set_z:"set_z",set_y:"set_y",set_x:"set_x",get_numChildren:"get_numChildren"}
+	,__properties__: {set_defaultTransform:"set_defaultTransform",set_followPositionOnly:"set_followPositionOnly",get_followPositionOnly:"get_followPositionOnly",set_follow:"set_follow",set_posChanged:"set_posChanged",get_posChanged:"get_posChanged",set_scaleZ:"set_scaleZ",set_scaleY:"set_scaleY",set_scaleX:"set_scaleX",set_z:"set_z",set_y:"set_y",set_x:"set_x",set_cullingColliderInherited:"set_cullingColliderInherited",get_cullingColliderInherited:"get_cullingColliderInherited",set_cullingCollider:"set_cullingCollider",set_drawn:"set_drawn",get_drawn:"get_drawn",set_alwaysSync:"set_alwaysSync",get_alwaysSync:"get_alwaysSync",set_fixedPosition:"set_fixedPosition",get_fixedPosition:"get_fixedPosition",set_lightCameraCenter:"set_lightCameraCenter",get_lightCameraCenter:"get_lightCameraCenter",set_ignoreParentTransform:"set_ignoreParentTransform",get_ignoreParentTransform:"get_ignoreParentTransform",set_modelRoot:"set_modelRoot",get_modelRoot:"get_modelRoot",set_ignoreCollide:"set_ignoreCollide",get_ignoreCollide:"get_ignoreCollide",set_ignoreBounds:"set_ignoreBounds",get_ignoreBounds:"get_ignoreBounds",set_inheritCulled:"set_inheritCulled",get_inheritCulled:"get_inheritCulled",set_alwaysSyncAnimation:"set_alwaysSyncAnimation",get_alwaysSyncAnimation:"get_alwaysSyncAnimation",set_culled:"set_culled",get_culled:"get_culled",set_allocated:"set_allocated",get_allocated:"get_allocated",set_visible:"set_visible",get_visible:"get_visible",get_numChildren:"get_numChildren"}
 };
 var h3d_col_SkinColliderDebugObj = function(col) {
 	this.boxes = [];
@@ -40013,6 +47647,11 @@ var h3d_col_SkinColliderDebugObj = function(col) {
 			this.flags |= f;
 		} else {
 			this.flags &= ~f;
+		}
+		var c = b;
+		if(c && (this.flags & 131072) != 0) {
+			var f = 262144;
+			this.flags |= f;
 		}
 	}
 	var f = 2048;
@@ -40189,7 +47828,7 @@ h3d_col_SkinColliderDebugObj.prototype = $extend(h3d_scene_Object.prototype,{
 				var m = this.skin.currentPalette[j.bindIndex];
 				b.setTransform(m);
 			} else {
-				b.setTransform(this.skin.currentAbsPose[j.index]);
+				b.setTransform(this.skin.jointsData[j.index].currentAbsPose);
 			}
 		}
 	}
@@ -40294,20 +47933,24 @@ h3d_col_Sphere.prototype = $extend(h3d_col_Collider.prototype,{
 		return dx * dx + dy * dy + dz * dz - this.r * this.r < 0;
 	}
 	,rayIntersection: function(r,bestMatch) {
-		var r2 = this.r * this.r;
-		var px = r.px + r.lx;
-		var py = r.py + r.ly;
-		var pz = r.pz + r.lz;
-		var a = r.lx * r.lx + r.ly * r.ly + r.lz * r.lz;
-		var b = 2 * r.lx * (this.x - px) + 2 * r.ly * (this.y - py) + 2 * r.lz * (this.z - pz);
-		var c = this.x * this.x + this.y * this.y + this.z * this.z + (px * px + py * py + pz * pz) - 2 * (this.x * px + this.y * py + this.z * pz) - r2;
-		var d = b * b - 4 * a * c;
-		if(d < 0) {
+		var mx = r.px - this.x;
+		var my = r.py - this.y;
+		var mz = r.pz - this.z;
+		var b = mx * r.lx + my * r.ly + mz * r.lz;
+		var c = mx * mx + my * my + mz * mz - this.r * this.r;
+		if(c > 0.0 && b > 0.0) {
 			return -1;
 		}
-		d = Math.sqrt(d);
-		var t = (-b + d) / (2 * a);
-		return 1 - t;
+		var d = b * b - c;
+		if(d < 0.0) {
+			return -1;
+		}
+		var t = -b - Math.sqrt(d);
+		if(t < 0.0) {
+			return 0.0;
+		} else {
+			return t;
+		}
 	}
 	,inFrustum: function(f,m) {
 		if(m != null) {
@@ -40537,6 +48180,163 @@ h3d_col_Sphere.prototype = $extend(h3d_col_Collider.prototype,{
 	,dimension: function() {
 		return this.r;
 	}
+	,closestPoint: function(p) {
+		var x = this.x;
+		var y = this.y;
+		var z = this.z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var v_x = x1;
+		var v_y = y1;
+		var v_z = z1;
+		var x = p.x - v_x;
+		var y = p.y - v_y;
+		var z = p.z - v_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var _this_x = x1;
+		var _this_y = y1;
+		var _this_z = z1;
+		var k = _this_x * _this_x + _this_y * _this_y + _this_z * _this_z;
+		if(k < 1e-20) {
+			k = 0;
+		} else {
+			k = 1. / Math.sqrt(k);
+		}
+		var x = _this_x * k;
+		var y = _this_y * k;
+		var z = _this_z * k;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var v = this.r;
+		var x = this_x * v;
+		var y = this_y * v;
+		var z = this_z * v;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var d_x = x1;
+		var d_y = y1;
+		var d_z = z1;
+		var x = this.x;
+		var y = this.y;
+		var z = this.z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var v_x = x1;
+		var v_y = y1;
+		var v_z = z1;
+		var x = d_x + v_x;
+		var y = d_y + v_y;
+		var z = d_z + v_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		return new h3d_VectorImpl(x,y,z);
+	}
 	,clone: function() {
 		var s = new h3d_col_Sphere();
 		s.x = this.x;
@@ -40690,6 +48490,8 @@ h3d_impl_Driver.prototype = {
 	}
 	,allocInstanceBuffer: function(b,bytes) {
 	}
+	,uploadInstanceBufferBytes: function(b,startVertex,vertexCount,buf,bufPos) {
+	}
 	,disposeTexture: function(t) {
 	}
 	,disposeBuffer: function(b) {
@@ -40708,6 +48510,8 @@ h3d_impl_Driver.prototype = {
 	}
 	,readBufferBytes: function(b,startVertex,vertexCount,buf,bufPos) {
 		throw haxe_Exception.thrown("Driver does not allow to read vertex bytes");
+	}
+	,onTextureBiasChanged: function(t) {
 	}
 	,copyTexture: function(from,to) {
 		return false;
@@ -40929,7 +48733,6 @@ h3d_impl_GlDriver.prototype = $extend(h3d_impl_Driver.prototype,{
 		}
 		this.gl.shaderSource(s,shader.code);
 		this.gl.compileShader(s);
-		var log = this.gl.getShaderInfoLog(s);
 		if(this.gl.getShaderParameter(s,35713) != 1) {
 			var log = this.gl.getShaderInfoLog(s);
 			var lid = Std.parseInt(HxOverrides.substr(log,9,null));
@@ -41069,6 +48872,8 @@ h3d_impl_GlDriver.prototype = $extend(h3d_impl_Driver.prototype,{
 					tmp = this.gl.getUniformBlockIndex(p.p,(shader.kind == hxsl_FunctionKind.Vertex ? "vertex_" : "") + "uniform_buffer" + i);
 					break;
 				case 1:
+					throw haxe_Exception.thrown("Storage buffer not supported in WebGL");
+				case 2:
 					throw haxe_Exception.thrown("RW buffer not supported in WebGL");
 				default:
 					throw haxe_Exception.thrown("assert");
@@ -41088,7 +48893,7 @@ h3d_impl_GlDriver.prototype = $extend(h3d_impl_Driver.prototype,{
 				case 0:
 					this.gl.uniformBlockBinding(p.p,s.buffers[i],i + start);
 					break;
-				case 1:
+				case 1:case 2:
 					break;
 				default:
 					throw haxe_Exception.thrown("assert");
@@ -41336,6 +49141,9 @@ h3d_impl_GlDriver.prototype = $extend(h3d_impl_Driver.prototype,{
 						this.gl.bindBufferBase(35345,i + start,buf.buffers[i].vbuf);
 						break;
 					case 1:
+						this.gl.bindBufferBase(37074,i + start,buf.buffers[i].vbuf);
+						break;
+					case 2:
 						if((buf.buffers[i].flags & 1 << h3d_BufferFlag.ReadWriteBuffer._hx_index) == 0) {
 							throw haxe_Exception.thrown("Buffer was allocated without ReadWriteBuffer flag");
 						}
@@ -41396,7 +49204,10 @@ h3d_impl_GlDriver.prototype = $extend(h3d_impl_Driver.prototype,{
 			return;
 		}
 		var wireframe = (bits & 268435456) != 0;
-		this.drawMode = wireframe ? 3 : 4;
+		var fallback = true;
+		if(fallback) {
+			this.drawMode = wireframe ? 3 : 4;
+		}
 		if((diff & 3) != 0) {
 			var cull = bits & 3;
 			if(cull == 0) {
@@ -41571,6 +49382,9 @@ h3d_impl_GlDriver.prototype = $extend(h3d_impl_Driver.prototype,{
 		}
 	}
 	,getBindType: function(t) {
+		if((t.flags & 1 << h3d_mat_TextureFlags.Is3D._hx_index) != 0) {
+			return 32879;
+		}
 		var isArray = (t.flags & 1 << h3d_mat_TextureFlags.IsArray._hx_index) != 0;
 		if((t.flags & 1 << h3d_mat_TextureFlags.Cube._hx_index) != 0) {
 			return 34067;
@@ -41714,7 +49528,7 @@ h3d_impl_GlDriver.prototype = $extend(h3d_impl_Driver.prototype,{
 		this.gl.texParameteri(bind,33084,t.startingMip);
 		this.gl.texParameteri(bind,33085,t.get_mipLevels() - 1);
 		var sizedFormat = tt1.internalFmt == 6408 ? 32856 : tt1.internalFmt;
-		if((t.flags & 1 << h3d_mat_TextureFlags.IsArray._hx_index) != 0 && (t.flags & 1 << h3d_mat_TextureFlags.Cube._hx_index) == 0) {
+		if(((t.flags & 1 << h3d_mat_TextureFlags.IsArray._hx_index) != 0 || (t.flags & 1 << h3d_mat_TextureFlags.Is3D._hx_index) != 0) && (t.flags & 1 << h3d_mat_TextureFlags.Cube._hx_index) == 0) {
 			this.gl.texStorage3D(bind,t.get_mipLevels(),sizedFormat,tt1.width,tt1.height,t.get_layerCount());
 			if(h3d_impl_GlDriver.outOfMemoryCheck) {
 				var err = _gthis.gl.getError();
@@ -41875,7 +49689,15 @@ h3d_impl_GlDriver.prototype = $extend(h3d_impl_Driver.prototype,{
 	}
 	,uploadTexturePixels: function(t,pixels,mipLevel,side) {
 		var cubic = (t.flags & 1 << h3d_mat_TextureFlags.Cube._hx_index) != 0;
-		var face = cubic ? h3d_impl_GlDriver.CUBE_FACES[side] : (t.flags & 1 << h3d_mat_TextureFlags.IsArray._hx_index) != 0 ? 35866 : 3553;
+		var face = 3553;
+		if(cubic) {
+			face = h3d_impl_GlDriver.CUBE_FACES[side];
+		}
+		if((t.flags & 1 << h3d_mat_TextureFlags.IsArray._hx_index) != 0) {
+			face = 35866;
+		} else if((t.flags & 1 << h3d_mat_TextureFlags.Is3D._hx_index) != 0) {
+			face = 32879;
+		}
 		var bind = this.getBindType(t);
 		this.gl.bindTexture(bind,t.t.t);
 		pixels.convert(t.format);
@@ -41903,12 +49725,12 @@ h3d_impl_GlDriver.prototype = $extend(h3d_impl_Driver.prototype,{
 			tmp = false;
 		}
 		if(tmp) {
-			if((t.flags & 1 << h3d_mat_TextureFlags.IsArray._hx_index) != 0) {
+			if((t.flags & 1 << h3d_mat_TextureFlags.IsArray._hx_index) != 0 || (t.flags & 1 << h3d_mat_TextureFlags.Is3D._hx_index) != 0) {
 				this.gl.compressedTexSubImage3D(face,mipLevel,0,0,side,pixels.width,pixels.height,1,t.t.internalFmt,buffer);
 			} else {
 				this.gl.compressedTexSubImage2D(face,mipLevel,0,0,pixels.width,pixels.height,t.t.internalFmt,buffer);
 			}
-		} else if((t.flags & 1 << h3d_mat_TextureFlags.IsArray._hx_index) != 0) {
+		} else if((t.flags & 1 << h3d_mat_TextureFlags.IsArray._hx_index) != 0 || (t.flags & 1 << h3d_mat_TextureFlags.Is3D._hx_index) != 0) {
 			this.gl.texSubImage3D(face,mipLevel,0,0,side,pixels.width,pixels.height,1,this.getChannels(t.t),t.t.pixelFmt,buffer);
 		} else {
 			this.gl.texSubImage2D(face,mipLevel,0,0,pixels.width,pixels.height,this.getChannels(t.t),t.t.pixelFmt,buffer);
@@ -42076,6 +49898,13 @@ h3d_impl_GlDriver.prototype = $extend(h3d_impl_Driver.prototype,{
 			data.push(instanceCount);
 		}
 		b.data = data;
+	}
+	,uploadInstanceBufferBytes: function(b,startVertex,vertexCount,buf,bufPos) {
+		var stride = 20;
+		var type = 34962;
+		var sub = new Uint8Array(buf.b.bufferValue,bufPos,vertexCount * stride);
+		this.gl.bufferSubData(type,startVertex * stride,sub);
+		this.gl.bindBuffer(type,null);
 	}
 	,disposeInstanceBuffer: function(b) {
 		b.data = null;
@@ -42363,10 +50192,13 @@ h3d_impl_GlDriver.prototype = $extend(h3d_impl_Driver.prototype,{
 			}
 		}
 	}
-	,setPolygonOffset: function(depthTexture) {
-		if(depthTexture != null && (depthTexture.depthBias != 0 || depthTexture.slopeScaledBias != 0)) {
+	,onTextureBiasChanged: function(t) {
+		this.setPolygonOffset(t);
+	}
+	,setPolygonOffset: function(depthBuffer) {
+		if(depthBuffer != null && (depthBuffer.depthBias != 0 || depthBuffer.slopeScaledBias != 0)) {
 			this.gl.enable(32823);
-			this.gl.polygonOffset(depthTexture.slopeScaledBias,depthTexture.depthBias);
+			this.gl.polygonOffset(depthBuffer.slopeScaledBias,depthBuffer.depthBias);
 		} else {
 			this.gl.disable(32823);
 		}
@@ -42528,17 +50360,28 @@ h3d_impl_InstanceBuffer.prototype = {
 		this.triCount = commandCount * indexCount / 3 | 0;
 		this.startIndex = startIndex;
 	}
-	,setBuffer: function(commandCount,bytes) {
-		this.dispose();
+	,updateTriCount: function(commandCount,bytes) {
+		this.triCount = 0;
 		var _g = 0;
 		var _g1 = commandCount;
 		while(_g < _g1) {
 			var i = _g++;
-			var idxCount = bytes.getInt32(i * 20);
-			var instCount = bytes.getInt32(i * 20 + 4);
+			var idxCount = bytes.getInt32(i * h3d_impl_InstanceBuffer.ELEMENT_SIZE);
+			var instCount = bytes.getInt32(i * h3d_impl_InstanceBuffer.ELEMENT_SIZE + 4);
 			var tri = idxCount * instCount / 3 | 0;
 			this.triCount += tri;
 		}
+	}
+	,uploadBytes: function(commandCount,bytes) {
+		this.updateTriCount(commandCount,bytes);
+		this.commandCount = commandCount;
+		this.indexCount = 0;
+		this.driver = h3d_Engine.CURRENT.driver;
+		this.driver.uploadInstanceBufferBytes(this,0,commandCount,bytes,0);
+	}
+	,allocFromBytes: function(commandCount,bytes) {
+		this.dispose();
+		this.updateTriCount(commandCount,bytes);
 		this.commandCount = commandCount;
 		this.indexCount = 0;
 		this.driver = h3d_Engine.CURRENT.driver;
@@ -42826,6 +50669,7 @@ h3d_impl_MemoryManager.prototype = {
 			inf.count++;
 			var size = this.memSize(t);
 			inf.size += size;
+			var name = t.name;
 			var stacks = inf.stacks;
 			var stackStr = t.allocPos.stack.join("\n");
 			var _g2 = 0;
@@ -42835,11 +50679,12 @@ h3d_impl_MemoryManager.prototype = {
 				if(s.stack == stackStr) {
 					s.size += size;
 					s.count++;
+					s.stats.push({ name : name, size : size});
 					stackStr = null;
 				}
 			}
 			if(stackStr != null) {
-				stacks.push({ stack : stackStr, count : 1, size : size});
+				stacks.push({ stats : [{ name : name, size : size}], stack : stackStr, count : 1, size : size});
 			}
 		}
 		var _g = 0;
@@ -42869,11 +50714,12 @@ h3d_impl_MemoryManager.prototype = {
 				if(s.stack == stackStr) {
 					s.size += size;
 					s.count++;
+					s.stats.push({ name : "buffer", size : size});
 					stackStr = null;
 				}
 			}
 			if(stackStr != null) {
-				stacks.push({ stack : stackStr, count : 1, size : size});
+				stacks.push({ stats : [{ name : "buffer", size : size}], stack : stackStr, count : 1, size : size});
 			}
 		}
 		all.sort(function(a,b) {
@@ -43434,9 +51280,10 @@ var h3d_mat_TextureFlags = $hxEnums["h3d.mat.TextureFlags"] = { __ename__:true,_
 	,AsyncLoading: {_hx_name:"AsyncLoading",_hx_index:12,__enum__:"h3d.mat.TextureFlags",toString:$estr}
 	,LazyLoading: {_hx_name:"LazyLoading",_hx_index:13,__enum__:"h3d.mat.TextureFlags",toString:$estr}
 	,Writable: {_hx_name:"Writable",_hx_index:14,__enum__:"h3d.mat.TextureFlags",toString:$estr}
+	,Is3D: {_hx_name:"Is3D",_hx_index:15,__enum__:"h3d.mat.TextureFlags",toString:$estr}
 };
-h3d_mat_TextureFlags.__constructs__ = [h3d_mat_TextureFlags.Target,h3d_mat_TextureFlags.Cube,h3d_mat_TextureFlags.MipMapped,h3d_mat_TextureFlags.ManualMipMapGen,h3d_mat_TextureFlags.IsNPOT,h3d_mat_TextureFlags.NoAlloc,h3d_mat_TextureFlags.Dynamic,h3d_mat_TextureFlags.AlphaPremultiplied,h3d_mat_TextureFlags.WasCleared,h3d_mat_TextureFlags.Loading,h3d_mat_TextureFlags.Serialize,h3d_mat_TextureFlags.IsArray,h3d_mat_TextureFlags.AsyncLoading,h3d_mat_TextureFlags.LazyLoading,h3d_mat_TextureFlags.Writable];
-h3d_mat_TextureFlags.__empty_constructs__ = [h3d_mat_TextureFlags.Target,h3d_mat_TextureFlags.Cube,h3d_mat_TextureFlags.MipMapped,h3d_mat_TextureFlags.ManualMipMapGen,h3d_mat_TextureFlags.IsNPOT,h3d_mat_TextureFlags.NoAlloc,h3d_mat_TextureFlags.Dynamic,h3d_mat_TextureFlags.AlphaPremultiplied,h3d_mat_TextureFlags.WasCleared,h3d_mat_TextureFlags.Loading,h3d_mat_TextureFlags.Serialize,h3d_mat_TextureFlags.IsArray,h3d_mat_TextureFlags.AsyncLoading,h3d_mat_TextureFlags.LazyLoading,h3d_mat_TextureFlags.Writable];
+h3d_mat_TextureFlags.__constructs__ = [h3d_mat_TextureFlags.Target,h3d_mat_TextureFlags.Cube,h3d_mat_TextureFlags.MipMapped,h3d_mat_TextureFlags.ManualMipMapGen,h3d_mat_TextureFlags.IsNPOT,h3d_mat_TextureFlags.NoAlloc,h3d_mat_TextureFlags.Dynamic,h3d_mat_TextureFlags.AlphaPremultiplied,h3d_mat_TextureFlags.WasCleared,h3d_mat_TextureFlags.Loading,h3d_mat_TextureFlags.Serialize,h3d_mat_TextureFlags.IsArray,h3d_mat_TextureFlags.AsyncLoading,h3d_mat_TextureFlags.LazyLoading,h3d_mat_TextureFlags.Writable,h3d_mat_TextureFlags.Is3D];
+h3d_mat_TextureFlags.__empty_constructs__ = [h3d_mat_TextureFlags.Target,h3d_mat_TextureFlags.Cube,h3d_mat_TextureFlags.MipMapped,h3d_mat_TextureFlags.ManualMipMapGen,h3d_mat_TextureFlags.IsNPOT,h3d_mat_TextureFlags.NoAlloc,h3d_mat_TextureFlags.Dynamic,h3d_mat_TextureFlags.AlphaPremultiplied,h3d_mat_TextureFlags.WasCleared,h3d_mat_TextureFlags.Loading,h3d_mat_TextureFlags.Serialize,h3d_mat_TextureFlags.IsArray,h3d_mat_TextureFlags.AsyncLoading,h3d_mat_TextureFlags.LazyLoading,h3d_mat_TextureFlags.Writable,h3d_mat_TextureFlags.Is3D];
 var h3d_mat_Defaults = function() { };
 $hxClasses["h3d.mat.Defaults"] = h3d_mat_Defaults;
 h3d_mat_Defaults.__name__ = "h3d.mat.Defaults";
@@ -43767,7 +51614,8 @@ h3d_mat_MaterialDatabase.prototype = {
 		var file = this.getFilePath(model);
 		var value;
 		try {
-			value = JSON.parse(hxd_res_Loader.currentInstance.load(file).toText());
+			var res = hxd_res_Loader.currentInstance.load(file);
+			value = JSON.parse(res.toText());
 		} catch( _g ) {
 			if(((haxe_Exception.caught(_g).unwrap()) instanceof hxd_fs_NotFound)) {
 				value = { };
@@ -43893,7 +51741,6 @@ h3d_mat_MaterialSetup.prototype = {
 var h3d_mat_Pass = function(name,shaders,parent) {
 	this.layer = 0;
 	this.rendererFlags = 0;
-	this.culled = false;
 	this.bits = 0;
 	this.parentPass = parent;
 	this.shaders = shaders;
@@ -43953,8 +51800,11 @@ h3d_mat_Pass.getBlendAlphaOp = function(v) {
 h3d_mat_Pass.getWireframe = function(v) {
 	return v >> 28 & 1;
 };
-h3d_mat_Pass.getReserved = function(v) {
+h3d_mat_Pass.getCulled = function(v) {
 	return v >> 29 & 1;
+};
+h3d_mat_Pass.getReserved = function(v) {
+	return v >> 30 & 1;
 };
 h3d_mat_Pass.prototype = {
 	load: function(p) {
@@ -44347,6 +52197,9 @@ h3d_mat_Pass.prototype = {
 			prev = s;
 			s = s.next;
 		}
+		if(s != this.parentShaders) {
+			prev = null;
+		}
 		this.parentShaders = this.parentPass.shaders;
 		if(prev == null) {
 			this.shaders = this.parentShaders;
@@ -44421,8 +52274,12 @@ h3d_mat_Pass.prototype = {
 		this.bits = this.bits & -268435457 | (v ? 1 : 0) << 28;
 		return this.wireframe = v;
 	}
-	,set_reserved: function(v) {
+	,set_culled: function(v) {
 		this.bits = this.bits & -536870913 | (v ? 1 : 0) << 29;
+		return this.culled = v;
+	}
+	,set_reserved: function(v) {
+		this.bits = this.bits & -1073741825 | (v ? 1 : 0) << 30;
 		return this.reserved = v;
 	}
 	,loadFlags: function(bits) {
@@ -44444,10 +52301,11 @@ h3d_mat_Pass.prototype = {
 		this.set_blendOp(Type.createEnumIndex(h3d_mat_Operation,this.bits >> 22 & 7));
 		this.set_blendAlphaOp(Type.createEnumIndex(h3d_mat_Operation,this.bits >> 25 & 7));
 		this.set_wireframe((this.bits >> 28 & 1) != 0);
-		this.set_reserved((this.bits >> 29 & 1) != 0);
+		this.set_culled((this.bits >> 29 & 1) != 0);
+		this.set_reserved((this.bits >> 30 & 1) != 0);
 	}
 	,__class__: h3d_mat_Pass
-	,__properties__: {set_reserved:"set_reserved",set_wireframe:"set_wireframe",set_blendAlphaOp:"set_blendAlphaOp",set_blendOp:"set_blendOp",set_blendAlphaDst:"set_blendAlphaDst",set_blendAlphaSrc:"set_blendAlphaSrc",set_blendDst:"set_blendDst",set_blendSrc:"set_blendSrc",set_depthTest:"set_depthTest",set_depthWrite:"set_depthWrite",set_culling:"set_culling",set_batchMode:"set_batchMode",set_isStatic:"set_isStatic",set_dynamicParameters:"set_dynamicParameters",set_enableLights:"set_enableLights"}
+	,__properties__: {set_reserved:"set_reserved",set_culled:"set_culled",set_wireframe:"set_wireframe",set_blendAlphaOp:"set_blendAlphaOp",set_blendOp:"set_blendOp",set_blendAlphaDst:"set_blendAlphaDst",set_blendAlphaSrc:"set_blendAlphaSrc",set_blendDst:"set_blendDst",set_blendSrc:"set_blendSrc",set_depthTest:"set_depthTest",set_depthWrite:"set_depthWrite",set_culling:"set_culling",set_batchMode:"set_batchMode",set_isStatic:"set_isStatic",set_dynamicParameters:"set_dynamicParameters",set_enableLights:"set_enableLights"}
 };
 var h3d_mat_Stencil = function() {
 	this.opBits = 0;
@@ -44745,6 +52603,9 @@ var h3d_mat_Texture = function(w,h,flags,format) {
 };
 $hxClasses["h3d.mat.Texture"] = h3d_mat_Texture;
 h3d_mat_Texture.__name__ = "h3d.mat.Texture";
+h3d_mat_Texture.getDefaultDepth = function() {
+	return h3d_Engine.CURRENT.driver.getDefaultDepthBuffer();
+};
 h3d_mat_Texture.fromBitmap = function(bmp) {
 	var t = new h3d_mat_Texture(bmp.ctx.canvas.width,bmp.ctx.canvas.height);
 	t.uploadBitmap(bmp);
@@ -44918,9 +52779,6 @@ h3d_mat_Texture.allocChecker = function(t,size) {
 	b.ctx = null;
 	b.pixel = null;
 };
-h3d_mat_Texture.getDefaultDepth = function() {
-	return h3d_Engine.CURRENT.driver.getDefaultDepthBuffer();
-};
 h3d_mat_Texture.prototype = {
 	set_lastFrame: function(lf) {
 		if(this._lastFrame != h3d_mat_Texture.PREVENT_AUTO_DISPOSE) {
@@ -45028,10 +52886,29 @@ h3d_mat_Texture.prototype = {
 				str += "(" + this.allocPos.position + ")";
 			}
 		}
-		return str + "(" + this.width + "x" + this.height + ")";
+		if((this.flags & 1 << h3d_mat_TextureFlags.Is3D._hx_index) != 0) {
+			str += "(" + this.width + "x" + this.height + "x" + this.get_layerCount() + ")";
+		} else {
+			str += "(" + this.width + "x" + this.height + ")";
+		}
+		return str;
 	}
 	,setName: function(n) {
 		this.name = n;
+	}
+	,set_depthBias: function(v) {
+		if(v != this.depthBias) {
+			this.depthBias = v;
+			h3d_Engine.CURRENT.onTextureBiasChanged(this);
+		}
+		return this.depthBias;
+	}
+	,set_slopeScaledBias: function(v) {
+		if(v != this.slopeScaledBias) {
+			this.slopeScaledBias = v;
+			h3d_Engine.CURRENT.onTextureBiasChanged(this);
+		}
+		return this.slopeScaledBias;
 	}
 	,set_mipMap: function(m) {
 		this.bits = this.bits & -4 | m._hx_index;
@@ -45248,19 +53125,6 @@ h3d_mat_Texture.prototype = {
 			this.mem.deleteTexture(this);
 		}
 	}
-	,capturePixels: function(face,mipLevel,region) {
-		if(mipLevel == null) {
-			mipLevel = 0;
-		}
-		if(face == null) {
-			face = 0;
-		}
-		var old = this._lastFrame;
-		this.preventAutoDispose();
-		var pix = this.mem.driver.capturePixels(this,face,mipLevel,region);
-		this.set_lastFrame(old);
-		return pix;
-	}
 	,hasStencil: function() {
 		if(this.format._hx_index == 25) {
 			return true;
@@ -45276,8 +53140,21 @@ h3d_mat_Texture.prototype = {
 			return false;
 		}
 	}
+	,capturePixels: function(face,mipLevel,region) {
+		if(mipLevel == null) {
+			mipLevel = 0;
+		}
+		if(face == null) {
+			face = 0;
+		}
+		var old = this._lastFrame;
+		this.preventAutoDispose();
+		var pix = this.mem.driver.capturePixels(this,face,mipLevel,region);
+		this.set_lastFrame(old);
+		return pix;
+	}
 	,__class__: h3d_mat_Texture
-	,__properties__: {get_mipLevels:"get_mipLevels",get_layerCount:"get_layerCount",set_wrap:"set_wrap",set_filter:"set_filter",set_mipMap:"set_mipMap",set_lastFrame:"set_lastFrame",get_lastFrame:"get_lastFrame"}
+	,__properties__: {set_slopeScaledBias:"set_slopeScaledBias",set_depthBias:"set_depthBias",get_mipLevels:"get_mipLevels",get_layerCount:"get_layerCount",set_wrap:"set_wrap",set_filter:"set_filter",set_mipMap:"set_mipMap",set_lastFrame:"set_lastFrame",get_lastFrame:"get_lastFrame"}
 };
 var h3d_mat_TextureArray = function(w,h,layers,flags,format) {
 	this.layers = layers;
@@ -45623,7 +53500,7 @@ hxsl_Shader.prototype = {
 			}
 			this.shader = curClass._SHADER;
 			if(this.shader == null) {
-				this.shader = new hxsl_SharedShader(curClass.SRC);
+				this.shader = new hxsl_SharedShader(curClass.SRC,curClass._MODULE);
 				curClass._SHADER = this.shader;
 			}
 		}
@@ -46398,7 +54275,7 @@ h3d_pass_Copy.__super__ = h3d_pass_ScreenFx;
 h3d_pass_Copy.prototype = $extend(h3d_pass_ScreenFx.prototype,{
 	apply: function(from,to,blend,customPass,layer) {
 		if(to != null) {
-			this.get_engine().pushTarget(to,layer != null ? layer : 0);
+			this.get_engine().pushTarget(to,layer != null ? layer : 0,null,h3d_DepthBinding.NotBound);
 		}
 		this.shader.texture__ = from;
 		if(customPass != null) {
@@ -46745,6 +54622,7 @@ var h3d_pass_Shadows = function(light) {
 	this.size = 1024;
 	this.mode = h3d_pass_RenderMode.None;
 	this.enabled = true;
+	this.updateStatic = false;
 	if(this.format == null) {
 		this.format = hxd_PixelFormat.R16F;
 	}
@@ -46813,6 +54691,15 @@ h3d_pass_Shadows.prototype = $extend(h3d_pass_Output.prototype,{
 	,computeStatic: function(passes) {
 		throw haxe_Exception.thrown("Not implemented");
 	}
+	,needStaticUpdate: function() {
+		switch(this.mode._hx_index) {
+		case 1:case 3:
+			this.updateStatic = true;
+			break;
+		case 0:case 2:
+			break;
+		}
+	}
 	,createDefaultShadowMap: function() {
 		var tex = h3d_mat_Texture.fromColor(16777215);
 		tex.name = "defaultShadowMap";
@@ -46824,15 +54711,46 @@ h3d_pass_Shadows.prototype = $extend(h3d_pass_Output.prototype,{
 	,syncShader: function(texture) {
 	}
 	,filterPasses: function(passes) {
-		if(!this.ctx.computingStatic) {
+		if(this.ctx.computingStatic || this.updateStatic) {
 			switch(this.mode._hx_index) {
 			case 0:
 				return false;
 			case 1:
-				this.syncEarlyExit();
-				return false;
-			case 2:
+				var head = null;
+				var prev = null;
+				var disc = passes.discarded;
+				var discQueue = passes.lastDisc;
+				var cur = passes.current;
+				while(cur != null) {
+					if(cur.pass.isStatic == true) {
+						if(head == null) {
+							prev = cur;
+							head = prev;
+						} else {
+							prev.next = cur;
+							prev = cur;
+						}
+					} else if(disc == null) {
+						discQueue = cur;
+						disc = discQueue;
+					} else {
+						discQueue.next = cur;
+						discQueue = cur;
+					}
+					cur = cur.next;
+				}
+				if(prev != null) {
+					prev.next = null;
+				}
+				if(discQueue != null) {
+					discQueue.next = null;
+				}
+				passes.current = head;
+				passes.discarded = disc;
+				passes.lastDisc = discQueue;
 				return true;
+			case 2:
+				return false;
 			case 3:
 				var head = null;
 				var prev = null;
@@ -46840,7 +54758,7 @@ h3d_pass_Shadows.prototype = $extend(h3d_pass_Output.prototype,{
 				var discQueue = passes.lastDisc;
 				var cur = passes.current;
 				while(cur != null) {
-					if(cur.pass.isStatic == false) {
+					if(cur.pass.isStatic == true) {
 						if(head == null) {
 							prev = cur;
 							head = prev;
@@ -46873,41 +54791,10 @@ h3d_pass_Shadows.prototype = $extend(h3d_pass_Output.prototype,{
 			case 0:
 				return false;
 			case 1:
-				var head = null;
-				var prev = null;
-				var disc = passes.discarded;
-				var discQueue = passes.lastDisc;
-				var cur = passes.current;
-				while(cur != null) {
-					if(cur.pass.isStatic == true) {
-						if(head == null) {
-							prev = cur;
-							head = prev;
-						} else {
-							prev.next = cur;
-							prev = cur;
-						}
-					} else if(disc == null) {
-						discQueue = cur;
-						disc = discQueue;
-					} else {
-						discQueue.next = cur;
-						discQueue = cur;
-					}
-					cur = cur.next;
-				}
-				if(prev != null) {
-					prev.next = null;
-				}
-				if(discQueue != null) {
-					discQueue.next = null;
-				}
-				passes.current = head;
-				passes.discarded = disc;
-				passes.lastDisc = discQueue;
-				return true;
-			case 2:
+				this.syncEarlyExit();
 				return false;
+			case 2:
+				return true;
 			case 3:
 				var head = null;
 				var prev = null;
@@ -46915,7 +54802,7 @@ h3d_pass_Shadows.prototype = $extend(h3d_pass_Output.prototype,{
 				var discQueue = passes.lastDisc;
 				var cur = passes.current;
 				while(cur != null) {
-					if(cur.pass.isStatic == true) {
+					if(cur.pass.isStatic == false) {
 						if(head == null) {
 							prev = cur;
 							head = prev;
@@ -49126,13 +57013,14 @@ h3d_pass_DirShadowMap.prototype = $extend(h3d_pass_Shadows.prototype,{
 			this.ctx.engine.clear(16777215,1.0);
 		}
 		h3d_pass_Shadows.prototype.draw.call(this,passes,sort);
-		var doBlur = this.blur.radius > 0 && (this.mode != h3d_pass_RenderMode.Mixed || !this.ctx.computingStatic);
+		var computingStatic = this.ctx.computingStatic || this.updateStatic;
+		var doBlur = this.blur.radius > 0 && (this.mode != h3d_pass_RenderMode.Mixed || !computingStatic);
 		if(this.border != null && !doBlur) {
 			this.border.render();
 		}
 		this.ctx.engine.popTarget();
 		var tmp;
-		if(this.mode == h3d_pass_RenderMode.Mixed && !this.ctx.computingStatic && this.staticTexture != null) {
+		if(this.mode == h3d_pass_RenderMode.Mixed && !computingStatic && this.staticTexture != null) {
 			var _this = this.staticTexture;
 			tmp = !(_this.t == null && (_this.isDepth() || _this.realloc == null));
 		} else {
@@ -49175,7 +57063,8 @@ h3d_pass_DirShadowMap.prototype = $extend(h3d_pass_Shadows.prototype,{
 		if(!this.filterPasses(passes)) {
 			return;
 		}
-		if(this.mode != h3d_pass_RenderMode.Mixed || this.ctx.computingStatic) {
+		var computingStatic = this.ctx.computingStatic || this.updateStatic;
+		if(this.mode != h3d_pass_RenderMode.Mixed || computingStatic) {
 			var ct = this.ctx.camera.target;
 			var slight = this.light == null ? this.ctx.lightSystem.shadowLight : this.light;
 			var ldir = slight == null ? null : slight.getShadowDirection();
@@ -49310,6 +57199,7 @@ h3d_pass_DirShadowMap.prototype = $extend(h3d_pass_Shadows.prototype,{
 		texture.depthBuffer = this.depth;
 		texture = this.processShadowMap(passes,texture,sort);
 		this.syncShader(texture);
+		this.updateStatic = false;
 	}
 	,computeStatic: function(passes) {
 		if(this.mode != h3d_pass_RenderMode.Static && this.mode != h3d_pass_RenderMode.Mixed) {
@@ -50672,6 +58562,76 @@ h3d_prim_Blendshape.prototype = {
 	}
 	,__class__: h3d_prim_Blendshape
 };
+var h3d_prim_Collider = function(hmdModel,data) {
+	this.hmdModel = hmdModel;
+	this.data = data;
+};
+$hxClasses["h3d.prim.Collider"] = h3d_prim_Collider;
+h3d_prim_Collider.__name__ = "h3d.prim.Collider";
+h3d_prim_Collider.fromHmd = function(hmdModel) {
+	var header = hmdModel.lib.header;
+	var _g = 0;
+	var _g1 = header.models;
+	while(_g < _g1.length) {
+		var h = _g1[_g];
+		++_g;
+		if(header.geometries[h.geometry] == hmdModel.get_data()) {
+			return new h3d_prim_Collider(hmdModel,header.colliders[h.collider]);
+		}
+	}
+	return null;
+};
+h3d_prim_Collider.prototype = {
+	getBuffers: function() {
+		var vertexPosition = this.hmdModel.dataPosition + this.data.vertexPosition;
+		var indexPosition = this.hmdModel.dataPosition + this.data.indexPosition;
+		var buffers = [];
+		var _g = 0;
+		var _g1 = this.data.vertexCounts.length;
+		while(_g < _g1) {
+			var i = _g++;
+			var vertexCount = this.data.vertexCounts[i];
+			var indexCount = this.data.indexCounts[i];
+			var is32 = vertexCount > 65536;
+			var vSize = vertexCount * 3 * 4;
+			var vertexBytes = new haxe_io_Bytes(new ArrayBuffer(vSize));
+			this.hmdModel.lib.resource.entry.readBytes(vertexBytes,0,vertexPosition,vSize);
+			var buf = new hxd_fmt_hmd_GeometryBuffer();
+			buf.vertexes = new Array(3 * vertexCount);
+			var _g2 = 0;
+			var _g3 = 3 * vertexCount;
+			while(_g2 < _g3) {
+				var i1 = _g2++;
+				buf.vertexes[i1] = vertexBytes.getFloat(i1 * 4);
+			}
+			var iSize = indexCount * (is32 ? 4 : 2);
+			var indexBytes = new haxe_io_Bytes(new ArrayBuffer(iSize));
+			this.hmdModel.lib.resource.entry.readBytes(indexBytes,0,indexPosition,iSize);
+			buf.indexes = new Array(indexCount);
+			var stride = is32 ? 4 : 2;
+			if(is32) {
+				var _g4 = 0;
+				var _g5 = indexCount;
+				while(_g4 < _g5) {
+					var i2 = _g4++;
+					buf.indexes[i2] = indexBytes.getInt32(i2 * stride);
+				}
+			} else {
+				var _g6 = 0;
+				var _g7 = indexCount;
+				while(_g6 < _g7) {
+					var i3 = _g6++;
+					buf.indexes[i3] = indexBytes.getUInt16(i3 * stride);
+				}
+			}
+			buffers.push(buf);
+			vertexPosition += vSize;
+			indexPosition += iSize;
+		}
+		return buffers;
+	}
+	,__class__: h3d_prim_Collider
+};
 var h3d_prim_MeshPrimitive = function() {
 	h3d_prim_Primitive.call(this);
 };
@@ -51768,12 +59728,20 @@ var h3d_prim_HMDModel = function(data,dataPos,lib,lods) {
 	h3d_prim_MeshPrimitive.call(this);
 	this.lods = [data];
 	if(lods != null) {
-		this.lods = this.lods.concat(lods);
+		var _g = 0;
+		while(_g < lods.length) {
+			var lod = lods[_g];
+			++_g;
+			this.lods.push(lib.header.geometries[lod.geometry]);
+		}
 	}
 	this.dataPosition = dataPos;
 	this.lib = lib;
 	if(lib.header.shapes != null && lib.header.shapes.length > 0) {
 		this.blendshape = new h3d_prim_Blendshape(this);
+	}
+	if(lib.header.colliders != null && lib.header.colliders.length > 0) {
+		this.colliderData = h3d_prim_Collider.fromHmd(this);
 	}
 };
 $hxClasses["h3d.prim.HMDModel"] = h3d_prim_HMDModel;
@@ -51802,8 +59770,17 @@ h3d_prim_HMDModel.prototype = $extend(h3d_prim_MeshPrimitive.prototype,{
 	,selectMaterial: function(material,lod) {
 		this.curMaterial = material + lod * this.get_data().indexCounts.length;
 	}
-	,getMaterialIndexes: function(material) {
-		return { start : this.indexesTriPos[material] * 3, count : this.get_data().indexCounts[material]};
+	,getMaterialIndexStart: function(material,lod) {
+		if(lod == null) {
+			lod = 0;
+		}
+		return this.indexesTriPos[material + lod * this.get_data().indexCounts.length] * 3;
+	}
+	,getMaterialIndexCount: function(material,lod) {
+		if(lod == null) {
+			lod = 0;
+		}
+		return this.lods[lod].indexCounts[material];
 	}
 	,getDataBuffers: function(fmt,defaults,material) {
 		return this.lib.getBuffers(this.get_data(),fmt,defaults,material);
@@ -52117,15 +60094,35 @@ h3d_prim_HMDModel.prototype = $extend(h3d_prim_MeshPrimitive.prototype,{
 		this.curMaterial = -1;
 	}
 	,initCollider: function(poly) {
-		var buf = this.lib.getBuffers(this.get_data(),hxd_BufferFormat.get_POS3D());
-		poly.setData(buf.vertexes,buf.indexes);
-		if(this.collider == null) {
-			var _this = this.get_data().bounds;
-			var dx = _this.xMax - _this.xMin;
-			var dy = _this.yMax - _this.yMin;
-			var dz = _this.zMax - _this.zMin;
-			var sphere = new h3d_col_Sphere((_this.xMin + _this.xMax) * 0.5,(_this.yMin + _this.yMax) * 0.5,(_this.zMin + _this.zMax) * 0.5,Math.sqrt(dx * dx + dy * dy + dz * dz) * 0.5);
-			this.collider = new h3d_col_OptimizedCollider(sphere,poly);
+		var _this = this.get_data().bounds;
+		var dx = _this.xMax - _this.xMin;
+		var dy = _this.yMax - _this.yMin;
+		var dz = _this.zMax - _this.zMin;
+		var sphere = new h3d_col_Sphere((_this.xMin + _this.xMax) * 0.5,(_this.yMin + _this.yMax) * 0.5,(_this.zMin + _this.zMax) * 0.5,Math.sqrt(dx * dx + dy * dy + dz * dz) * 0.5);
+		if(this.colliderData == null) {
+			var buf = this.lib.getBuffers(this.get_data(),hxd_BufferFormat.get_POS3D());
+			poly.setData(buf.vertexes,buf.indexes);
+			if(this.collider == null) {
+				this.collider = new h3d_col_OptimizedCollider(sphere,poly);
+			}
+		} else {
+			var buffers = this.colliderData.getBuffers();
+			var hulls = [];
+			hulls.length = buffers.length;
+			var _g_current = 0;
+			var _g_array = buffers;
+			while(_g_current < _g_array.length) {
+				var _g_value = _g_array[_g_current];
+				var _g_key = _g_current++;
+				var i = _g_key;
+				var buf = _g_value;
+				var p = new h3d_col_PolygonBuffer();
+				p.source = poly.source;
+				p.setData(buf.vertexes,buf.indexes);
+				hulls[i] = p;
+			}
+			var convexHulls = new h3d_col_GroupCollider(hulls);
+			this.collider = new h3d_col_OptimizedCollider(sphere,convexHulls);
 		}
 	}
 	,getCollider: function() {
@@ -52152,18 +60149,33 @@ h3d_prim_HMDModel.prototype = $extend(h3d_prim_MeshPrimitive.prototype,{
 	}
 	,screenRatioToLod: function(screenRatio) {
 		var lodCount = this.lodCount();
+		if(this.forcedLod >= 0) {
+			var a = this.forcedLod;
+			if(a > lodCount) {
+				return lodCount;
+			} else {
+				return a;
+			}
+		}
 		if(lodCount == 1) {
 			return 0;
 		}
-		this.lodConfig = this.getLodConfig();
-		if(this.lodConfig != null && this.lodConfig.length >= lodCount - 1) {
+		var lodConfig = this.getLodConfig();
+		if(lodConfig != null) {
+			var lodConfigHasCulling = lodConfig.length > lodCount - 1;
+			if(lodConfigHasCulling && screenRatio < lodConfig[lodConfig.length - 1]) {
+				return lodCount;
+			}
 			var lodLevel = 0;
-			var maxIter = this.lodConfig.length > lodCount - 1 ? lodCount - 1 : this.lodConfig.length;
+			var maxIter = lodConfigHasCulling ? lodCount - 1 : lodConfig.length;
 			var _g = 0;
 			var _g1 = maxIter;
 			while(_g < _g1) {
 				var i = _g++;
-				if(this.lodConfig[i] > screenRatio) {
+				if(lodConfig[i] == 0.0) {
+					return lodLevel;
+				}
+				if(lodConfig[i] > screenRatio) {
 					++lodLevel;
 				} else {
 					break;
@@ -52178,7 +60190,11 @@ h3d_prim_HMDModel.prototype = $extend(h3d_prim_MeshPrimitive.prototype,{
 			return this.lodConfig;
 		}
 		var d = this.lib.resource.entry.get_directory();
-		return h3d_prim_ModelDatabase.current.getDefaultLodConfig(d);
+		if(d.indexOf("res/") < 0) {
+			d = "res/" + d;
+		}
+		this.lodConfig = h3d_prim_ModelDatabase.current.getDefaultLodConfig(d);
+		return this.lodConfig;
 	}
 	,__class__: h3d_prim_HMDModel
 	,__properties__: {get_data:"get_data"}
@@ -52274,6 +60290,16 @@ h3d_prim_Instanced.prototype = $extend(h3d_prim_Primitive.prototype,{
 	,getBounds: function() {
 		return this.bounds;
 	}
+	,screenRatioToLod: function(screenRatio) {
+		return this.primitive.screenRatioToLod(screenRatio);
+	}
+	,setCommand: function(material,lod,count) {
+		if(lod > this.primitive.lodCount() - 1) {
+			this.commands.setCommand(0,0,0);
+			return;
+		}
+		this.commands.setCommand(count,this.primitive.getMaterialIndexCount(material,lod),this.primitive.getMaterialIndexStart(material,lod));
+	}
 	,render: function(engine) {
 		if(this.primitive.buffer == null || this.primitive.buffer.vbuf == null) {
 			this.primitive.alloc(engine);
@@ -52298,29 +60324,29 @@ var h3d_prim_ModelDatabase = function() {
 };
 $hxClasses["h3d.prim.ModelDatabase"] = h3d_prim_ModelDatabase;
 h3d_prim_ModelDatabase.__name__ = "h3d.prim.ModelDatabase";
+h3d_prim_ModelDatabase.customizeLodConfig = function(c) {
+	return c;
+};
 h3d_prim_ModelDatabase.prototype = {
 	get_baseDir: function() {
 		return "";
 	}
-	,getFilePath: function(model) {
-		var dir = model.entry.get_directory();
-		if(dir == null || dir == "") {
-			return h3d_prim_ModelDatabase.filename;
+	,getFilePath: function(directory) {
+		if(directory == null || directory == "") {
+			return h3d_prim_ModelDatabase.FILE_NAME;
 		} else {
-			return model.entry.get_directory() + "/" + h3d_prim_ModelDatabase.filename;
+			return directory + "/" + h3d_prim_ModelDatabase.FILE_NAME;
 		}
 	}
-	,getModelData: function(model) {
-		if(model == null) {
+	,getRootData: function(directory) {
+		if(directory == null) {
 			return null;
 		}
-		var this1 = h3d_prim_ModelDatabase.db;
-		var key = model.entry.get_directory();
-		var cached = this1.h[key];
+		var cached = h3d_prim_ModelDatabase.db.h[directory];
 		if(cached != null) {
-			return cached.v;
+			return cached;
 		}
-		var file = this.getFilePath(model);
+		var file = this.getFilePath(directory);
 		var value;
 		try {
 			value = JSON.parse(hxd_res_Loader.currentInstance.load(file).toText());
@@ -52331,63 +60357,246 @@ h3d_prim_ModelDatabase.prototype = {
 				throw _g;
 			}
 		}
-		var this1 = h3d_prim_ModelDatabase.db;
-		var key = model.entry.get_directory();
-		this1.h[key] = { v : value};
+		h3d_prim_ModelDatabase.db.h[directory] = value;
 		return value;
 	}
-	,saveData: function(model,data) {
-		var file = this.getFilePath(model);
+	,getModelData: function(directory,resourceName,modelName) {
+		var key = resourceName + "/" + modelName;
+		var rootData = this.getRootData(directory);
+		this.cleanOldModelData(rootData,key);
+		return Reflect.field(rootData,key);
+	}
+	,saveModelData: function(directory,resourceName,modelName,data) {
+		var file = this.getFilePath(directory);
+		var rootData = this.getRootData(directory);
+		var key = resourceName + "/" + modelName;
+		if(data == null || Reflect.fields(data).length == 0) {
+			Reflect.deleteField(rootData,key);
+		} else {
+			rootData[key] = data;
+		}
 		throw haxe_Exception.thrown("Can't save model props database " + file);
 	}
-	,loadModelProps: function(name,hmd) {
-		var p = this.getModelData(hmd.lib.resource);
-		var lodConfigs = Reflect.field(p,"lodConfig");
-		hmd.lodConfig = Reflect.field(lodConfigs,name);
+	,getDefaultLodConfig: function(dir) {
+		var value = hxd_res_Loader.currentInstance.fs;
+		var fs = ((value) instanceof hxd_fs_LocalFileSystem) ? value : null;
+		var c = h3d_prim_ModelDatabase.baseLodConfig;
+		c = h3d_prim_ModelDatabase.customizeLodConfig(c);
+		return c;
 	}
-	,saveModelProps: function(name,hmd,defaultProps) {
-		var root = this.getModelData(hmd.lib.resource);
-		if(root == null) {
+	,cleanOldModelData: function(rootData,key) {
+		var oldLodConfig = Reflect.field(rootData,h3d_prim_ModelDatabase.LOD_CONFIG);
+		if(oldLodConfig != null) {
+			var _g = 0;
+			var _g1 = Reflect.fields(oldLodConfig);
+			while(_g < _g1.length) {
+				var f = _g1[_g];
+				++_g;
+				if(key.indexOf(f) < 0) {
+					continue;
+				}
+				var c = Reflect.field(oldLodConfig,f);
+				var newData = { "lodConfig" : c};
+				rootData[key] = newData;
+				Reflect.deleteField(oldLodConfig,f);
+				rootData[h3d_prim_ModelDatabase.LOD_CONFIG] = oldLodConfig;
+			}
+			if(oldLodConfig == null || Reflect.fields(oldLodConfig).length == 0) {
+				Reflect.deleteField(rootData,h3d_prim_ModelDatabase.LOD_CONFIG);
+			}
+		}
+	}
+	,loadLodConfig: function(input,data) {
+		var c = Reflect.field(data,h3d_prim_ModelDatabase.LOD_CONFIG);
+		if(c == null || input.hmd == null) {
 			return;
 		}
-		var lodConfigObj = Reflect.field(root,"lodConfig");
-		if(lodConfigObj == null) {
-			lodConfigObj = { };
-			root["lodConfig"] = lodConfigObj;
+		input.hmd.lodConfig = c;
+	}
+	,loadDynamicBonesConfig: function(input,data) {
+		var c = Reflect.field(data,h3d_prim_ModelDatabase.DYN_BONES_CONFIG);
+		if(c == null || input.skin == null) {
+			return;
 		}
+		var getJointConf = function(j) {
+			var _g = 0;
+			while(_g < c.length) {
+				var jConf = c[_g];
+				++_g;
+				if(jConf.name == j.name) {
+					return jConf;
+				}
+			}
+			return null;
+		};
+		var skinData = input.skin.getSkinData();
+		var _g = 0;
+		var _g1 = skinData.allJoints;
+		while(_g < _g1.length) {
+			var j = _g1[_g];
+			++_g;
+			var jConf = getJointConf(j);
+			if(jConf == null) {
+				continue;
+			}
+			var newJ = new h3d_anim_DynamicJoint();
+			newJ.index = j.index;
+			newJ.name = j.name;
+			newJ.bindIndex = j.bindIndex;
+			newJ.splitIndex = j.splitIndex;
+			newJ.defMat = j.defMat;
+			newJ.transPos = j.transPos;
+			newJ.parent = j.parent;
+			newJ.follow = j.follow;
+			newJ.subs = j.subs;
+			newJ.offsets = j.offsets;
+			newJ.offsetRay = j.offsetRay;
+			newJ.retargetAnim = j.retargetAnim;
+			newJ.damping = jConf.damping;
+			newJ.resistance = jConf.resistance;
+			newJ.slackness = jConf.slackness;
+			newJ.stiffness = jConf.stiffness;
+			newJ.additive = jConf.additive;
+			var tmp;
+			if(jConf.lockAxis == null) {
+				var x = 0;
+				var y = 0;
+				var z = 0;
+				if(z == null) {
+					z = 0.;
+				}
+				if(y == null) {
+					y = 0.;
+				}
+				if(x == null) {
+					x = 0.;
+				}
+				tmp = new h3d_VectorImpl(x,y,z);
+			} else {
+				var tmp1 = jConf.lockAxis;
+				var x1 = tmp1 != null ? tmp1.x : null;
+				var tmp2 = jConf.lockAxis;
+				var y1 = tmp2 != null ? tmp2.y : null;
+				var tmp3 = jConf.lockAxis;
+				var z1 = tmp3 != null ? tmp3.z : null;
+				if(z1 == null) {
+					z1 = 0.;
+				}
+				if(y1 == null) {
+					y1 = 0.;
+				}
+				if(x1 == null) {
+					x1 = 0.;
+				}
+				tmp = new h3d_VectorImpl(x1,y1,z1);
+			}
+			newJ.lockAxis = tmp;
+			var x2 = jConf.globalForce.x;
+			var y2 = jConf.globalForce.y;
+			var z2 = jConf.globalForce.z;
+			if(z2 == null) {
+				z2 = 0.;
+			}
+			if(y2 == null) {
+				y2 = 0.;
+			}
+			if(x2 == null) {
+				x2 = 0.;
+			}
+			newJ.globalForce = new h3d_VectorImpl(x2,y2,z2);
+			skinData.allJoints[j.index] = newJ;
+			var tmp4 = j.parent;
+			if(tmp4 != null) {
+				tmp4.subs.push(newJ);
+			}
+			var tmp5 = j.parent;
+			if(tmp5 != null) {
+				HxOverrides.remove(tmp5.subs,j);
+			}
+			if(newJ.subs != null) {
+				var _g2 = 0;
+				var _g3 = newJ.subs;
+				while(_g2 < _g3.length) {
+					var s = _g3[_g2];
+					++_g2;
+					s.parent = newJ;
+				}
+			}
+		}
+		input.skin.setSkinData(skinData);
+	}
+	,saveLodConfig: function(input,data) {
 		var isDefaultConfig = true;
-		var defaultConfig = this.getDefaultLodConfig(hmd.lib.resource.entry.get_directory());
-		if(hmd.lodConfig != null) {
-			if(defaultConfig.length != hmd.lodConfig.length) {
+		var defaultConfig = this.getDefaultLodConfig(input.resourceDirectory);
+		if(input.hmd.lodConfig != null) {
+			if(defaultConfig.length != input.hmd.lodConfig.length) {
 				isDefaultConfig = false;
 			}
 			var _g = 0;
-			var _g1 = hmd.lodConfig.length;
+			var _g1 = input.hmd.lodConfig.length;
 			while(_g < _g1) {
 				var idx = _g++;
-				if(defaultConfig[idx] != hmd.lodConfig[idx]) {
+				if(defaultConfig[idx] != input.hmd.lodConfig[idx]) {
 					isDefaultConfig = false;
 					break;
 				}
 			}
 		}
 		if(!isDefaultConfig) {
-			lodConfigObj[name] = hmd.lodConfig;
+			var c = [];
+			var _g = 0;
+			var _g1 = input.hmd.lodCount();
+			while(_g < _g1) {
+				var idx = _g++;
+				if(idx >= input.hmd.lodConfig.length) {
+					c[idx] = 0.;
+				} else {
+					c[idx] = input.hmd.lodConfig[idx];
+				}
+			}
+			data[h3d_prim_ModelDatabase.LOD_CONFIG] = c;
 		} else {
-			Reflect.deleteField(lodConfigObj,name);
+			Reflect.deleteField(data,h3d_prim_ModelDatabase.LOD_CONFIG);
 		}
-		if(Reflect.fields(lodConfigObj).length <= 0) {
-			Reflect.deleteField(root,"lodConfig");
-		}
-		this.saveData(hmd.lib.resource,root);
 	}
-	,getDefaultLodConfig: function(dir) {
-		var value = hxd_res_Loader.currentInstance.fs;
-		var fs = ((value) instanceof hxd_fs_LocalFileSystem) ? value : null;
-		if(fs == null) {
-			return h3d_prim_ModelDatabase.baseLodConfig;
+	,saveDynamicBonesConfig: function(input,data) {
+		if(input.skin == null) {
+			return;
 		}
-		return h3d_prim_ModelDatabase.baseLodConfig;
+		var dynamicJoints = [];
+		var _g = 0;
+		var _g1 = input.skin.getSkinData().allJoints;
+		while(_g < _g1.length) {
+			var j = _g1[_g];
+			++_g;
+			var dynJ = ((j) instanceof h3d_anim_DynamicJoint) ? j : null;
+			if(dynJ == null) {
+				continue;
+			}
+			dynamicJoints.push({ name : dynJ.name, slackness : dynJ.slackness, stiffness : dynJ.stiffness, resistance : dynJ.resistance, damping : dynJ.damping, additive : dynJ.additive, globalForce : dynJ.globalForce, lockAxis : dynJ.lockAxis});
+		}
+		if(dynamicJoints.length == 0) {
+			Reflect.deleteField(data,h3d_prim_ModelDatabase.DYN_BONES_CONFIG);
+			return;
+		}
+		data[h3d_prim_ModelDatabase.DYN_BONES_CONFIG] = dynamicJoints;
+	}
+	,loadModelProps: function(input) {
+		var data = this.getModelData(input.resourceDirectory,input.resourceName,input.objectName);
+		if(data == null) {
+			return;
+		}
+		this.loadLodConfig(input,data);
+		this.loadDynamicBonesConfig(input,data);
+	}
+	,saveModelProps: function(input) {
+		var data = this.getModelData(input.resourceDirectory,input.resourceName,input.objectName);
+		if(data == null) {
+			data = { };
+		}
+		this.saveLodConfig(input,data);
+		this.saveDynamicBonesConfig(input,data);
+		this.saveModelData(input.resourceDirectory,input.resourceName,input.objectName,data);
 	}
 	,__class__: h3d_prim_ModelDatabase
 	,__properties__: {get_baseDir:"get_baseDir"}
@@ -52776,6 +60985,390 @@ var h3d_scene_Mesh = function(primitive,material,parent) {
 };
 $hxClasses["h3d.scene.Mesh"] = h3d_scene_Mesh;
 h3d_scene_Mesh.__name__ = "h3d.scene.Mesh";
+h3d_scene_Mesh.screenRatio = function(absPos,bounds,camera) {
+	var _this = absPos;
+	var x = 0.;
+	var y = 0.;
+	var z = 0.;
+	if(z == null) {
+		z = 0.;
+	}
+	if(y == null) {
+		y = 0.;
+	}
+	if(x == null) {
+		x = 0.;
+	}
+	var worldCenter_x = x;
+	var worldCenter_y = y;
+	var worldCenter_z = z;
+	var x = _this._41;
+	var y = _this._42;
+	var z = _this._43;
+	if(z == null) {
+		z = 0.;
+	}
+	if(y == null) {
+		y = 0.;
+	}
+	if(x == null) {
+		x = 0.;
+	}
+	worldCenter_x = x;
+	worldCenter_y = y;
+	worldCenter_z = z;
+	var _this = absPos;
+	var x = 0.;
+	var y = 0.;
+	var z = 0.;
+	if(z == null) {
+		z = 0.;
+	}
+	if(y == null) {
+		y = 0.;
+	}
+	if(x == null) {
+		x = 0.;
+	}
+	var worldScale_x = x;
+	var worldScale_y = y;
+	var worldScale_z = z;
+	worldScale_x = Math.sqrt(_this._11 * _this._11 + _this._12 * _this._12 + _this._13 * _this._13);
+	worldScale_y = Math.sqrt(_this._21 * _this._21 + _this._22 * _this._22 + _this._23 * _this._23);
+	worldScale_z = Math.sqrt(_this._31 * _this._31 + _this._32 * _this._32 + _this._33 * _this._33);
+	if(_this._11 * (_this._22 * _this._33 - _this._23 * _this._32) + _this._12 * (_this._23 * _this._31 - _this._21 * _this._33) + _this._13 * (_this._21 * _this._32 - _this._22 * _this._31) < 0) {
+		worldScale_x *= -1;
+		worldScale_y *= -1;
+		worldScale_z *= -1;
+	}
+	var a = bounds.xMax - bounds.xMin;
+	var a1 = bounds.yMax - bounds.yMin;
+	var b = bounds.zMax - bounds.zMin;
+	var b1 = a1 < b ? b : a1;
+	var a1 = worldScale_x;
+	var a2 = worldScale_y;
+	var b = worldScale_z;
+	var b2 = a2 < b ? b : a2;
+	var worldRadius = (a < b1 ? b1 : a) * (a1 < b2 ? b2 : a1) / 2.0;
+	var x = 0.;
+	var y = 0.;
+	var z = 0.;
+	if(z == null) {
+		z = 0.;
+	}
+	if(y == null) {
+		y = 0.;
+	}
+	if(x == null) {
+		x = 0.;
+	}
+	var cameraRight_x = x;
+	var cameraRight_y = y;
+	var cameraRight_z = z;
+	if(camera.directions == null) {
+		camera.directions = new h3d_MatrixImpl();
+		camera.directions._44 = 0;
+	}
+	if(camera.directions._44 == 0) {
+		camera.calcDirections();
+	}
+	cameraRight_x = camera.directions._21;
+	cameraRight_y = camera.directions._22;
+	cameraRight_z = camera.directions._23;
+	var x = 0.;
+	var y = 0.;
+	var z = 0.;
+	if(z == null) {
+		z = 0.;
+	}
+	if(y == null) {
+		y = 0.;
+	}
+	if(x == null) {
+		x = 0.;
+	}
+	var cameraUp_x = x;
+	var cameraUp_y = y;
+	var cameraUp_z = z;
+	if(camera.directions == null) {
+		camera.directions = new h3d_MatrixImpl();
+		camera.directions._44 = 0;
+	}
+	if(camera.directions._44 == 0) {
+		camera.calcDirections();
+	}
+	cameraUp_x = camera.directions._31;
+	cameraUp_y = camera.directions._32;
+	cameraUp_z = camera.directions._33;
+	var x = cameraUp_x - cameraRight_x;
+	var y = cameraUp_y - cameraRight_y;
+	var z = cameraUp_z - cameraRight_z;
+	if(z == null) {
+		z = 0.;
+	}
+	if(y == null) {
+		y = 0.;
+	}
+	if(x == null) {
+		x = 0.;
+	}
+	var x1 = x;
+	var y1 = y;
+	var z1 = z;
+	if(z1 == null) {
+		z1 = 0.;
+	}
+	if(y1 == null) {
+		y1 = 0.;
+	}
+	if(x1 == null) {
+		x1 = 0.;
+	}
+	var _this_x = x1;
+	var _this_y = y1;
+	var _this_z = z1;
+	var k = _this_x * _this_x + _this_y * _this_y + _this_z * _this_z;
+	if(k < 1e-20) {
+		k = 0;
+	} else {
+		k = 1. / Math.sqrt(k);
+	}
+	var x = _this_x * k;
+	var y = _this_y * k;
+	var z = _this_z * k;
+	if(z == null) {
+		z = 0.;
+	}
+	if(y == null) {
+		y = 0.;
+	}
+	if(x == null) {
+		x = 0.;
+	}
+	var x1 = x;
+	var y1 = y;
+	var z1 = z;
+	if(z1 == null) {
+		z1 = 0.;
+	}
+	if(y1 == null) {
+		y1 = 0.;
+	}
+	if(x1 == null) {
+		x1 = 0.;
+	}
+	var cameraTopLeft_x = x1;
+	var cameraTopLeft_y = y1;
+	var cameraTopLeft_z = z1;
+	var x = cameraTopLeft_x * worldRadius;
+	var y = cameraTopLeft_y * worldRadius;
+	var z = cameraTopLeft_z * worldRadius;
+	if(z == null) {
+		z = 0.;
+	}
+	if(y == null) {
+		y = 0.;
+	}
+	if(x == null) {
+		x = 0.;
+	}
+	var x1 = x;
+	var y1 = y;
+	var z1 = z;
+	if(z1 == null) {
+		z1 = 0.;
+	}
+	if(y1 == null) {
+		y1 = 0.;
+	}
+	if(x1 == null) {
+		x1 = 0.;
+	}
+	var v_x = x1;
+	var v_y = y1;
+	var v_z = z1;
+	var x = worldCenter_x + v_x;
+	var y = worldCenter_y + v_y;
+	var z = worldCenter_z + v_z;
+	if(z == null) {
+		z = 0.;
+	}
+	if(y == null) {
+		y = 0.;
+	}
+	if(x == null) {
+		x = 0.;
+	}
+	var x1 = x;
+	var y1 = y;
+	var z1 = z;
+	if(z1 == null) {
+		z1 = 0.;
+	}
+	if(y1 == null) {
+		y1 = 0.;
+	}
+	if(x1 == null) {
+		x1 = 0.;
+	}
+	var worldTopLeft_x = x1;
+	var worldTopLeft_y = y1;
+	var worldTopLeft_z = z1;
+	var x = cameraTopLeft_x * worldRadius;
+	var y = cameraTopLeft_y * worldRadius;
+	var z = cameraTopLeft_z * worldRadius;
+	if(z == null) {
+		z = 0.;
+	}
+	if(y == null) {
+		y = 0.;
+	}
+	if(x == null) {
+		x = 0.;
+	}
+	var x1 = x;
+	var y1 = y;
+	var z1 = z;
+	if(z1 == null) {
+		z1 = 0.;
+	}
+	if(y1 == null) {
+		y1 = 0.;
+	}
+	if(x1 == null) {
+		x1 = 0.;
+	}
+	var v_x = x1;
+	var v_y = y1;
+	var v_z = z1;
+	var x = worldCenter_x - v_x;
+	var y = worldCenter_y - v_y;
+	var z = worldCenter_z - v_z;
+	if(z == null) {
+		z = 0.;
+	}
+	if(y == null) {
+		y = 0.;
+	}
+	if(x == null) {
+		x = 0.;
+	}
+	var x1 = x;
+	var y1 = y;
+	var z1 = z;
+	if(z1 == null) {
+		z1 = 0.;
+	}
+	if(y1 == null) {
+		y1 = 0.;
+	}
+	if(x1 == null) {
+		x1 = 0.;
+	}
+	var worldBottomRight_x = x1;
+	var worldBottomRight_y = y1;
+	var worldBottomRight_z = z1;
+	var snapToPixel = false;
+	if(snapToPixel == null) {
+		snapToPixel = true;
+	}
+	var x = 0.;
+	var y = 0.;
+	var z = 0.;
+	if(z == null) {
+		z = 0.;
+	}
+	if(y == null) {
+		y = 0.;
+	}
+	if(x == null) {
+		x = 0.;
+	}
+	var screenTopLeft_x = x;
+	var screenTopLeft_y = y;
+	var screenTopLeft_z = z;
+	var x = worldTopLeft_x;
+	var y = worldTopLeft_y;
+	var z = worldTopLeft_z;
+	if(z == null) {
+		z = 0.;
+	}
+	if(y == null) {
+		y = 0.;
+	}
+	if(x == null) {
+		x = 0.;
+	}
+	screenTopLeft_x = x;
+	screenTopLeft_y = y;
+	screenTopLeft_z = z;
+	var m = camera.m;
+	var px = screenTopLeft_x * m._11 + screenTopLeft_y * m._21 + screenTopLeft_z * m._31 + m._41;
+	var py = screenTopLeft_x * m._12 + screenTopLeft_y * m._22 + screenTopLeft_z * m._32 + m._42;
+	var pz = screenTopLeft_x * m._13 + screenTopLeft_y * m._23 + screenTopLeft_z * m._33 + m._43;
+	var iw = 1 / (screenTopLeft_x * m._14 + screenTopLeft_y * m._24 + screenTopLeft_z * m._34 + m._44);
+	screenTopLeft_x = px * iw;
+	screenTopLeft_y = py * iw;
+	screenTopLeft_z = pz * iw;
+	screenTopLeft_x = (screenTopLeft_x + 1) * 0.5;
+	screenTopLeft_y = (-screenTopLeft_y + 1) * 0.5;
+	if(snapToPixel) {
+		screenTopLeft_x = Math.round(screenTopLeft_x);
+		screenTopLeft_y = Math.round(screenTopLeft_y);
+	}
+	var snapToPixel = false;
+	if(snapToPixel == null) {
+		snapToPixel = true;
+	}
+	var x = 0.;
+	var y = 0.;
+	var z = 0.;
+	if(z == null) {
+		z = 0.;
+	}
+	if(y == null) {
+		y = 0.;
+	}
+	if(x == null) {
+		x = 0.;
+	}
+	var screenBottomRight_x = x;
+	var screenBottomRight_y = y;
+	var screenBottomRight_z = z;
+	var x = worldBottomRight_x;
+	var y = worldBottomRight_y;
+	var z = worldBottomRight_z;
+	if(z == null) {
+		z = 0.;
+	}
+	if(y == null) {
+		y = 0.;
+	}
+	if(x == null) {
+		x = 0.;
+	}
+	screenBottomRight_x = x;
+	screenBottomRight_y = y;
+	screenBottomRight_z = z;
+	var m = camera.m;
+	var px = screenBottomRight_x * m._11 + screenBottomRight_y * m._21 + screenBottomRight_z * m._31 + m._41;
+	var py = screenBottomRight_x * m._12 + screenBottomRight_y * m._22 + screenBottomRight_z * m._32 + m._42;
+	var pz = screenBottomRight_x * m._13 + screenBottomRight_y * m._23 + screenBottomRight_z * m._33 + m._43;
+	var iw = 1 / (screenBottomRight_x * m._14 + screenBottomRight_y * m._24 + screenBottomRight_z * m._34 + m._44);
+	screenBottomRight_x = px * iw;
+	screenBottomRight_y = py * iw;
+	screenBottomRight_z = pz * iw;
+	screenBottomRight_x = (screenBottomRight_x + 1) * 0.5;
+	screenBottomRight_y = (-screenBottomRight_y + 1) * 0.5;
+	if(snapToPixel) {
+		screenBottomRight_x = Math.round(screenBottomRight_x);
+		screenBottomRight_y = Math.round(screenBottomRight_y);
+	}
+	var a = screenBottomRight_x - screenTopLeft_x;
+	var b = screenBottomRight_y - screenTopLeft_y;
+	var screenArea = a < b ? b : a;
+	return screenArea * screenArea;
+};
 h3d_scene_Mesh.__super__ = h3d_scene_Object;
 h3d_scene_Mesh.prototype = $extend(h3d_scene_Object.prototype,{
 	getMeshMaterials: function() {
@@ -52875,397 +61468,16 @@ h3d_scene_Mesh.prototype = $extend(h3d_scene_Object.prototype,{
 			this.curScreenRatio = 1.0;
 			return;
 		}
-		var absPos = this.getAbsPos();
-		var _this = absPos;
-		var x = 0.;
-		var y = 0.;
-		var z = 0.;
-		if(z == null) {
-			z = 0.;
-		}
-		if(y == null) {
-			y = 0.;
-		}
-		if(x == null) {
-			x = 0.;
-		}
-		var worldCenter_x = x;
-		var worldCenter_y = y;
-		var worldCenter_z = z;
-		var x = _this._41;
-		var y = _this._42;
-		var z = _this._43;
-		if(z == null) {
-			z = 0.;
-		}
-		if(y == null) {
-			y = 0.;
-		}
-		if(x == null) {
-			x = 0.;
-		}
-		worldCenter_x = x;
-		worldCenter_y = y;
-		worldCenter_z = z;
-		var _this = absPos;
-		var x = 0.;
-		var y = 0.;
-		var z = 0.;
-		if(z == null) {
-			z = 0.;
-		}
-		if(y == null) {
-			y = 0.;
-		}
-		if(x == null) {
-			x = 0.;
-		}
-		var worldScale_x = x;
-		var worldScale_y = y;
-		var worldScale_z = z;
-		worldScale_x = Math.sqrt(_this._11 * _this._11 + _this._12 * _this._12 + _this._13 * _this._13);
-		worldScale_y = Math.sqrt(_this._21 * _this._21 + _this._22 * _this._22 + _this._23 * _this._23);
-		worldScale_z = Math.sqrt(_this._31 * _this._31 + _this._32 * _this._32 + _this._33 * _this._33);
-		if(_this._11 * (_this._22 * _this._33 - _this._23 * _this._32) + _this._12 * (_this._23 * _this._31 - _this._21 * _this._33) + _this._13 * (_this._21 * _this._32 - _this._22 * _this._31) < 0) {
-			worldScale_x *= -1;
-			worldScale_y *= -1;
-			worldScale_z *= -1;
-		}
-		var a = bounds.xMax - bounds.xMin;
-		var a1 = bounds.yMax - bounds.yMin;
-		var b = bounds.zMax - bounds.zMin;
-		var b1 = a1 < b ? b : a1;
-		var a1 = worldScale_x;
-		var a2 = worldScale_y;
-		var b = worldScale_z;
-		var b2 = a2 < b ? b : a2;
-		var worldRadius = (a < b1 ? b1 : a) * (a1 < b2 ? b2 : a1) / 2.0;
-		var _this = ctx.camera;
-		var x = 0.;
-		var y = 0.;
-		var z = 0.;
-		if(z == null) {
-			z = 0.;
-		}
-		if(y == null) {
-			y = 0.;
-		}
-		if(x == null) {
-			x = 0.;
-		}
-		var cameraRight_x = x;
-		var cameraRight_y = y;
-		var cameraRight_z = z;
-		if(_this.directions == null) {
-			_this.directions = new h3d_MatrixImpl();
-			_this.directions._44 = 0;
-		}
-		if(_this.directions._44 == 0) {
-			_this.calcDirections();
-		}
-		cameraRight_x = _this.directions._21;
-		cameraRight_y = _this.directions._22;
-		cameraRight_z = _this.directions._23;
-		var _this = ctx.camera;
-		var x = 0.;
-		var y = 0.;
-		var z = 0.;
-		if(z == null) {
-			z = 0.;
-		}
-		if(y == null) {
-			y = 0.;
-		}
-		if(x == null) {
-			x = 0.;
-		}
-		var cameraUp_x = x;
-		var cameraUp_y = y;
-		var cameraUp_z = z;
-		if(_this.directions == null) {
-			_this.directions = new h3d_MatrixImpl();
-			_this.directions._44 = 0;
-		}
-		if(_this.directions._44 == 0) {
-			_this.calcDirections();
-		}
-		cameraUp_x = _this.directions._31;
-		cameraUp_y = _this.directions._32;
-		cameraUp_z = _this.directions._33;
-		var x = cameraUp_x - cameraRight_x;
-		var y = cameraUp_y - cameraRight_y;
-		var z = cameraUp_z - cameraRight_z;
-		if(z == null) {
-			z = 0.;
-		}
-		if(y == null) {
-			y = 0.;
-		}
-		if(x == null) {
-			x = 0.;
-		}
-		var x1 = x;
-		var y1 = y;
-		var z1 = z;
-		if(z1 == null) {
-			z1 = 0.;
-		}
-		if(y1 == null) {
-			y1 = 0.;
-		}
-		if(x1 == null) {
-			x1 = 0.;
-		}
-		var _this_x = x1;
-		var _this_y = y1;
-		var _this_z = z1;
-		var k = _this_x * _this_x + _this_y * _this_y + _this_z * _this_z;
-		if(k < 1e-20) {
-			k = 0;
-		} else {
-			k = 1. / Math.sqrt(k);
-		}
-		var x = _this_x * k;
-		var y = _this_y * k;
-		var z = _this_z * k;
-		if(z == null) {
-			z = 0.;
-		}
-		if(y == null) {
-			y = 0.;
-		}
-		if(x == null) {
-			x = 0.;
-		}
-		var x1 = x;
-		var y1 = y;
-		var z1 = z;
-		if(z1 == null) {
-			z1 = 0.;
-		}
-		if(y1 == null) {
-			y1 = 0.;
-		}
-		if(x1 == null) {
-			x1 = 0.;
-		}
-		var cameraTopLeft_x = x1;
-		var cameraTopLeft_y = y1;
-		var cameraTopLeft_z = z1;
-		var x = cameraTopLeft_x * worldRadius;
-		var y = cameraTopLeft_y * worldRadius;
-		var z = cameraTopLeft_z * worldRadius;
-		if(z == null) {
-			z = 0.;
-		}
-		if(y == null) {
-			y = 0.;
-		}
-		if(x == null) {
-			x = 0.;
-		}
-		var x1 = x;
-		var y1 = y;
-		var z1 = z;
-		if(z1 == null) {
-			z1 = 0.;
-		}
-		if(y1 == null) {
-			y1 = 0.;
-		}
-		if(x1 == null) {
-			x1 = 0.;
-		}
-		var v_x = x1;
-		var v_y = y1;
-		var v_z = z1;
-		var x = worldCenter_x + v_x;
-		var y = worldCenter_y + v_y;
-		var z = worldCenter_z + v_z;
-		if(z == null) {
-			z = 0.;
-		}
-		if(y == null) {
-			y = 0.;
-		}
-		if(x == null) {
-			x = 0.;
-		}
-		var x1 = x;
-		var y1 = y;
-		var z1 = z;
-		if(z1 == null) {
-			z1 = 0.;
-		}
-		if(y1 == null) {
-			y1 = 0.;
-		}
-		if(x1 == null) {
-			x1 = 0.;
-		}
-		var worldTopLeft_x = x1;
-		var worldTopLeft_y = y1;
-		var worldTopLeft_z = z1;
-		var x = cameraTopLeft_x * worldRadius;
-		var y = cameraTopLeft_y * worldRadius;
-		var z = cameraTopLeft_z * worldRadius;
-		if(z == null) {
-			z = 0.;
-		}
-		if(y == null) {
-			y = 0.;
-		}
-		if(x == null) {
-			x = 0.;
-		}
-		var x1 = x;
-		var y1 = y;
-		var z1 = z;
-		if(z1 == null) {
-			z1 = 0.;
-		}
-		if(y1 == null) {
-			y1 = 0.;
-		}
-		if(x1 == null) {
-			x1 = 0.;
-		}
-		var v_x = x1;
-		var v_y = y1;
-		var v_z = z1;
-		var x = worldCenter_x - v_x;
-		var y = worldCenter_y - v_y;
-		var z = worldCenter_z - v_z;
-		if(z == null) {
-			z = 0.;
-		}
-		if(y == null) {
-			y = 0.;
-		}
-		if(x == null) {
-			x = 0.;
-		}
-		var x1 = x;
-		var y1 = y;
-		var z1 = z;
-		if(z1 == null) {
-			z1 = 0.;
-		}
-		if(y1 == null) {
-			y1 = 0.;
-		}
-		if(x1 == null) {
-			x1 = 0.;
-		}
-		var worldBottomRight_x = x1;
-		var worldBottomRight_y = y1;
-		var worldBottomRight_z = z1;
-		var snapToPixel = false;
-		if(snapToPixel == null) {
-			snapToPixel = true;
-		}
-		var x = 0.;
-		var y = 0.;
-		var z = 0.;
-		if(z == null) {
-			z = 0.;
-		}
-		if(y == null) {
-			y = 0.;
-		}
-		if(x == null) {
-			x = 0.;
-		}
-		var screenTopLeft_x = x;
-		var screenTopLeft_y = y;
-		var screenTopLeft_z = z;
-		var x = worldTopLeft_x;
-		var y = worldTopLeft_y;
-		var z = worldTopLeft_z;
-		if(z == null) {
-			z = 0.;
-		}
-		if(y == null) {
-			y = 0.;
-		}
-		if(x == null) {
-			x = 0.;
-		}
-		screenTopLeft_x = x;
-		screenTopLeft_y = y;
-		screenTopLeft_z = z;
-		var m = ctx.camera.m;
-		var px = screenTopLeft_x * m._11 + screenTopLeft_y * m._21 + screenTopLeft_z * m._31 + m._41;
-		var py = screenTopLeft_x * m._12 + screenTopLeft_y * m._22 + screenTopLeft_z * m._32 + m._42;
-		var pz = screenTopLeft_x * m._13 + screenTopLeft_y * m._23 + screenTopLeft_z * m._33 + m._43;
-		var iw = 1 / (screenTopLeft_x * m._14 + screenTopLeft_y * m._24 + screenTopLeft_z * m._34 + m._44);
-		screenTopLeft_x = px * iw;
-		screenTopLeft_y = py * iw;
-		screenTopLeft_z = pz * iw;
-		screenTopLeft_x = (screenTopLeft_x + 1) * 0.5;
-		screenTopLeft_y = (-screenTopLeft_y + 1) * 0.5;
-		if(snapToPixel) {
-			screenTopLeft_x = Math.round(screenTopLeft_x);
-			screenTopLeft_y = Math.round(screenTopLeft_y);
-		}
-		var snapToPixel = false;
-		if(snapToPixel == null) {
-			snapToPixel = true;
-		}
-		var x = 0.;
-		var y = 0.;
-		var z = 0.;
-		if(z == null) {
-			z = 0.;
-		}
-		if(y == null) {
-			y = 0.;
-		}
-		if(x == null) {
-			x = 0.;
-		}
-		var screenBottomRight_x = x;
-		var screenBottomRight_y = y;
-		var screenBottomRight_z = z;
-		var x = worldBottomRight_x;
-		var y = worldBottomRight_y;
-		var z = worldBottomRight_z;
-		if(z == null) {
-			z = 0.;
-		}
-		if(y == null) {
-			y = 0.;
-		}
-		if(x == null) {
-			x = 0.;
-		}
-		screenBottomRight_x = x;
-		screenBottomRight_y = y;
-		screenBottomRight_z = z;
-		var m = ctx.camera.m;
-		var px = screenBottomRight_x * m._11 + screenBottomRight_y * m._21 + screenBottomRight_z * m._31 + m._41;
-		var py = screenBottomRight_x * m._12 + screenBottomRight_y * m._22 + screenBottomRight_z * m._32 + m._42;
-		var pz = screenBottomRight_x * m._13 + screenBottomRight_y * m._23 + screenBottomRight_z * m._33 + m._43;
-		var iw = 1 / (screenBottomRight_x * m._14 + screenBottomRight_y * m._24 + screenBottomRight_z * m._34 + m._44);
-		screenBottomRight_x = px * iw;
-		screenBottomRight_y = py * iw;
-		screenBottomRight_z = pz * iw;
-		screenBottomRight_x = (screenBottomRight_x + 1) * 0.5;
-		screenBottomRight_y = (-screenBottomRight_y + 1) * 0.5;
-		if(snapToPixel) {
-			screenBottomRight_x = Math.round(screenBottomRight_x);
-			screenBottomRight_y = Math.round(screenBottomRight_y);
-		}
-		var a = screenBottomRight_x - screenTopLeft_x;
-		var b = screenBottomRight_y - screenTopLeft_y;
-		var screenArea = a < b ? b : a;
-		this.curScreenRatio = screenArea * screenArea;
+		this.curScreenRatio = h3d_scene_Mesh.screenRatio(this.getAbsPos(),bounds,ctx.camera);
 		if(this.inheritLod) {
 			ctx.forcedScreenRatio = this.curScreenRatio;
 		}
 	}
 	,emit: function(ctx) {
 		this.calcScreenRatio(ctx);
+		if(this.primitive.screenRatioToLod(this.curScreenRatio) >= this.primitive.lodCount()) {
+			return;
+		}
 		var p = this.material.passes;
 		while(p != null) {
 			if(!p.culled) {
@@ -53889,6 +62101,7 @@ var h3d_scene_Interactive = function(shape,parent) {
 	this.hitPoint = new h3d_Vector4Impl(0.,0.,0.,1.);
 	this.lastClickFrame = -1;
 	this.mouseDownButton = -1;
+	this.emittedLastFrame = false;
 	this.isAbsoluteShape = false;
 	this.allowMultiClick = false;
 	this.enableRightButton = false;
@@ -54068,6 +62281,11 @@ h3d_scene_Interactive.prototype = $extend(h3d_scene_Object.prototype,{
 				} else {
 					_this.flags &= ~f;
 				}
+				var c = b1;
+				if(c && (_this.flags & 131072) != 0) {
+					var f = 262144;
+					_this.flags |= f;
+				}
 			}
 			var f = 2048;
 			if(b) {
@@ -54092,6 +62310,14 @@ h3d_scene_Interactive.prototype = $extend(h3d_scene_Object.prototype,{
 			this.scene = null;
 		}
 		h3d_scene_Object.prototype.onRemove.call(this);
+	}
+	,sync: function(ctx) {
+		h3d_scene_Object.prototype.sync.call(this,ctx);
+		this.emittedLastFrame = false;
+	}
+	,emit: function(ctx) {
+		h3d_scene_Object.prototype.emit.call(this,ctx);
+		this.emittedLastFrame = true;
 	}
 	,preventClick: function() {
 		this.mouseDownButton = -1;
@@ -54310,6 +62536,9 @@ h3d_scene_MultiMaterial.prototype = $extend(h3d_scene_Mesh.prototype,{
 	}
 	,emit: function(ctx) {
 		this.calcScreenRatio(ctx);
+		if(this.primitive.screenRatioToLod(this.curScreenRatio) >= this.primitive.lodCount()) {
+			return;
+		}
 		var _g = 0;
 		var _g1 = this.materials.length;
 		while(_g < _g1) {
@@ -54580,6 +62809,9 @@ h3d_scene_RenderContext.prototype = $extend(h3d_impl_RenderContext.prototype,{
 		}
 		if(x == null) {
 			x = 1;
+		}
+		if(x <= 0 || y <= 0 || z <= 0) {
+			throw haxe_Exception.thrown("Can't use zero or negative work groups count");
 		}
 		var prev = h3d_impl_RenderContext.get();
 		if(prev != this) {
@@ -54962,7 +63194,7 @@ h3d_scene_Renderer.prototype = $extend(hxd_impl_AnyProps.prototype,{
 			var p = tmp;
 			var z = p.obj.absPos._41 * cam._13 + p.obj.absPos._42 * cam._23 + p.obj.absPos._43 * cam._33 + cam._43;
 			var w = p.obj.absPos._41 * cam._14 + p.obj.absPos._42 * cam._24 + p.obj.absPos._43 * cam._34 + cam._44;
-			p.depth = z / w;
+			p.depth = w > 0.0 ? z / w : -z / w;
 		}
 		if(frontToBack) {
 			var list = passes.current;
@@ -55003,7 +63235,7 @@ h3d_scene_Renderer.prototype = $extend(hxd_impl_AnyProps.prototype,{
 								e = q;
 								q = q.next;
 								--qsize;
-							} else if(qsize == 0 || q == null || (p.pass.layer == q.pass.layer ? p.depth > q.depth ? 1 : -1 : p.pass.layer - q.pass.layer) <= 0) {
+							} else if(qsize == 0 || q == null || (p.pass.layer != q.pass.layer ? p.pass.layer - q.pass.layer : p.depth == q.depth ? 0 : p.depth > q.depth ? 1 : -1) <= 0) {
 								e = p;
 								p = p.next;
 								--psize;
@@ -55069,7 +63301,7 @@ h3d_scene_Renderer.prototype = $extend(hxd_impl_AnyProps.prototype,{
 								e = q;
 								q = q.next;
 								--qsize;
-							} else if(qsize == 0 || q == null || (p.pass.layer == q.pass.layer ? p.depth > q.depth ? -1 : 1 : p.pass.layer - q.pass.layer) <= 0) {
+							} else if(qsize == 0 || q == null || (p.pass.layer != q.pass.layer ? p.pass.layer - q.pass.layer : p.depth == q.depth ? 0 : p.depth < q.depth ? 1 : -1) <= 0) {
 								e = p;
 								p = p.next;
 								--psize;
@@ -55234,6 +63466,11 @@ var h3d_scene_Scene = function(createRenderer,createLightSystem) {
 	}
 	this.prevEngine = null;
 	this.checkPasses = true;
+	this.interactiveOffset = 0;
+	this.ratioY = 1;
+	this.ratioX = 1;
+	this.offsetY = 0;
+	this.offsetX = 0;
 	h3d_scene_Object.call(this,null);
 	this.window = hxd_Window.getInstance();
 	this.eventListeners = [];
@@ -55322,8 +63559,12 @@ h3d_scene_Scene.prototype = $extend(h3d_scene_Object.prototype,{
 			return null;
 		}
 		if(this.hitInteractives.length == 0) {
-			var screenX = (event.relX / this.window.get_width() - 0.5) * 2;
-			var screenY = -(event.relY / this.window.get_height() - 0.5) * 2;
+			var x = event.relX - this.offsetX;
+			var y = event.relY - this.offsetY;
+			var width = this.ratioX * this.window.get_width();
+			var height = this.ratioY * this.window.get_height();
+			var screenX = (x / width - 0.5) * 2;
+			var screenY = -(y / height - 0.5) * 2;
 			var p0 = this.camera.unproject(screenX,screenY,0);
 			var p1 = this.camera.unproject(screenX,screenY,1);
 			var x = p0.x;
@@ -55389,6 +63630,11 @@ h3d_scene_Scene.prototype = $extend(h3d_scene_Object.prototype,{
 			r.lz = p2_z - p1_z;
 			r.normalize();
 			var r1 = r;
+			if(this.interactiveOffset != 0) {
+				r1.px += r1.lx * this.interactiveOffset;
+				r1.py += r1.ly * this.interactiveOffset;
+				r1.pz += r1.lz * this.interactiveOffset;
+			}
 			var saveR_px = r1.px;
 			var saveR_py = r1.py;
 			var saveR_pz = r1.pz;
@@ -55557,81 +63803,84 @@ h3d_scene_Scene.prototype = $extend(h3d_scene_Object.prototype,{
 					++_g;
 					var m = i.invPos;
 					var wfactor = 0.;
-					if(i.preciseShape != null) {
-						var x = r1.px;
-						var y = r1.py;
-						var z = r1.pz;
-						if(z == null) {
-							z = 0.;
+					if(i.preciseShape != null || !i.bestMatch) {
+						if(!i.isAbsoluteShape) {
+							var x = r1.px;
+							var y = r1.py;
+							var z = r1.pz;
+							if(z == null) {
+								z = 0.;
+							}
+							if(y == null) {
+								y = 0.;
+							}
+							if(x == null) {
+								x = 0.;
+							}
+							var x1 = x;
+							var y1 = y;
+							var z1 = z;
+							if(z1 == null) {
+								z1 = 0.;
+							}
+							if(y1 == null) {
+								y1 = 0.;
+							}
+							if(x1 == null) {
+								x1 = 0.;
+							}
+							var p_x = x1;
+							var p_y = y1;
+							var p_z = z1;
+							var px = p_x * m._11 + p_y * m._21 + p_z * m._31 + m._41;
+							var py = p_x * m._12 + p_y * m._22 + p_z * m._32 + m._42;
+							var pz = p_x * m._13 + p_y * m._23 + p_z * m._33 + m._43;
+							p_x = px;
+							p_y = py;
+							p_z = pz;
+							r1.px = p_x;
+							r1.py = p_y;
+							r1.pz = p_z;
+							var x2 = r1.lx;
+							var y2 = r1.ly;
+							var z2 = r1.lz;
+							if(z2 == null) {
+								z2 = 0.;
+							}
+							if(y2 == null) {
+								y2 = 0.;
+							}
+							if(x2 == null) {
+								x2 = 0.;
+							}
+							var x3 = x2;
+							var y3 = y2;
+							var z3 = z2;
+							if(z3 == null) {
+								z3 = 0.;
+							}
+							if(y3 == null) {
+								y3 = 0.;
+							}
+							if(x3 == null) {
+								x3 = 0.;
+							}
+							var _this_x = x3;
+							var _this_y = y3;
+							var _this_z = z3;
+							var px1 = _this_x * m._11 + _this_y * m._21 + _this_z * m._31;
+							var py1 = _this_x * m._12 + _this_y * m._22 + _this_z * m._32;
+							var pz1 = _this_x * m._13 + _this_y * m._23 + _this_z * m._33;
+							_this_x = px1;
+							_this_y = py1;
+							_this_z = pz1;
+							r1.lx = _this_x;
+							r1.ly = _this_y;
+							r1.lz = _this_z;
+							r1.normalize();
 						}
-						if(y == null) {
-							y = 0.;
-						}
-						if(x == null) {
-							x = 0.;
-						}
-						var x1 = x;
-						var y1 = y;
-						var z1 = z;
-						if(z1 == null) {
-							z1 = 0.;
-						}
-						if(y1 == null) {
-							y1 = 0.;
-						}
-						if(x1 == null) {
-							x1 = 0.;
-						}
-						var p_x = x1;
-						var p_y = y1;
-						var p_z = z1;
-						var px = p_x * m._11 + p_y * m._21 + p_z * m._31 + m._41;
-						var py = p_x * m._12 + p_y * m._22 + p_z * m._32 + m._42;
-						var pz = p_x * m._13 + p_y * m._23 + p_z * m._33 + m._43;
-						p_x = px;
-						p_y = py;
-						p_z = pz;
-						r1.px = p_x;
-						r1.py = p_y;
-						r1.pz = p_z;
-						var x2 = r1.lx;
-						var y2 = r1.ly;
-						var z2 = r1.lz;
-						if(z2 == null) {
-							z2 = 0.;
-						}
-						if(y2 == null) {
-							y2 = 0.;
-						}
-						if(x2 == null) {
-							x2 = 0.;
-						}
-						var x3 = x2;
-						var y3 = y2;
-						var z3 = z2;
-						if(z3 == null) {
-							z3 = 0.;
-						}
-						if(y3 == null) {
-							y3 = 0.;
-						}
-						if(x3 == null) {
-							x3 = 0.;
-						}
-						var _this_x = x3;
-						var _this_y = y3;
-						var _this_z = z3;
-						var px1 = _this_x * m._11 + _this_y * m._21 + _this_z * m._31;
-						var py1 = _this_x * m._12 + _this_y * m._22 + _this_z * m._32;
-						var pz1 = _this_x * m._13 + _this_y * m._23 + _this_z * m._33;
-						_this_x = px1;
-						_this_y = py1;
-						_this_z = pz1;
-						r1.lx = _this_x;
-						r1.ly = _this_y;
-						r1.lz = _this_z;
-						r1.normalize();
-						var hit = i.preciseShape.rayIntersection(r1,i.bestMatch);
+						var tmp = i.preciseShape;
+						var hit = (tmp != null ? tmp : i.shape).rayIntersection(r1,true);
 						if(hit > 0) {
 							var x4 = r1.px + hit * r1.lx;
 							var y4 = r1.py + hit * r1.ly;
@@ -55711,13 +63960,15 @@ h3d_scene_Scene.prototype = $extend(h3d_scene_Object.prototype,{
 					var _this_z1 = z7;
 					var _this_w = w1;
 					_this_w = 1;
-					var m1 = i.absPos;
-					var px2 = _this_x1 * m1._11 + _this_y1 * m1._21 + _this_z1 * m1._31 + _this_w * m1._41;
-					var py2 = _this_x1 * m1._12 + _this_y1 * m1._22 + _this_z1 * m1._32 + _this_w * m1._42;
-					var pz2 = _this_x1 * m1._13 + _this_y1 * m1._23 + _this_z1 * m1._33 + _this_w * m1._43;
-					_this_x1 = px2;
-					_this_y1 = py2;
-					_this_z1 = pz2;
+					if(!i.isAbsoluteShape) {
+						var m1 = i.absPos;
+						var px2 = _this_x1 * m1._11 + _this_y1 * m1._21 + _this_z1 * m1._31 + _this_w * m1._41;
+						var py2 = _this_x1 * m1._12 + _this_y1 * m1._22 + _this_z1 * m1._32 + _this_w * m1._42;
+						var pz2 = _this_x1 * m1._13 + _this_y1 * m1._23 + _this_z1 * m1._33 + _this_w * m1._43;
+						_this_x1 = px2;
+						_this_y1 = py2;
+						_this_z1 = pz2;
+					}
 					var m2 = this.camera.m;
 					var px3 = _this_x1 * m2._11 + _this_y1 * m2._21 + _this_z1 * m2._31 + _this_w * m2._41;
 					var py3 = _this_x1 * m2._12 + _this_y1 * m2._22 + _this_z1 * m2._32 + _this_w * m2._42;
@@ -55865,7 +64116,7 @@ h3d_scene_Scene.prototype = $extend(h3d_scene_Object.prototype,{
 				var p = passes[_g];
 				++_g;
 				if(!p.rendered) {
-					haxe_Log.trace("Pass " + p.name + " has not been rendered : don't know how to handle.",{ fileName : "h3d/scene/Scene.hx", lineNumber : 375, className : "h3d.scene.Scene", methodName : "render"});
+					haxe_Log.trace("Pass " + p.name + " has not been rendered : don't know how to handle.",{ fileName : "h3d/scene/Scene.hx", lineNumber : 397, className : "h3d.scene.Scene", methodName : "render"});
 				}
 			}
 		}
@@ -55915,7 +64166,7 @@ var h3d_scene_Joint = function(skin,j) {
 	h3d_scene_Object.call(this,null);
 	this.name = j.name;
 	this.skin = skin;
-	this.lastFrame = -1;
+	this.lastFrame = -2;
 	this.parent = skin;
 	this.index = j.index;
 };
@@ -55945,36 +64196,1332 @@ h3d_scene_Joint.prototype = $extend(h3d_scene_Object.prototype,{
 		return null;
 	}
 	,syncPos: function() {
-		var p = this.parent;
+		var p = this.skin;
 		while(p != null) {
 			if((p.flags & 1) != 0) {
-				if(this.skin.jointsAbsPosInv == null) {
-					var this1 = new h3d_MatrixImpl();
-					this.skin.jointsAbsPosInv = this1;
-					this.skin.jointsAbsPosInv.zero();
-				}
-				if(this.skin.jointsAbsPosInv._44 == 0) {
-					this.skin.jointsAbsPosInv.inverse3x4(this.parent.absPos);
-				}
-				this.parent.syncPos();
-				this.lastFrame = -1;
+				this.update();
 				break;
 			}
 			p = p.parent;
 		}
 		if(this.lastFrame != this.skin.lastFrame) {
 			this.lastFrame = this.skin.lastFrame;
-			this.absPos.load(this.skin.currentAbsPose[this.index]);
-			if(this.skin.jointsAbsPosInv != null && this.skin.jointsAbsPosInv._44 != 0) {
-				this.absPos.multiply3x4(this.absPos,this.skin.jointsAbsPosInv);
-				this.absPos.multiply3x4(this.absPos,this.parent.absPos);
-			}
+			this.absPos.load(this.skin.jointsData[this.index].currentAbsPose);
 		}
+	}
+	,update: function() {
+		this.skin.getAbsPos();
+		this.skin.syncJoints();
+		this.lastFrame = -1;
 	}
 	,__class__: h3d_scene_Joint
 });
+var h3d_scene_JointData = function() {
+	this.currentAbsPose = h3d_Matrix.I();
+};
+$hxClasses["h3d.scene.JointData"] = h3d_scene_JointData;
+h3d_scene_JointData.__name__ = "h3d.scene.JointData";
+h3d_scene_JointData.prototype = {
+	sync: function(skin,j) {
+		if(j.follow != null) {
+			return;
+		}
+		var m = this.currentAbsPose;
+		var r = this.currentRelPose;
+		var bid = j.bindIndex;
+		if(r == null) {
+			r = j.defMat;
+		} else if(j.retargetAnim && skin.enableRetargeting) {
+			h3d_scene_Skin.TMP_MAT.load(r);
+			r = h3d_scene_Skin.TMP_MAT;
+			r._41 = j.defMat._41;
+			r._42 = j.defMat._42;
+			r._43 = j.defMat._43;
+		}
+		if(j.parent == null) {
+			var _this = m;
+			var b = skin.absPos;
+			var m11 = r._11;
+			var m12 = r._12;
+			var m13 = r._13;
+			var m21 = r._21;
+			var m22 = r._22;
+			var m23 = r._23;
+			var a31 = r._31;
+			var a32 = r._32;
+			var a33 = r._33;
+			var a41 = r._41;
+			var a42 = r._42;
+			var a43 = r._43;
+			var b11 = b._11;
+			var b12 = b._12;
+			var b13 = b._13;
+			var b21 = b._21;
+			var b22 = b._22;
+			var b23 = b._23;
+			var b31 = b._31;
+			var b32 = b._32;
+			var b33 = b._33;
+			var b41 = b._41;
+			var b42 = b._42;
+			var b43 = b._43;
+			_this._11 = m11 * b11 + m12 * b21 + m13 * b31;
+			_this._12 = m11 * b12 + m12 * b22 + m13 * b32;
+			_this._13 = m11 * b13 + m12 * b23 + m13 * b33;
+			_this._14 = 0;
+			_this._21 = m21 * b11 + m22 * b21 + m23 * b31;
+			_this._22 = m21 * b12 + m22 * b22 + m23 * b32;
+			_this._23 = m21 * b13 + m22 * b23 + m23 * b33;
+			_this._24 = 0;
+			_this._31 = a31 * b11 + a32 * b21 + a33 * b31;
+			_this._32 = a31 * b12 + a32 * b22 + a33 * b32;
+			_this._33 = a31 * b13 + a32 * b23 + a33 * b33;
+			_this._34 = 0;
+			_this._41 = a41 * b11 + a42 * b21 + a43 * b31 + b41;
+			_this._42 = a41 * b12 + a42 * b22 + a43 * b32 + b42;
+			_this._43 = a41 * b13 + a42 * b23 + a43 * b33 + b43;
+			_this._44 = 1;
+		} else {
+			var _this = m;
+			var b = skin.jointsData[j.parent.index].currentAbsPose;
+			var m11 = r._11;
+			var m12 = r._12;
+			var m13 = r._13;
+			var m21 = r._21;
+			var m22 = r._22;
+			var m23 = r._23;
+			var a31 = r._31;
+			var a32 = r._32;
+			var a33 = r._33;
+			var a41 = r._41;
+			var a42 = r._42;
+			var a43 = r._43;
+			var b11 = b._11;
+			var b12 = b._12;
+			var b13 = b._13;
+			var b21 = b._21;
+			var b22 = b._22;
+			var b23 = b._23;
+			var b31 = b._31;
+			var b32 = b._32;
+			var b33 = b._33;
+			var b41 = b._41;
+			var b42 = b._42;
+			var b43 = b._43;
+			_this._11 = m11 * b11 + m12 * b21 + m13 * b31;
+			_this._12 = m11 * b12 + m12 * b22 + m13 * b32;
+			_this._13 = m11 * b13 + m12 * b23 + m13 * b33;
+			_this._14 = 0;
+			_this._21 = m21 * b11 + m22 * b21 + m23 * b31;
+			_this._22 = m21 * b12 + m22 * b22 + m23 * b32;
+			_this._23 = m21 * b13 + m22 * b23 + m23 * b33;
+			_this._24 = 0;
+			_this._31 = a31 * b11 + a32 * b21 + a33 * b31;
+			_this._32 = a31 * b12 + a32 * b22 + a33 * b32;
+			_this._33 = a31 * b13 + a32 * b23 + a33 * b33;
+			_this._34 = 0;
+			_this._41 = a41 * b11 + a42 * b21 + a43 * b31 + b41;
+			_this._42 = a41 * b12 + a42 * b22 + a43 * b32 + b42;
+			_this._43 = a41 * b13 + a42 * b23 + a43 * b33 + b43;
+			_this._44 = 1;
+		}
+		if(this.additivePose != null) {
+			var _this = m;
+			var a = this.additivePose;
+			var m11 = a._11;
+			var m12 = a._12;
+			var m13 = a._13;
+			var m21 = a._21;
+			var m22 = a._22;
+			var m23 = a._23;
+			var a31 = a._31;
+			var a32 = a._32;
+			var a33 = a._33;
+			var a41 = a._41;
+			var a42 = a._42;
+			var a43 = a._43;
+			var b11 = m._11;
+			var b12 = m._12;
+			var b13 = m._13;
+			var b21 = m._21;
+			var b22 = m._22;
+			var b23 = m._23;
+			var b31 = m._31;
+			var b32 = m._32;
+			var b33 = m._33;
+			var b41 = m._41;
+			var b42 = m._42;
+			var b43 = m._43;
+			_this._11 = m11 * b11 + m12 * b21 + m13 * b31;
+			_this._12 = m11 * b12 + m12 * b22 + m13 * b32;
+			_this._13 = m11 * b13 + m12 * b23 + m13 * b33;
+			_this._14 = 0;
+			_this._21 = m21 * b11 + m22 * b21 + m23 * b31;
+			_this._22 = m21 * b12 + m22 * b22 + m23 * b32;
+			_this._23 = m21 * b13 + m22 * b23 + m23 * b33;
+			_this._24 = 0;
+			_this._31 = a31 * b11 + a32 * b21 + a33 * b31;
+			_this._32 = a31 * b12 + a32 * b22 + a33 * b32;
+			_this._33 = a31 * b13 + a32 * b23 + a33 * b33;
+			_this._34 = 0;
+			_this._41 = a41 * b11 + a42 * b21 + a43 * b31 + b41;
+			_this._42 = a41 * b12 + a42 * b22 + a43 * b32 + b42;
+			_this._43 = a41 * b13 + a42 * b23 + a43 * b33 + b43;
+			_this._44 = 1;
+		}
+		if(bid >= 0) {
+			var _this = skin.currentPalette[bid];
+			var a = j.transPos;
+			var m11 = a._11;
+			var m12 = a._12;
+			var m13 = a._13;
+			var m21 = a._21;
+			var m22 = a._22;
+			var m23 = a._23;
+			var a31 = a._31;
+			var a32 = a._32;
+			var a33 = a._33;
+			var a41 = a._41;
+			var a42 = a._42;
+			var a43 = a._43;
+			var b11 = m._11;
+			var b12 = m._12;
+			var b13 = m._13;
+			var b21 = m._21;
+			var b22 = m._22;
+			var b23 = m._23;
+			var b31 = m._31;
+			var b32 = m._32;
+			var b33 = m._33;
+			var b41 = m._41;
+			var b42 = m._42;
+			var b43 = m._43;
+			_this._11 = m11 * b11 + m12 * b21 + m13 * b31;
+			_this._12 = m11 * b12 + m12 * b22 + m13 * b32;
+			_this._13 = m11 * b13 + m12 * b23 + m13 * b33;
+			_this._14 = 0;
+			_this._21 = m21 * b11 + m22 * b21 + m23 * b31;
+			_this._22 = m21 * b12 + m22 * b22 + m23 * b32;
+			_this._23 = m21 * b13 + m22 * b23 + m23 * b33;
+			_this._24 = 0;
+			_this._31 = a31 * b11 + a32 * b21 + a33 * b31;
+			_this._32 = a31 * b12 + a32 * b22 + a33 * b32;
+			_this._33 = a31 * b13 + a32 * b23 + a33 * b33;
+			_this._34 = 0;
+			_this._41 = a41 * b11 + a42 * b21 + a43 * b31 + b41;
+			_this._42 = a41 * b12 + a42 * b22 + a43 * b32 + b42;
+			_this._43 = a41 * b13 + a42 * b23 + a43 * b33 + b43;
+			_this._44 = 1;
+		}
+	}
+	,__class__: h3d_scene_JointData
+};
+var h3d_scene_DynamicJointData = function() {
+	this.f = -1;
+	h3d_scene_JointData.call(this);
+	var x = 0;
+	var y = 0;
+	var z = 0;
+	if(z == null) {
+		z = 0.;
+	}
+	if(y == null) {
+		y = 0.;
+	}
+	if(x == null) {
+		x = 0.;
+	}
+	this.speed = new h3d_VectorImpl(x,y,z);
+};
+$hxClasses["h3d.scene.DynamicJointData"] = h3d_scene_DynamicJointData;
+h3d_scene_DynamicJointData.__name__ = "h3d.scene.DynamicJointData";
+h3d_scene_DynamicJointData.__super__ = h3d_scene_JointData;
+h3d_scene_DynamicJointData.prototype = $extend(h3d_scene_JointData.prototype,{
+	load: function(data) {
+		if(data.currentRelPose != null) {
+			if(this.currentRelPose == null) {
+				this.currentRelPose = new h3d_MatrixImpl();
+			}
+			this.currentRelPose.load(data.currentRelPose);
+		}
+		if(data.currentAbsPose != null) {
+			if(this.currentAbsPose == null) {
+				this.currentAbsPose = new h3d_MatrixImpl();
+			}
+			this.currentAbsPose.load(data.currentAbsPose);
+		}
+		if(data.additivePose != null) {
+			if(this.additivePose == null) {
+				this.additivePose = new h3d_MatrixImpl();
+			}
+			this.additivePose.load(data.additivePose);
+		}
+		if(data.absPos != null) {
+			if(this.absPos == null) {
+				this.absPos = new h3d_MatrixImpl();
+			}
+			this.absPos.load(data.absPos);
+		}
+		var _this = this.speed;
+		var v = data.speed;
+		_this.x = v.x;
+		_this.y = v.y;
+		_this.z = v.z;
+	}
+	,sync: function(skin,j) {
+		h3d_scene_JointData.prototype.sync.call(this,skin,j);
+		if(this.f != hxd_Timer.frameCount) {
+			this.f = hxd_Timer.frameCount;
+			if(this.initialState == null) {
+				this.initialState = new h3d_scene_DynamicJointData();
+			}
+			this.initialState.load(this);
+		} else {
+			this.load(this.initialState);
+		}
+		this.computeDyn(skin,j);
+		this.computeRotationDyn(skin,j.parent);
+	}
+	,computeDyn: function(skin,j) {
+		var j1 = j;
+		var value = skin.jointsData[j1.index];
+		var jData = ((value) instanceof h3d_scene_DynamicJointData) ? value : null;
+		var absPos = jData.absPos == null ? jData.currentAbsPose : jData.absPos;
+		var relPos = j1.defMat;
+		var _this = h3d_scene_DynamicJointData.newWorldPos;
+		var _this1 = absPos;
+		var x = 0.;
+		var y = 0.;
+		var z = 0.;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var v_x = x;
+		var v_y = y;
+		var v_z = z;
+		var x = _this1._41;
+		var y = _this1._42;
+		var z = _this1._43;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		v_x = x;
+		v_y = y;
+		v_z = z;
+		_this.x = v_x;
+		_this.y = v_y;
+		_this.z = v_z;
+		var _this = h3d_scene_DynamicJointData.expectedPos;
+		var _this1 = absPos;
+		var x = 0.;
+		var y = 0.;
+		var z = 0.;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var v_x = x;
+		var v_y = y;
+		var v_z = z;
+		var x = _this1._41;
+		var y = _this1._42;
+		var z = _this1._43;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		v_x = x;
+		v_y = y;
+		v_z = z;
+		_this.x = v_x;
+		_this.y = v_y;
+		_this.z = v_z;
+		var globalForce = j1.globalForce;
+		var _this = this.speed;
+		var this1 = this.speed;
+		var v = 1.0 - j1.resistance;
+		var x = globalForce.x * v;
+		var y = globalForce.y * v;
+		var z = globalForce.z * v;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var v_x = x1;
+		var v_y = y1;
+		var v_z = z1;
+		var x = this1.x + v_x;
+		var y = this1.y + v_y;
+		var z = this1.z + v_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var v_x = x1;
+		var v_y = y1;
+		var v_z = z1;
+		_this.x = v_x;
+		_this.y = v_y;
+		_this.z = v_z;
+		var this1 = jData.speed;
+		var v = 1.0 - j1.damping;
+		this1.x *= v;
+		this1.y *= v;
+		this1.z *= v;
+		var _this = jData.speed;
+		if(_this.x * _this.x + _this.y * _this.y + _this.z * _this.z > h3d_anim_DynamicJoint.SLEEP_THRESHOLD) {
+			var _this = h3d_scene_DynamicJointData.newWorldPos;
+			var this1 = h3d_scene_DynamicJointData.newWorldPos;
+			var this2 = jData.speed;
+			var f = hxd_Timer.dt;
+			var min = 0;
+			var max = hxd_Timer.maxDeltaTime;
+			if(max == null) {
+				max = 1.;
+			}
+			if(min == null) {
+				min = 0.;
+			}
+			var v = f < min ? min : f > max ? max : f;
+			var x = this2.x * v;
+			var y = this2.y * v;
+			var z = this2.z * v;
+			if(z == null) {
+				z = 0.;
+			}
+			if(y == null) {
+				y = 0.;
+			}
+			if(x == null) {
+				x = 0.;
+			}
+			var x1 = x;
+			var y1 = y;
+			var z1 = z;
+			if(z1 == null) {
+				z1 = 0.;
+			}
+			if(y1 == null) {
+				y1 = 0.;
+			}
+			if(x1 == null) {
+				x1 = 0.;
+			}
+			var v_x = x1;
+			var v_y = y1;
+			var v_z = z1;
+			var x = this1.x + v_x;
+			var y = this1.y + v_y;
+			var z = this1.z + v_z;
+			if(z == null) {
+				z = 0.;
+			}
+			if(y == null) {
+				y = 0.;
+			}
+			if(x == null) {
+				x = 0.;
+			}
+			var x1 = x;
+			var y1 = y;
+			var z1 = z;
+			if(z1 == null) {
+				z1 = 0.;
+			}
+			if(y1 == null) {
+				y1 = 0.;
+			}
+			if(x1 == null) {
+				x1 = 0.;
+			}
+			var v_x = x1;
+			var v_y = y1;
+			var v_z = z1;
+			_this.x = v_x;
+			_this.y = v_y;
+			_this.z = v_z;
+		}
+		var _this = jData.speed;
+		if(_this.x * _this.x + _this.y * _this.y + _this.z * _this.z > h3d_anim_DynamicJoint.MAX_THRESHOLD) {
+			var _this = h3d_scene_DynamicJointData.newWorldPos;
+			var _this1 = jData.currentAbsPose;
+			var x = 0.;
+			var y = 0.;
+			var z = 0.;
+			if(z == null) {
+				z = 0.;
+			}
+			if(y == null) {
+				y = 0.;
+			}
+			if(x == null) {
+				x = 0.;
+			}
+			var v_x = x;
+			var v_y = y;
+			var v_z = z;
+			var x = _this1._41;
+			var y = _this1._42;
+			var z = _this1._43;
+			if(z == null) {
+				z = 0.;
+			}
+			if(y == null) {
+				y = 0.;
+			}
+			if(x == null) {
+				x = 0.;
+			}
+			v_x = x;
+			v_y = y;
+			v_z = z;
+			_this.x = v_x;
+			_this.y = v_y;
+			_this.z = v_z;
+			absPos.load(jData.currentAbsPose);
+			var _this = jData.speed;
+			var x = 0;
+			var y = 0;
+			var z = 0;
+			if(z == null) {
+				z = 0.;
+			}
+			if(y == null) {
+				y = 0.;
+			}
+			if(x == null) {
+				x = 0.;
+			}
+			_this.x = x;
+			_this.y = y;
+			_this.z = z;
+		}
+		h3d_scene_Skin.TMP_MAT.multiply(relPos,skin.jointsData[j1.parent.index].currentAbsPose);
+		var _this = h3d_scene_DynamicJointData.expectedPos;
+		var _this1 = h3d_scene_Skin.TMP_MAT;
+		var x = 0.;
+		var y = 0.;
+		var z = 0.;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var v_x = x;
+		var v_y = y;
+		var v_z = z;
+		var x = _this1._41;
+		var y = _this1._42;
+		var z = _this1._43;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		v_x = x;
+		v_y = y;
+		v_z = z;
+		_this.x = v_x;
+		_this.y = v_y;
+		_this.z = v_z;
+		var _this = h3d_scene_DynamicJointData.newWorldPos;
+		var v1 = h3d_scene_DynamicJointData.newWorldPos;
+		var v2 = h3d_scene_DynamicJointData.expectedPos;
+		var k = j1.stiffness;
+		var a = v1.x;
+		_this.x = a + k * (v2.x - a);
+		var a = v1.y;
+		_this.y = a + k * (v2.y - a);
+		var a = v1.z;
+		_this.z = a + k * (v2.z - a);
+		var this1 = h3d_scene_DynamicJointData.newWorldPos;
+		var _this = skin.jointsData[j1.parent.index].currentAbsPose;
+		var x = 0.;
+		var y = 0.;
+		var z = 0.;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var v_x = x;
+		var v_y = y;
+		var v_z = z;
+		var x = _this._41;
+		var y = _this._42;
+		var z = _this._43;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		v_x = x;
+		v_y = y;
+		v_z = z;
+		var x = this1.x - v_x;
+		var y = this1.y - v_y;
+		var z = this1.z - v_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var _this_x = x1;
+		var _this_y = y1;
+		var _this_z = z1;
+		var k = _this_x * _this_x + _this_y * _this_y + _this_z * _this_z;
+		if(k < 1e-20) {
+			k = 0;
+		} else {
+			k = 1. / Math.sqrt(k);
+		}
+		var x = _this_x * k;
+		var y = _this_y * k;
+		var z = _this_z * k;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var dirToParent_x = x1;
+		var dirToParent_y = y1;
+		var dirToParent_z = z1;
+		var _this = relPos;
+		var x = 0.;
+		var y = 0.;
+		var z = 0.;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var _this_x = x;
+		var _this_y = y;
+		var _this_z = z;
+		var x = _this._41;
+		var y = _this._42;
+		var z = _this._43;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		_this_x = x;
+		_this_y = y;
+		_this_z = z;
+		var lengthToParent = Math.sqrt(_this_x * _this_x + _this_y * _this_y + _this_z * _this_z);
+		var _this = h3d_scene_DynamicJointData.expectedPos;
+		var _this1 = skin.jointsData[j1.parent.index].currentAbsPose;
+		var x = 0.;
+		var y = 0.;
+		var z = 0.;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var _this_x = x;
+		var _this_y = y;
+		var _this_z = z;
+		var x = _this1._41;
+		var y = _this1._42;
+		var z = _this1._43;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		_this_x = x;
+		_this_y = y;
+		_this_z = z;
+		var x = dirToParent_x * lengthToParent;
+		var y = dirToParent_y * lengthToParent;
+		var z = dirToParent_z * lengthToParent;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var v_x = x1;
+		var v_y = y1;
+		var v_z = z1;
+		var x = _this_x + v_x;
+		var y = _this_y + v_y;
+		var z = _this_z + v_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var v_x = x1;
+		var v_y = y1;
+		var v_z = z1;
+		_this.x = v_x;
+		_this.y = v_y;
+		_this.z = v_z;
+		var _this = h3d_scene_DynamicJointData.newWorldPos;
+		var v1 = h3d_scene_DynamicJointData.expectedPos;
+		var v2 = h3d_scene_DynamicJointData.newWorldPos;
+		var k = j1.slackness;
+		var a = v1.x;
+		_this.x = a + k * (v2.x - a);
+		var a = v1.y;
+		_this.y = a + k * (v2.y - a);
+		var a = v1.z;
+		_this.z = a + k * (v2.z - a);
+		skin.jointsData[j1.parent.index].currentAbsPose.getInverse(h3d_scene_Skin.TMP_MAT);
+		var _this = h3d_scene_DynamicJointData.tmpVec;
+		var v = h3d_scene_DynamicJointData.newWorldPos;
+		_this.x = v.x;
+		_this.y = v.y;
+		_this.z = v.z;
+		var this1 = h3d_scene_DynamicJointData.tmpVec;
+		var m = h3d_scene_Skin.TMP_MAT;
+		var px = this1.x * m._11 + this1.y * m._21 + this1.z * m._31 + m._41;
+		var py = this1.x * m._12 + this1.y * m._22 + this1.z * m._32 + m._42;
+		var pz = this1.x * m._13 + this1.y * m._23 + this1.z * m._33 + m._43;
+		this1.x = px;
+		this1.y = py;
+		this1.z = pz;
+		var _this = h3d_scene_DynamicJointData.tmpVec2;
+		var _this1 = jData.currentAbsPose;
+		var x = 0.;
+		var y = 0.;
+		var z = 0.;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var v_x = x;
+		var v_y = y;
+		var v_z = z;
+		var x = _this1._41;
+		var y = _this1._42;
+		var z = _this1._43;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		v_x = x;
+		v_y = y;
+		v_z = z;
+		_this.x = v_x;
+		_this.y = v_y;
+		_this.z = v_z;
+		var this1 = h3d_scene_DynamicJointData.tmpVec2;
+		var m = h3d_scene_Skin.TMP_MAT;
+		var px = this1.x * m._11 + this1.y * m._21 + this1.z * m._31 + m._41;
+		var py = this1.x * m._12 + this1.y * m._22 + this1.z * m._32 + m._42;
+		var pz = this1.x * m._13 + this1.y * m._23 + this1.z * m._33 + m._43;
+		this1.x = px;
+		this1.y = py;
+		this1.z = pz;
+		if(j1.lockAxis.x > 0.0) {
+			h3d_scene_DynamicJointData.tmpVec.x = h3d_scene_DynamicJointData.tmpVec2.x;
+		}
+		if(j1.lockAxis.y > 0.0) {
+			h3d_scene_DynamicJointData.tmpVec.y = h3d_scene_DynamicJointData.tmpVec2.y;
+		}
+		if(j1.lockAxis.z > 0.0) {
+			h3d_scene_DynamicJointData.tmpVec.z = h3d_scene_DynamicJointData.tmpVec2.z;
+		}
+		var this1 = h3d_scene_DynamicJointData.tmpVec;
+		var m = skin.jointsData[j1.parent.index].currentAbsPose;
+		var px = this1.x * m._11 + this1.y * m._21 + this1.z * m._31 + m._41;
+		var py = this1.x * m._12 + this1.y * m._22 + this1.z * m._32 + m._42;
+		var pz = this1.x * m._13 + this1.y * m._23 + this1.z * m._33 + m._43;
+		this1.x = px;
+		this1.y = py;
+		this1.z = pz;
+		var _this = h3d_scene_DynamicJointData.newWorldPos;
+		var v = h3d_scene_DynamicJointData.tmpVec;
+		_this.x = v.x;
+		_this.y = v.y;
+		_this.z = v.z;
+		var _this = jData.speed;
+		var this1 = jData.speed;
+		var this2 = h3d_scene_DynamicJointData.newWorldPos;
+		var _this1 = absPos;
+		var x = 0.;
+		var y = 0.;
+		var z = 0.;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var v_x = x;
+		var v_y = y;
+		var v_z = z;
+		var x = _this1._41;
+		var y = _this1._42;
+		var z = _this1._43;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		v_x = x;
+		v_y = y;
+		v_z = z;
+		var x = this2.x - v_x;
+		var y = this2.y - v_y;
+		var z = this2.z - v_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var v = 1.0 / hxd_Timer.dt;
+		var x = this_x * v;
+		var y = this_y * v;
+		var z = this_z * v;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var v_x = x1;
+		var v_y = y1;
+		var v_z = z1;
+		var x = this1.x + v_x;
+		var y = this1.y + v_y;
+		var z = this1.z + v_z;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var this_x = x1;
+		var this_y = y1;
+		var this_z = z1;
+		var x = this_x * 0.5;
+		var y = this_y * 0.5;
+		var z = this_z * 0.5;
+		if(z == null) {
+			z = 0.;
+		}
+		if(y == null) {
+			y = 0.;
+		}
+		if(x == null) {
+			x = 0.;
+		}
+		var x1 = x;
+		var y1 = y;
+		var z1 = z;
+		if(z1 == null) {
+			z1 = 0.;
+		}
+		if(y1 == null) {
+			y1 = 0.;
+		}
+		if(x1 == null) {
+			x1 = 0.;
+		}
+		var v_x = x1;
+		var v_y = y1;
+		var v_z = z1;
+		_this.x = v_x;
+		_this.y = v_y;
+		_this.z = v_z;
+		var _this = jData.currentAbsPose;
+		var v = h3d_scene_DynamicJointData.newWorldPos;
+		_this._41 = v.x;
+		_this._42 = v.y;
+		_this._43 = v.z;
+		if(jData.absPos == null) {
+			jData.absPos = new h3d_MatrixImpl();
+		}
+		jData.absPos.load(jData.currentAbsPose);
+		if(jData.relPos == null) {
+			jData.relPos = new h3d_MatrixImpl();
+		}
+		skin.jointsData[j1.parent.index].currentAbsPose.getInverse(h3d_scene_Skin.TMP_MAT);
+		jData.relPos.multiply(jData.absPos,h3d_scene_Skin.TMP_MAT);
+		if(j1.bindIndex >= 0) {
+			var _this = skin.currentPalette[j1.bindIndex];
+			var a = j1.transPos;
+			var b = jData.currentAbsPose;
+			var m11 = a._11;
+			var m12 = a._12;
+			var m13 = a._13;
+			var m21 = a._21;
+			var m22 = a._22;
+			var m23 = a._23;
+			var a31 = a._31;
+			var a32 = a._32;
+			var a33 = a._33;
+			var a41 = a._41;
+			var a42 = a._42;
+			var a43 = a._43;
+			var b11 = b._11;
+			var b12 = b._12;
+			var b13 = b._13;
+			var b21 = b._21;
+			var b22 = b._22;
+			var b23 = b._23;
+			var b31 = b._31;
+			var b32 = b._32;
+			var b33 = b._33;
+			var b41 = b._41;
+			var b42 = b._42;
+			var b43 = b._43;
+			_this._11 = m11 * b11 + m12 * b21 + m13 * b31;
+			_this._12 = m11 * b12 + m12 * b22 + m13 * b32;
+			_this._13 = m11 * b13 + m12 * b23 + m13 * b33;
+			_this._14 = 0;
+			_this._21 = m21 * b11 + m22 * b21 + m23 * b31;
+			_this._22 = m21 * b12 + m22 * b22 + m23 * b32;
+			_this._23 = m21 * b13 + m22 * b23 + m23 * b33;
+			_this._24 = 0;
+			_this._31 = a31 * b11 + a32 * b21 + a33 * b31;
+			_this._32 = a31 * b12 + a32 * b22 + a33 * b32;
+			_this._33 = a31 * b13 + a32 * b23 + a33 * b33;
+			_this._34 = 0;
+			_this._41 = a41 * b11 + a42 * b21 + a43 * b31 + b41;
+			_this._42 = a41 * b12 + a42 * b22 + a43 * b32 + b42;
+			_this._43 = a41 * b13 + a42 * b23 + a43 * b33 + b43;
+			_this._44 = 1;
+		}
+		var _this = jData.speed;
+		if(Math.sqrt(_this.x * _this.x + _this.y * _this.y + _this.z * _this.z) != 0.) {
+			skin.forceJointsUpdateOnFrame = hxd_Timer.frameCount + 1;
+		}
+	}
+	,computeRotationDyn: function(skin,j) {
+		if(j.follow != null) {
+			return;
+		}
+		var jData = skin.jointsData[j.index];
+		var value = skin.jointsData[j.index];
+		var jDynData = ((value) instanceof h3d_scene_DynamicJointData) ? value : null;
+		var dynJoint = ((j) instanceof h3d_anim_DynamicJoint) ? j : null;
+		if(j.subs.length == 1) {
+			var value = j.subs[0];
+			var child = ((value) instanceof h3d_anim_DynamicJoint) ? value : null;
+			if(child == null) {
+				return;
+			}
+			var value = skin.jointsData[child.index];
+			var childData = ((value) instanceof h3d_scene_DynamicJointData) ? value : null;
+			var _this = h3d_scene_DynamicJointData.tmpVec;
+			var _this1 = child.defMat;
+			var x = 0.;
+			var y = 0.;
+			var z = 0.;
+			if(z == null) {
+				z = 0.;
+			}
+			if(y == null) {
+				y = 0.;
+			}
+			if(x == null) {
+				x = 0.;
+			}
+			var _this_x = x;
+			var _this_y = y;
+			var _this_z = z;
+			var x = _this1._41;
+			var y = _this1._42;
+			var z = _this1._43;
+			if(z == null) {
+				z = 0.;
+			}
+			if(y == null) {
+				y = 0.;
+			}
+			if(x == null) {
+				x = 0.;
+			}
+			_this_x = x;
+			_this_y = y;
+			_this_z = z;
+			var k = _this_x * _this_x + _this_y * _this_y + _this_z * _this_z;
+			if(k < 1e-20) {
+				k = 0;
+			} else {
+				k = 1. / Math.sqrt(k);
+			}
+			var x = _this_x * k;
+			var y = _this_y * k;
+			var z = _this_z * k;
+			if(z == null) {
+				z = 0.;
+			}
+			if(y == null) {
+				y = 0.;
+			}
+			if(x == null) {
+				x = 0.;
+			}
+			var x1 = x;
+			var y1 = y;
+			var z1 = z;
+			if(z1 == null) {
+				z1 = 0.;
+			}
+			if(y1 == null) {
+				y1 = 0.;
+			}
+			if(x1 == null) {
+				x1 = 0.;
+			}
+			var v_x = x1;
+			var v_y = y1;
+			var v_z = z1;
+			_this.x = v_x;
+			_this.y = v_y;
+			_this.z = v_z;
+			var _this = h3d_scene_DynamicJointData.tmpVec2;
+			var _this1 = childData.relPos;
+			var x = 0.;
+			var y = 0.;
+			var z = 0.;
+			if(z == null) {
+				z = 0.;
+			}
+			if(y == null) {
+				y = 0.;
+			}
+			if(x == null) {
+				x = 0.;
+			}
+			var _this_x = x;
+			var _this_y = y;
+			var _this_z = z;
+			var x = _this1._41;
+			var y = _this1._42;
+			var z = _this1._43;
+			if(z == null) {
+				z = 0.;
+			}
+			if(y == null) {
+				y = 0.;
+			}
+			if(x == null) {
+				x = 0.;
+			}
+			_this_x = x;
+			_this_y = y;
+			_this_z = z;
+			var k = _this_x * _this_x + _this_y * _this_y + _this_z * _this_z;
+			if(k < 1e-20) {
+				k = 0;
+			} else {
+				k = 1. / Math.sqrt(k);
+			}
+			var x = _this_x * k;
+			var y = _this_y * k;
+			var z = _this_z * k;
+			if(z == null) {
+				z = 0.;
+			}
+			if(y == null) {
+				y = 0.;
+			}
+			if(x == null) {
+				x = 0.;
+			}
+			var x1 = x;
+			var y1 = y;
+			var z1 = z;
+			if(z1 == null) {
+				z1 = 0.;
+			}
+			if(y1 == null) {
+				y1 = 0.;
+			}
+			if(x1 == null) {
+				x1 = 0.;
+			}
+			var v_x = x1;
+			var v_y = y1;
+			var v_z = z1;
+			_this.x = v_x;
+			_this.y = v_y;
+			_this.z = v_z;
+			h3d_scene_DynamicJointData.tmpQ.initMoveTo(h3d_scene_DynamicJointData.tmpVec,h3d_scene_DynamicJointData.tmpVec2);
+			h3d_scene_DynamicJointData.tmpQ.toMatrix(h3d_scene_Skin.TMP_MAT);
+			jData.currentAbsPose.multiply(h3d_scene_Skin.TMP_MAT,jData.currentAbsPose);
+		}
+		if(j.bindIndex >= 0) {
+			var _this = skin.currentPalette[j.bindIndex];
+			var a = j.transPos;
+			var b = jData.currentAbsPose;
+			var m11 = a._11;
+			var m12 = a._12;
+			var m13 = a._13;
+			var m21 = a._21;
+			var m22 = a._22;
+			var m23 = a._23;
+			var a31 = a._31;
+			var a32 = a._32;
+			var a33 = a._33;
+			var a41 = a._41;
+			var a42 = a._42;
+			var a43 = a._43;
+			var b11 = b._11;
+			var b12 = b._12;
+			var b13 = b._13;
+			var b21 = b._21;
+			var b22 = b._22;
+			var b23 = b._23;
+			var b31 = b._31;
+			var b32 = b._32;
+			var b33 = b._33;
+			var b41 = b._41;
+			var b42 = b._42;
+			var b43 = b._43;
+			_this._11 = m11 * b11 + m12 * b21 + m13 * b31;
+			_this._12 = m11 * b12 + m12 * b22 + m13 * b32;
+			_this._13 = m11 * b13 + m12 * b23 + m13 * b33;
+			_this._14 = 0;
+			_this._21 = m21 * b11 + m22 * b21 + m23 * b31;
+			_this._22 = m21 * b12 + m22 * b22 + m23 * b32;
+			_this._23 = m21 * b13 + m22 * b23 + m23 * b33;
+			_this._24 = 0;
+			_this._31 = a31 * b11 + a32 * b21 + a33 * b31;
+			_this._32 = a31 * b12 + a32 * b22 + a33 * b32;
+			_this._33 = a31 * b13 + a32 * b23 + a33 * b33;
+			_this._34 = 0;
+			_this._41 = a41 * b11 + a42 * b21 + a43 * b31 + b41;
+			_this._42 = a41 * b12 + a42 * b22 + a43 * b32 + b42;
+			_this._43 = a41 * b13 + a42 * b23 + a43 * b33 + b43;
+			_this._44 = 1;
+		}
+		if(jDynData != null) {
+			jDynData.absPos.load(jDynData.currentAbsPose);
+		}
+	}
+	,__class__: h3d_scene_DynamicJointData
+});
 var h3d_scene_Skin = function(s,mat,parent) {
+	this.prevEnableRetargeting = true;
 	this.enableRetargeting = true;
+	this.forceJointsUpdateOnFrame = -1;
+	this.prevJointsFrame = -1;
 	h3d_scene_MultiMaterial.call(this,null,mat,parent);
 	if(s != null) {
 		this.setSkinData(s);
@@ -55988,7 +65535,14 @@ h3d_scene_Skin.prototype = $extend(h3d_scene_MultiMaterial.prototype,{
 		var s = o == null ? new h3d_scene_Skin(null,this.materials.slice()) : o;
 		h3d_scene_MultiMaterial.prototype.clone.call(this,s);
 		s.setSkinData(this.skinData);
-		s.currentRelPose = this.currentRelPose.slice();
+		s.jointsData = [];
+		var _g = 0;
+		var _g1 = this.jointsData;
+		while(_g < _g1.length) {
+			var jData = _g1[_g];
+			++_g;
+			s.jointsData.push(Reflect.copy(jData));
+		}
 		return s;
 	}
 	,addBoundsRec: function(b,relativeTo) {
@@ -56072,6 +65626,14 @@ h3d_scene_Skin.prototype = $extend(h3d_scene_MultiMaterial.prototype,{
 				pt_x = px;
 				pt_y = py;
 				pt_z = pz;
+				if(relativeTo != null) {
+					var px1 = pt_x * relativeTo._11 + pt_y * relativeTo._21 + pt_z * relativeTo._31 + relativeTo._41;
+					var py1 = pt_x * relativeTo._12 + pt_y * relativeTo._22 + pt_z * relativeTo._32 + relativeTo._42;
+					var pz1 = pt_x * relativeTo._13 + pt_y * relativeTo._23 + pt_z * relativeTo._33 + relativeTo._43;
+					pt_x = px1;
+					pt_y = py1;
+					pt_z = pz1;
+				}
 				var x2 = pt_x;
 				var y2 = pt_y;
 				var z2 = pt_z;
@@ -56122,12 +65684,20 @@ h3d_scene_Skin.prototype = $extend(h3d_scene_MultiMaterial.prototype,{
 				var pt_x1 = x4;
 				var pt_y1 = y4;
 				var pt_z1 = z4;
-				var px1 = pt_x1 * m._11 + pt_y1 * m._21 + pt_z1 * m._31 + m._41;
-				var py1 = pt_x1 * m._12 + pt_y1 * m._22 + pt_z1 * m._32 + m._42;
-				var pz1 = pt_x1 * m._13 + pt_y1 * m._23 + pt_z1 * m._33 + m._43;
-				pt_x1 = px1;
-				pt_y1 = py1;
-				pt_z1 = pz1;
+				var px2 = pt_x1 * m._11 + pt_y1 * m._21 + pt_z1 * m._31 + m._41;
+				var py2 = pt_x1 * m._12 + pt_y1 * m._22 + pt_z1 * m._32 + m._42;
+				var pz2 = pt_x1 * m._13 + pt_y1 * m._23 + pt_z1 * m._33 + m._43;
+				pt_x1 = px2;
+				pt_y1 = py2;
+				pt_z1 = pz2;
+				if(relativeTo != null) {
+					var px3 = pt_x1 * relativeTo._11 + pt_y1 * relativeTo._21 + pt_z1 * relativeTo._31 + relativeTo._41;
+					var py3 = pt_x1 * relativeTo._12 + pt_y1 * relativeTo._22 + pt_z1 * relativeTo._32 + relativeTo._42;
+					var pz3 = pt_x1 * relativeTo._13 + pt_y1 * relativeTo._23 + pt_z1 * relativeTo._33 + relativeTo._43;
+					pt_x1 = px3;
+					pt_y1 = py3;
+					pt_z1 = pz3;
+				}
 				var x5 = pt_x1;
 				var y5 = pt_y1;
 				var z5 = pt_z1;
@@ -56164,7 +65734,7 @@ h3d_scene_Skin.prototype = $extend(h3d_scene_MultiMaterial.prototype,{
 			if(j.bindIndex < 0) {
 				continue;
 			}
-			var r = this.currentAbsPose[j.index];
+			var r = this.jointsData[j.index].currentAbsPose;
 			var x = r._41;
 			var y = r._42;
 			var z = r._43;
@@ -56219,6 +65789,39 @@ h3d_scene_Skin.prototype = $extend(h3d_scene_MultiMaterial.prototype,{
 	}
 	,getSkinData: function() {
 		return this.skinData;
+	}
+	,getJointRelPosition: function(name,additive) {
+		if(additive == null) {
+			additive = false;
+		}
+		var j = this.skinData.namedJoints.h[name];
+		if(j == null) {
+			return null;
+		}
+		if(additive) {
+			return this.jointsData[j.index].additivePose;
+		}
+		var tmp = this.jointsData[j.index].currentRelPose;
+		if(tmp != null) {
+			return tmp;
+		} else {
+			return j.defMat;
+		}
+	}
+	,setJointRelPosition: function(name,pos,additive) {
+		if(additive == null) {
+			additive = false;
+		}
+		var j = this.skinData.namedJoints.h[name];
+		if(j == null) {
+			return;
+		}
+		if(additive) {
+			this.jointsData[j.index].additivePose = pos;
+		} else {
+			this.jointsData[j.index].currentRelPose = pos;
+		}
+		this.jointsUpdated = true;
 	}
 	,setSkinData: function(s,shaderInit) {
 		if(shaderInit == null) {
@@ -56283,17 +65886,12 @@ h3d_scene_Skin.prototype = $extend(h3d_scene_MultiMaterial.prototype,{
 				}
 			}
 		}
-		this.currentRelPose = [];
-		this.currentAbsPose = [];
+		this.jointsData = [];
 		this.currentPalette = [];
+		this.prevPalette = null;
+		this.prevSplitPalette = null;
 		this.paletteChanged = true;
-		var _g = 0;
-		var _g1 = this.skinData.allJoints;
-		while(_g < _g1.length) {
-			var j = _g1[_g];
-			++_g;
-			this.currentAbsPose.push(h3d_Matrix.I());
-		}
+		this.makeJointsData();
 		var _g = 0;
 		var _g1 = this.skinData.boundJoints.length;
 		while(_g < _g1) {
@@ -56322,6 +65920,15 @@ h3d_scene_Skin.prototype = $extend(h3d_scene_MultiMaterial.prototype,{
 			this.splitPalette = null;
 		}
 	}
+	,makeJointsData: function() {
+		var _g = 0;
+		var _g1 = this.skinData.allJoints;
+		while(_g < _g1.length) {
+			var j = _g1[_g];
+			++_g;
+			this.jointsData[j.index] = j.makeRuntimeData();
+		}
+	}
 	,sync: function(ctx) {
 		if(!ctx.visibleFlag && (this.flags & 64) == 0) {
 			return;
@@ -56329,168 +65936,79 @@ h3d_scene_Skin.prototype = $extend(h3d_scene_MultiMaterial.prototype,{
 		this.syncJoints();
 	}
 	,syncJoints: function() {
-		if(!this.jointsUpdated) {
+		if(!this.jointsUpdated && this.forceJointsUpdateOnFrame != hxd_Timer.frameCount) {
 			return;
 		}
-		var tmpMat = h3d_scene_Skin.TMP_MAT;
+		if(this.computeVelocity()) {
+			this.syncPrevJoints();
+			var _this = this.skinShader;
+			_this.constModified = true;
+			_this.calcPrevPos__ = true;
+		} else {
+			this.prevSplitPalette = null;
+			this.prevPalette = null;
+			var _this = this.skinShader;
+			_this.constModified = true;
+			_this.calcPrevPos__ = false;
+		}
+		var _this = this.skinShader;
+		var _v = this.computeVelocity();
+		_this.constModified = true;
+		_this.calcPrevPos__ = _v;
 		var _g = 0;
 		var _g1 = this.skinData.allJoints;
 		while(_g < _g1.length) {
 			var j = _g1[_g];
 			++_g;
-			if(j.follow != null) {
-				continue;
-			}
-			var id = j.index;
-			var m = this.currentAbsPose[id];
-			var r = this.currentRelPose[id];
-			var bid = j.bindIndex;
-			if(r == null) {
-				r = j.defMat;
-			} else if(j.retargetAnim && this.enableRetargeting) {
-				tmpMat.load(r);
-				r = tmpMat;
-				r._41 = j.defMat._41;
-				r._42 = j.defMat._42;
-				r._43 = j.defMat._43;
-			}
-			if(j.parent == null) {
-				var _this = m;
-				var b = this.absPos;
-				var m11 = r._11;
-				var m12 = r._12;
-				var m13 = r._13;
-				var m21 = r._21;
-				var m22 = r._22;
-				var m23 = r._23;
-				var a31 = r._31;
-				var a32 = r._32;
-				var a33 = r._33;
-				var a41 = r._41;
-				var a42 = r._42;
-				var a43 = r._43;
-				var b11 = b._11;
-				var b12 = b._12;
-				var b13 = b._13;
-				var b21 = b._21;
-				var b22 = b._22;
-				var b23 = b._23;
-				var b31 = b._31;
-				var b32 = b._32;
-				var b33 = b._33;
-				var b41 = b._41;
-				var b42 = b._42;
-				var b43 = b._43;
-				_this._11 = m11 * b11 + m12 * b21 + m13 * b31;
-				_this._12 = m11 * b12 + m12 * b22 + m13 * b32;
-				_this._13 = m11 * b13 + m12 * b23 + m13 * b33;
-				_this._14 = 0;
-				_this._21 = m21 * b11 + m22 * b21 + m23 * b31;
-				_this._22 = m21 * b12 + m22 * b22 + m23 * b32;
-				_this._23 = m21 * b13 + m22 * b23 + m23 * b33;
-				_this._24 = 0;
-				_this._31 = a31 * b11 + a32 * b21 + a33 * b31;
-				_this._32 = a31 * b12 + a32 * b22 + a33 * b32;
-				_this._33 = a31 * b13 + a32 * b23 + a33 * b33;
-				_this._34 = 0;
-				_this._41 = a41 * b11 + a42 * b21 + a43 * b31 + b41;
-				_this._42 = a41 * b12 + a42 * b22 + a43 * b32 + b42;
-				_this._43 = a41 * b13 + a42 * b23 + a43 * b33 + b43;
-				_this._44 = 1;
-			} else {
-				var _this1 = m;
-				var b1 = this.currentAbsPose[j.parent.index];
-				var m111 = r._11;
-				var m121 = r._12;
-				var m131 = r._13;
-				var m211 = r._21;
-				var m221 = r._22;
-				var m231 = r._23;
-				var a311 = r._31;
-				var a321 = r._32;
-				var a331 = r._33;
-				var a411 = r._41;
-				var a421 = r._42;
-				var a431 = r._43;
-				var b111 = b1._11;
-				var b121 = b1._12;
-				var b131 = b1._13;
-				var b211 = b1._21;
-				var b221 = b1._22;
-				var b231 = b1._23;
-				var b311 = b1._31;
-				var b321 = b1._32;
-				var b331 = b1._33;
-				var b411 = b1._41;
-				var b421 = b1._42;
-				var b431 = b1._43;
-				_this1._11 = m111 * b111 + m121 * b211 + m131 * b311;
-				_this1._12 = m111 * b121 + m121 * b221 + m131 * b321;
-				_this1._13 = m111 * b131 + m121 * b231 + m131 * b331;
-				_this1._14 = 0;
-				_this1._21 = m211 * b111 + m221 * b211 + m231 * b311;
-				_this1._22 = m211 * b121 + m221 * b221 + m231 * b321;
-				_this1._23 = m211 * b131 + m221 * b231 + m231 * b331;
-				_this1._24 = 0;
-				_this1._31 = a311 * b111 + a321 * b211 + a331 * b311;
-				_this1._32 = a311 * b121 + a321 * b221 + a331 * b321;
-				_this1._33 = a311 * b131 + a321 * b231 + a331 * b331;
-				_this1._34 = 0;
-				_this1._41 = a411 * b111 + a421 * b211 + a431 * b311 + b411;
-				_this1._42 = a411 * b121 + a421 * b221 + a431 * b321 + b421;
-				_this1._43 = a411 * b131 + a421 * b231 + a431 * b331 + b431;
-				_this1._44 = 1;
-			}
-			if(bid >= 0) {
-				var _this2 = this.currentPalette[bid];
-				var a = j.transPos;
-				var m112 = a._11;
-				var m122 = a._12;
-				var m132 = a._13;
-				var m212 = a._21;
-				var m222 = a._22;
-				var m232 = a._23;
-				var a312 = a._31;
-				var a322 = a._32;
-				var a332 = a._33;
-				var a412 = a._41;
-				var a422 = a._42;
-				var a432 = a._43;
-				var b112 = m._11;
-				var b122 = m._12;
-				var b132 = m._13;
-				var b212 = m._21;
-				var b222 = m._22;
-				var b232 = m._23;
-				var b312 = m._31;
-				var b322 = m._32;
-				var b332 = m._33;
-				var b412 = m._41;
-				var b422 = m._42;
-				var b432 = m._43;
-				_this2._11 = m112 * b112 + m122 * b212 + m132 * b312;
-				_this2._12 = m112 * b122 + m122 * b222 + m132 * b322;
-				_this2._13 = m112 * b132 + m122 * b232 + m132 * b332;
-				_this2._14 = 0;
-				_this2._21 = m212 * b112 + m222 * b212 + m232 * b312;
-				_this2._22 = m212 * b122 + m222 * b222 + m232 * b322;
-				_this2._23 = m212 * b132 + m222 * b232 + m232 * b332;
-				_this2._24 = 0;
-				_this2._31 = a312 * b112 + a322 * b212 + a332 * b312;
-				_this2._32 = a312 * b122 + a322 * b222 + a332 * b322;
-				_this2._33 = a312 * b132 + a322 * b232 + a332 * b332;
-				_this2._34 = 0;
-				_this2._41 = a412 * b112 + a422 * b212 + a432 * b312 + b412;
-				_this2._42 = a412 * b122 + a422 * b222 + a432 * b322 + b422;
-				_this2._43 = a412 * b132 + a422 * b232 + a432 * b332 + b432;
-				_this2._44 = 1;
-			}
+			this.jointsData[j.index].sync(this,j);
 		}
 		this.skinShader.bonesMatrixes__ = this.currentPalette;
-		if(this.jointsAbsPosInv != null) {
-			this.jointsAbsPosInv._44 = 0;
-		}
 		this.jointsUpdated = false;
+		this.prevEnableRetargeting = this.enableRetargeting;
+	}
+	,syncPrevJoints: function() {
+		if(this.prevJointsFrame == hxd_Timer.frameCount) {
+			return;
+		}
+		this.prevJointsFrame = hxd_Timer.frameCount;
+		if(this.prevPalette == null) {
+			this.prevPalette = [];
+			var _g = 0;
+			var _g1 = this.currentPalette.length;
+			while(_g < _g1) {
+				var _ = _g++;
+				this.prevPalette.push(h3d_Matrix.I());
+			}
+			if(this.splitPalette != null) {
+				this.prevSplitPalette = [];
+				var _g = 0;
+				var _g1 = this.skinData.splitJoints;
+				while(_g < _g1.length) {
+					var a = _g1[_g];
+					++_g;
+					var tmp = this.prevSplitPalette;
+					var _g2 = [];
+					var _g3 = 0;
+					var _g4 = a.joints;
+					while(_g3 < _g4.length) {
+						var j = _g4[_g3];
+						++_g3;
+						_g2.push(this.prevPalette[j.bindIndex]);
+					}
+					tmp.push(_g2);
+				}
+			}
+		}
+		var _g_current = 0;
+		var _g_array = this.currentPalette;
+		while(_g_current < _g_array.length) {
+			var _g_value = _g_array[_g_current];
+			var _g_key = _g_current++;
+			var i = _g_key;
+			var m = _g_value;
+			this.prevPalette[i].load(m);
+		}
+		this.skinShader.prevBonesMatrixes__ = this.prevPalette;
 	}
 	,emit: function(ctx) {
 		this.calcScreenRatio(ctx);
@@ -56534,8 +66052,8 @@ h3d_scene_Skin.prototype = $extend(h3d_scene_MultiMaterial.prototype,{
 			while(_g < _g1.length) {
 				var j = _g1[_g];
 				++_g;
-				var m = this.currentAbsPose[j.index];
-				var mp = j.parent == null ? this.absPos : this.currentAbsPose[j.parent.index];
+				var m = this.jointsData[j.index].currentAbsPose;
+				var mp = j.parent == null ? this.absPos : this.jointsData[j.parent.index].currentAbsPose;
 				g.lineStyle(1,j.parent == null ? -16776961 : -256);
 				g.moveTo(mp._41,mp._42,mp._43);
 				g.lineTo(m._41,m._42,m._43);
@@ -56554,6 +66072,9 @@ h3d_scene_Skin.prototype = $extend(h3d_scene_MultiMaterial.prototype,{
 		} else {
 			var i = ctx.drawPass.index;
 			this.skinShader.bonesMatrixes__ = this.splitPalette[i];
+			if(this.prevSplitPalette != null) {
+				this.skinShader.prevBonesMatrixes__ = this.prevSplitPalette[i];
+			}
 			this.primitive.selectMaterial(i,this.primitive.screenRatioToLod(this.curScreenRatio));
 			ctx.uploadParams();
 			this.primitive.render(ctx.engine);
@@ -57350,19 +66871,27 @@ h3d_shader_BaseMesh.prototype = $extend(hxsl_Shader.prototype,{
 });
 var h3d_shader_Blur = function() {
 	this.cubeDir__ = new h3d_MatrixImpl();
+	this.depthThresholdMaxDist__ = 0;
 	this.depthThreshold__ = 1;
 	this.fixedColor__ = new h3d_Vector4Impl(0.,0.,0.,1.);
 	this.pixel__ = new h3d_VectorImpl(0.,0.,0.);
 	this.offsets__ = [];
 	this.values__ = [];
 	this.Quality__ = 0;
+	this.inverseProj__ = new h3d_MatrixImpl();
 	h3d_shader_ScreenShader.call(this);
 };
 $hxClasses["h3d.shader.Blur"] = h3d_shader_Blur;
 h3d_shader_Blur.__name__ = "h3d.shader.Blur";
 h3d_shader_Blur.__super__ = h3d_shader_ScreenShader;
 h3d_shader_Blur.prototype = $extend(h3d_shader_ScreenShader.prototype,{
-	get_texture: function() {
+	get_inverseProj: function() {
+		return this.inverseProj__;
+	}
+	,set_inverseProj: function(_v) {
+		return this.inverseProj__ = _v;
+	}
+	,get_texture: function() {
 		return this.texture__;
 	}
 	,set_texture: function(_v) {
@@ -57439,6 +66968,12 @@ h3d_shader_Blur.prototype = $extend(h3d_shader_ScreenShader.prototype,{
 	,set_depthThreshold: function(_v) {
 		return this.depthThreshold__ = _v;
 	}
+	,get_depthThresholdMaxDist: function() {
+		return this.depthThresholdMaxDist__;
+	}
+	,set_depthThresholdMaxDist: function(_v) {
+		return this.depthThresholdMaxDist__ = _v;
+	}
 	,get_isCube: function() {
 		return this.isCube__;
 	}
@@ -57487,34 +67022,38 @@ h3d_shader_Blur.prototype = $extend(h3d_shader_ScreenShader.prototype,{
 		case 0:
 			return this.flipY__;
 		case 1:
-			return this.texture__;
+			return this.inverseProj__;
 		case 2:
-			return this.depthTexture__;
+			return this.texture__;
 		case 3:
-			return this.Quality__;
+			return this.depthTexture__;
 		case 4:
-			return this.isDepth__;
+			return this.Quality__;
 		case 5:
-			return this.values__;
+			return this.isDepth__;
 		case 6:
-			return this.offsets__;
+			return this.values__;
 		case 7:
-			return this.pixel__;
+			return this.offsets__;
 		case 8:
-			return this.hasFixedColor__;
+			return this.pixel__;
 		case 9:
-			return this.smoothFixedColor__;
+			return this.hasFixedColor__;
 		case 10:
-			return this.fixedColor__;
+			return this.smoothFixedColor__;
 		case 11:
-			return this.isDepthDependant__;
+			return this.fixedColor__;
 		case 12:
-			return this.depthThreshold__;
+			return this.isDepthDependant__;
 		case 13:
-			return this.isCube__;
+			return this.depthThreshold__;
 		case 14:
-			return this.cubeTexture__;
+			return this.depthThresholdMaxDist__;
 		case 15:
+			return this.isCube__;
+		case 16:
+			return this.cubeTexture__;
+		case 17:
 			return this.cubeDir__;
 		default:
 		}
@@ -57524,10 +67063,12 @@ h3d_shader_Blur.prototype = $extend(h3d_shader_ScreenShader.prototype,{
 		switch(index) {
 		case 0:
 			return this.flipY__;
-		case 3:
+		case 4:
 			return this.Quality__;
-		case 12:
+		case 13:
 			return this.depthThreshold__;
+		case 14:
+			return this.depthThresholdMaxDist__;
 		default:
 		}
 		return 0.;
@@ -57536,6 +67077,7 @@ h3d_shader_Blur.prototype = $extend(h3d_shader_ScreenShader.prototype,{
 		var s = Object.create(h3d_shader_Blur.prototype);
 		s.shader = this.shader;
 		s.flipY__ = this.flipY__;
+		s.inverseProj__ = this.inverseProj__;
 		s.texture__ = this.texture__;
 		s.depthTexture__ = this.depthTexture__;
 		s.Quality__ = this.Quality__;
@@ -57548,13 +67090,14 @@ h3d_shader_Blur.prototype = $extend(h3d_shader_ScreenShader.prototype,{
 		s.fixedColor__ = this.fixedColor__;
 		s.isDepthDependant__ = this.isDepthDependant__;
 		s.depthThreshold__ = this.depthThreshold__;
+		s.depthThresholdMaxDist__ = this.depthThresholdMaxDist__;
 		s.isCube__ = this.isCube__;
 		s.cubeTexture__ = this.cubeTexture__;
 		s.cubeDir__ = this.cubeDir__;
 		return s;
 	}
 	,__class__: h3d_shader_Blur
-	,__properties__: $extend(h3d_shader_ScreenShader.prototype.__properties__,{set_cubeDir:"set_cubeDir",get_cubeDir:"get_cubeDir",set_cubeTexture:"set_cubeTexture",get_cubeTexture:"get_cubeTexture",set_isCube:"set_isCube",get_isCube:"get_isCube",set_depthThreshold:"set_depthThreshold",get_depthThreshold:"get_depthThreshold",set_isDepthDependant:"set_isDepthDependant",get_isDepthDependant:"get_isDepthDependant",set_fixedColor:"set_fixedColor",get_fixedColor:"get_fixedColor",set_smoothFixedColor:"set_smoothFixedColor",get_smoothFixedColor:"get_smoothFixedColor",set_hasFixedColor:"set_hasFixedColor",get_hasFixedColor:"get_hasFixedColor",set_pixel:"set_pixel",get_pixel:"get_pixel",set_offsets:"set_offsets",get_offsets:"get_offsets",set_values:"set_values",get_values:"get_values",set_isDepth:"set_isDepth",get_isDepth:"get_isDepth",set_Quality:"set_Quality",get_Quality:"get_Quality",set_depthTexture:"set_depthTexture",get_depthTexture:"get_depthTexture",set_texture:"set_texture",get_texture:"get_texture"})
+	,__properties__: $extend(h3d_shader_ScreenShader.prototype.__properties__,{set_cubeDir:"set_cubeDir",get_cubeDir:"get_cubeDir",set_cubeTexture:"set_cubeTexture",get_cubeTexture:"get_cubeTexture",set_isCube:"set_isCube",get_isCube:"get_isCube",set_depthThresholdMaxDist:"set_depthThresholdMaxDist",get_depthThresholdMaxDist:"get_depthThresholdMaxDist",set_depthThreshold:"set_depthThreshold",get_depthThreshold:"get_depthThreshold",set_isDepthDependant:"set_isDepthDependant",get_isDepthDependant:"get_isDepthDependant",set_fixedColor:"set_fixedColor",get_fixedColor:"get_fixedColor",set_smoothFixedColor:"set_smoothFixedColor",get_smoothFixedColor:"get_smoothFixedColor",set_hasFixedColor:"set_hasFixedColor",get_hasFixedColor:"get_hasFixedColor",set_pixel:"set_pixel",get_pixel:"get_pixel",set_offsets:"set_offsets",get_offsets:"get_offsets",set_values:"set_values",get_values:"get_values",set_isDepth:"set_isDepth",get_isDepth:"get_isDepth",set_Quality:"set_Quality",get_Quality:"get_Quality",set_depthTexture:"set_depthTexture",get_depthTexture:"get_depthTexture",set_texture:"set_texture",get_texture:"get_texture",set_inverseProj:"set_inverseProj",get_inverseProj:"get_inverseProj"})
 });
 var h3d_shader_ShaderBuffers = function() {
 	this.globals = new Float32Array(0);
@@ -59209,8 +68752,33 @@ h3d_shader_SignedDistanceField.prototype = $extend(hxsl_Shader.prototype,{
 	,__class__: h3d_shader_SignedDistanceField
 	,__properties__: {set_smoothing:"set_smoothing",get_smoothing:"get_smoothing",set_alphaCutoff:"set_alphaCutoff",get_alphaCutoff:"get_alphaCutoff",set_autoSmoothing:"set_autoSmoothing",get_autoSmoothing:"get_autoSmoothing",set_channel:"set_channel",get_channel:"get_channel"}
 });
+var h3d_shader_Utils = function() {
+	hxsl_Shader.call(this);
+};
+$hxClasses["h3d.shader.Utils"] = h3d_shader_Utils;
+h3d_shader_Utils.__name__ = "h3d.shader.Utils";
+h3d_shader_Utils.__super__ = hxsl_Shader;
+h3d_shader_Utils.prototype = $extend(hxsl_Shader.prototype,{
+	updateConstants: function(globals) {
+		this.constBits = 0;
+		this.updateConstantsFinal(globals);
+	}
+	,getParamValue: function(index) {
+		return null;
+	}
+	,getParamFloatValue: function(index) {
+		return 0.;
+	}
+	,setParamIndexValue: function(index,val) {
+	}
+	,setParamIndexFloatValue: function(index,val) {
+	}
+	,__class__: h3d_shader_Utils
+});
 var h3d_shader_SkinBase = function() {
+	this.prevBonesMatrixes__ = [];
 	this.bonesMatrixes__ = [];
+	this.calcPrevPos__ = false;
 	this.fourBonesByVertex__ = false;
 	this.MaxBones__ = 0;
 	hxsl_Shader.call(this);
@@ -59235,11 +68803,24 @@ h3d_shader_SkinBase.prototype = $extend(hxsl_Shader.prototype,{
 		this.constModified = true;
 		return this.fourBonesByVertex__ = _v;
 	}
+	,get_calcPrevPos: function() {
+		return this.calcPrevPos__;
+	}
+	,set_calcPrevPos: function(_v) {
+		this.constModified = true;
+		return this.calcPrevPos__ = _v;
+	}
 	,get_bonesMatrixes: function() {
 		return this.bonesMatrixes__;
 	}
 	,set_bonesMatrixes: function(_v) {
 		return this.bonesMatrixes__ = _v;
+	}
+	,get_prevBonesMatrixes: function() {
+		return this.prevBonesMatrixes__;
+	}
+	,set_prevBonesMatrixes: function(_v) {
+		return this.prevBonesMatrixes__ = _v;
 	}
 	,updateConstants: function(globals) {
 		this.constBits = 0;
@@ -59251,6 +68832,9 @@ h3d_shader_SkinBase.prototype = $extend(hxsl_Shader.prototype,{
 		if(this.fourBonesByVertex__) {
 			this.constBits |= 256;
 		}
+		if(this.calcPrevPos__) {
+			this.constBits |= 512;
+		}
 		this.updateConstantsFinal(globals);
 	}
 	,getParamValue: function(index) {
@@ -59260,7 +68844,11 @@ h3d_shader_SkinBase.prototype = $extend(hxsl_Shader.prototype,{
 		case 1:
 			return this.fourBonesByVertex__;
 		case 2:
+			return this.calcPrevPos__;
+		case 3:
 			return this.bonesMatrixes__;
+		case 4:
+			return this.prevBonesMatrixes__;
 		default:
 		}
 		return null;
@@ -59280,7 +68868,13 @@ h3d_shader_SkinBase.prototype = $extend(hxsl_Shader.prototype,{
 			this.fourBonesByVertex__ = val;
 			break;
 		case 2:
+			this.calcPrevPos__ = val;
+			break;
+		case 3:
 			this.bonesMatrixes__ = val;
+			break;
+		case 4:
+			this.prevBonesMatrixes__ = val;
 			break;
 		default:
 		}
@@ -59292,11 +68886,13 @@ h3d_shader_SkinBase.prototype = $extend(hxsl_Shader.prototype,{
 		s.shader = this.shader;
 		s.MaxBones__ = this.MaxBones__;
 		s.fourBonesByVertex__ = this.fourBonesByVertex__;
+		s.calcPrevPos__ = this.calcPrevPos__;
 		s.bonesMatrixes__ = this.bonesMatrixes__;
+		s.prevBonesMatrixes__ = this.prevBonesMatrixes__;
 		return s;
 	}
 	,__class__: h3d_shader_SkinBase
-	,__properties__: {set_bonesMatrixes:"set_bonesMatrixes",get_bonesMatrixes:"get_bonesMatrixes",set_fourBonesByVertex:"set_fourBonesByVertex",get_fourBonesByVertex:"get_fourBonesByVertex",set_MaxBones:"set_MaxBones",get_MaxBones:"get_MaxBones"}
+	,__properties__: {set_prevBonesMatrixes:"set_prevBonesMatrixes",get_prevBonesMatrixes:"get_prevBonesMatrixes",set_bonesMatrixes:"set_bonesMatrixes",get_bonesMatrixes:"get_bonesMatrixes",set_calcPrevPos:"set_calcPrevPos",get_calcPrevPos:"get_calcPrevPos",set_fourBonesByVertex:"set_fourBonesByVertex",get_fourBonesByVertex:"get_fourBonesByVertex",set_MaxBones:"set_MaxBones",get_MaxBones:"get_MaxBones"}
 });
 var h3d_shader_Skin = function() {
 	h3d_shader_SkinBase.call(this);
@@ -59315,6 +68911,9 @@ h3d_shader_Skin.prototype = $extend(h3d_shader_SkinBase.prototype,{
 		if(this.fourBonesByVertex__) {
 			this.constBits |= 256;
 		}
+		if(this.calcPrevPos__) {
+			this.constBits |= 512;
+		}
 		this.updateConstantsFinal(globals);
 	}
 	,getParamValue: function(index) {
@@ -59324,7 +68923,11 @@ h3d_shader_Skin.prototype = $extend(h3d_shader_SkinBase.prototype,{
 		case 1:
 			return this.fourBonesByVertex__;
 		case 2:
+			return this.calcPrevPos__;
+		case 3:
 			return this.bonesMatrixes__;
+		case 4:
+			return this.prevBonesMatrixes__;
 		default:
 		}
 		return null;
@@ -59340,7 +68943,9 @@ h3d_shader_Skin.prototype = $extend(h3d_shader_SkinBase.prototype,{
 		s.shader = this.shader;
 		s.MaxBones__ = this.MaxBones__;
 		s.fourBonesByVertex__ = this.fourBonesByVertex__;
+		s.calcPrevPos__ = this.calcPrevPos__;
 		s.bonesMatrixes__ = this.bonesMatrixes__;
+		s.prevBonesMatrixes__ = this.prevBonesMatrixes__;
 		return s;
 	}
 	,__class__: h3d_shader_Skin
@@ -59362,6 +68967,9 @@ h3d_shader_SkinTangent.prototype = $extend(h3d_shader_SkinBase.prototype,{
 		if(this.fourBonesByVertex__) {
 			this.constBits |= 256;
 		}
+		if(this.calcPrevPos__) {
+			this.constBits |= 512;
+		}
 		this.updateConstantsFinal(globals);
 	}
 	,getParamValue: function(index) {
@@ -59371,7 +68979,11 @@ h3d_shader_SkinTangent.prototype = $extend(h3d_shader_SkinBase.prototype,{
 		case 1:
 			return this.fourBonesByVertex__;
 		case 2:
+			return this.calcPrevPos__;
+		case 3:
 			return this.bonesMatrixes__;
+		case 4:
+			return this.prevBonesMatrixes__;
 		default:
 		}
 		return null;
@@ -59387,7 +68999,9 @@ h3d_shader_SkinTangent.prototype = $extend(h3d_shader_SkinBase.prototype,{
 		s.shader = this.shader;
 		s.MaxBones__ = this.MaxBones__;
 		s.fourBonesByVertex__ = this.fourBonesByVertex__;
+		s.calcPrevPos__ = this.calcPrevPos__;
 		s.bonesMatrixes__ = this.bonesMatrixes__;
+		s.prevBonesMatrixes__ = this.prevBonesMatrixes__;
 		return s;
 	}
 	,__class__: h3d_shader_SkinTangent
@@ -59872,6 +69486,14 @@ haxe_EntryPoint.run = function() {
 	} else if(nextTick >= 0) {
 		setTimeout(haxe_EntryPoint.run,nextTick * 1000);
 	}
+};
+var haxe_EnumFlags = {};
+haxe_EnumFlags.from = function(e) {
+	var i = 1 << e._hx_index;
+	if(i == null) {
+		i = 0;
+	}
+	return i;
 };
 var haxe_Exception = function(message,previous,native) {
 	Error.call(this,message);
@@ -62746,6 +72368,16 @@ var haxe_macro_ComplexType = $hxEnums["haxe.macro.ComplexType"] = { __ename__:tr
 };
 haxe_macro_ComplexType.__constructs__ = [haxe_macro_ComplexType.TPath,haxe_macro_ComplexType.TFunction,haxe_macro_ComplexType.TAnonymous,haxe_macro_ComplexType.TParent,haxe_macro_ComplexType.TExtend,haxe_macro_ComplexType.TOptional,haxe_macro_ComplexType.TNamed,haxe_macro_ComplexType.TIntersection];
 haxe_macro_ComplexType.__empty_constructs__ = [];
+var haxe_macro_Error = function(message,pos,previous) {
+	haxe_Exception.call(this,message,previous);
+	this.pos = pos;
+};
+$hxClasses["haxe.macro.Error"] = haxe_macro_Error;
+haxe_macro_Error.__name__ = "haxe.macro.Error";
+haxe_macro_Error.__super__ = haxe_Exception;
+haxe_macro_Error.prototype = $extend(haxe_Exception.prototype,{
+	__class__: haxe_macro_Error
+});
 var haxe_net_ReadyState = $hxEnums["haxe.net.ReadyState"] = { __ename__:true,__constructs__:null
 	,Connecting: {_hx_name:"Connecting",_hx_index:0,__enum__:"haxe.net.ReadyState",toString:$estr}
 	,Open: {_hx_name:"Open",_hx_index:1,__enum__:"haxe.net.ReadyState",toString:$estr}
@@ -66351,6 +75983,9 @@ hxd_Pixels.toDDSLayers = function(pixels,isCubeMap) {
 			case 3:
 				v = 77;
 				break;
+			case 7:
+				v = 98;
+				break;
 			default:
 				throw haxe_Exception.thrown("Unnsupported format " + Std.string(fmt));
 			}
@@ -67678,8 +77313,10 @@ hxd_Window.prototype = {
 			hxd_Window.inst = null;
 		}
 		if(window.ResizeObserver != null) {
-			this.observer.disconnect();
-			this.observer = null;
+			if(this.observer != null) {
+				this.observer.disconnect();
+				this.observer = null;
+			}
 		}
 	}
 	,onClose: function() {
@@ -74057,9 +83694,11 @@ var hxd_fmt_hmd_Property = $hxEnums["hxd.fmt.hmd.Property"] = { __ename__:true,_
 	,Unused_HasMaterialFlags: {_hx_name:"Unused_HasMaterialFlags",_hx_index:1,__enum__:"hxd.fmt.hmd.Property",toString:$estr}
 	,HasExtraTextures: {_hx_name:"HasExtraTextures",_hx_index:2,__enum__:"hxd.fmt.hmd.Property",toString:$estr}
 	,FourBonesByVertex: {_hx_name:"FourBonesByVertex",_hx_index:3,__enum__:"hxd.fmt.hmd.Property",toString:$estr}
+	,HasLod: {_hx_name:"HasLod",_hx_index:4,__enum__:"hxd.fmt.hmd.Property",toString:$estr}
+	,HasCollider: {_hx_name:"HasCollider",_hx_index:5,__enum__:"hxd.fmt.hmd.Property",toString:$estr}
 };
-hxd_fmt_hmd_Property.__constructs__ = [hxd_fmt_hmd_Property.CameraFOVY,hxd_fmt_hmd_Property.Unused_HasMaterialFlags,hxd_fmt_hmd_Property.HasExtraTextures,hxd_fmt_hmd_Property.FourBonesByVertex];
-hxd_fmt_hmd_Property.__empty_constructs__ = [hxd_fmt_hmd_Property.Unused_HasMaterialFlags,hxd_fmt_hmd_Property.HasExtraTextures,hxd_fmt_hmd_Property.FourBonesByVertex];
+hxd_fmt_hmd_Property.__constructs__ = [hxd_fmt_hmd_Property.CameraFOVY,hxd_fmt_hmd_Property.Unused_HasMaterialFlags,hxd_fmt_hmd_Property.HasExtraTextures,hxd_fmt_hmd_Property.FourBonesByVertex,hxd_fmt_hmd_Property.HasLod,hxd_fmt_hmd_Property.HasCollider];
+hxd_fmt_hmd_Property.__empty_constructs__ = [hxd_fmt_hmd_Property.Unused_HasMaterialFlags,hxd_fmt_hmd_Property.HasExtraTextures,hxd_fmt_hmd_Property.FourBonesByVertex,hxd_fmt_hmd_Property.HasLod,hxd_fmt_hmd_Property.HasCollider];
 var hxd_fmt_hmd_Position = function() {
 };
 $hxClasses["hxd.fmt.hmd.Position"] = hxd_fmt_hmd_Position;
@@ -74136,6 +83775,13 @@ hxd_fmt_hmd_BlendShape.__name__ = "hxd.fmt.hmd.BlendShape";
 hxd_fmt_hmd_BlendShape.prototype = {
 	__class__: hxd_fmt_hmd_BlendShape
 };
+var hxd_fmt_hmd_Collider = function() {
+};
+$hxClasses["hxd.fmt.hmd.Collider"] = hxd_fmt_hmd_Collider;
+hxd_fmt_hmd_Collider.__name__ = "hxd.fmt.hmd.Collider";
+hxd_fmt_hmd_Collider.prototype = {
+	__class__: hxd_fmt_hmd_Collider
+};
 var hxd_fmt_hmd_Material = function() {
 };
 $hxClasses["hxd.fmt.hmd.Material"] = hxd_fmt_hmd_Material;
@@ -74169,7 +83815,50 @@ var hxd_fmt_hmd_Model = function() {
 $hxClasses["hxd.fmt.hmd.Model"] = hxd_fmt_hmd_Model;
 hxd_fmt_hmd_Model.__name__ = "hxd.fmt.hmd.Model";
 hxd_fmt_hmd_Model.prototype = {
-	__class__: hxd_fmt_hmd_Model
+	getObjectName: function() {
+		if(this.name == null) {
+			return this.name;
+		}
+		var reg_r = new RegExp("_*-*LOD0","".split("u").join(""));
+		return this.name.replace(reg_r,"");
+	}
+	,isLOD: function() {
+		return this.name.indexOf("LOD0") < 0;
+	}
+	,isLOD0: function(modelName) {
+		if(this.name != null && this.name.indexOf(modelName) != -1) {
+			return this.name.indexOf("LOD0") != -1;
+		} else {
+			return false;
+		}
+	}
+	,toLODName: function(i) {
+		return this.name + "LOD" + i;
+	}
+	,getLODInfos: function() {
+		var keyword = "LOD";
+		if(this.name == null || this.name.length <= keyword.length) {
+			return { lodLevel : -1, modelName : null};
+		}
+		if(HxOverrides.substr(this.name,0,keyword.length) == keyword) {
+			var parsedInt = Std.parseInt(HxOverrides.substr(this.name,keyword.length,1));
+			if(parsedInt != null) {
+				if(Std.parseInt(HxOverrides.substr(this.name,keyword.length + 1,1)) != null) {
+					throw haxe_Exception.thrown("Did not expect a second number after LOD in " + this.name);
+				}
+				return { lodLevel : parsedInt, modelName : HxOverrides.substr(this.name,keyword.length,null)};
+			}
+		}
+		var maxCursor = this.name.length - keyword.length - 1;
+		if(HxOverrides.substr(this.name,maxCursor,keyword.length) == keyword) {
+			var parsedInt = Std.parseInt(this.name.charAt(this.name.length - 1));
+			if(parsedInt != null) {
+				return { lodLevel : parsedInt, modelName : HxOverrides.substr(this.name,0,maxCursor)};
+			}
+		}
+		return { lodLevel : -1, modelName : null};
+	}
+	,__class__: hxd_fmt_hmd_Model
 };
 var hxd_fmt_hmd_AnimationFlag = $hxEnums["hxd.fmt.hmd.AnimationFlag"] = { __ename__:true,__constructs__:null
 	,HasPosition: {_hx_name:"HasPosition",_hx_index:0,__enum__:"hxd.fmt.hmd.AnimationFlag",toString:$estr}
@@ -74753,29 +84442,45 @@ hxd_fmt_hmd_Library.prototype = {
 		if(p != null) {
 			return p;
 		}
-		var lodInfos = this.getLODInfos(model);
-		if(lodInfos.lodLevel > 0) {
-			var _g = 0;
-			var _g1 = this.header.models;
-			while(_g < _g1.length) {
-				var m = _g1[_g];
-				++_g;
-				if(m.name != null && m.name.indexOf(lodInfos.modelName) != -1 && m.name.indexOf("LOD0") != -1) {
-					return null;
-				}
-			}
-			throw haxe_Exception.thrown("No LOD0 found for " + lodInfos.modelName + " in " + this.resource.entry.name);
-		}
 		var lods = null;
-		if(lodInfos.lodLevel == 0) {
-			lods = this.findLODs(lodInfos.modelName,model.materials.length);
+		var hasLod = model.lods != null;
+		if(hasLod) {
+			if(model.isLOD()) {
+				return null;
+			}
+			var _g = [];
+			var _g1 = 0;
+			var _g2 = model.lods;
+			while(_g1 < _g2.length) {
+				var lod = _g2[_g1];
+				++_g1;
+				_g.push(this.header.models[lod]);
+			}
+			lods = _g;
+			this.patchLodsMaterials(model,lods);
+		} else {
+			var lodInfos = model.getLODInfos();
+			if(lodInfos.lodLevel > 0) {
+				var _g = 0;
+				var _g1 = this.header.models;
+				while(_g < _g1.length) {
+					var m = _g1[_g];
+					++_g;
+					if(m.isLOD0(lodInfos.modelName)) {
+						return null;
+					}
+				}
+				throw haxe_Exception.thrown("No LOD0 found for " + lodInfos.modelName + " in " + this.resource.entry.name);
+			}
+			if(lodInfos.lodLevel == 0) {
+				lods = this.findLODs(lodInfos.modelName,model);
+				this.patchLodsMaterials(model,lods);
+				hasLod = true;
+			}
 		}
 		p = new h3d_prim_HMDModel(this.header.geometries[id],this.header.dataPosition,this,lods);
 		p.incref();
 		this.cachedPrimitives[id] = p;
-		if(lodInfos.lodLevel == 0) {
-			h3d_prim_ModelDatabase.current.loadModelProps(model.name,p);
-		}
 		return p;
 	}
 	,dispose: function() {
@@ -74898,31 +84603,7 @@ hxd_fmt_hmd_Library.prototype = {
 		}
 		return def;
 	}
-	,getLODInfos: function(model) {
-		var modelName = model.name;
-		var keyword = h3d_prim_HMDModel.lodExportKeyword;
-		if(modelName == null || modelName.length <= keyword.length) {
-			return { lodLevel : -1, modelName : null};
-		}
-		if(HxOverrides.substr(modelName,0,keyword.length) == keyword) {
-			var parsedInt = Std.parseInt(HxOverrides.substr(modelName,keyword.length,1));
-			if(parsedInt != null) {
-				if(Std.parseInt(HxOverrides.substr(modelName,keyword.length + 1,1)) != null) {
-					throw haxe_Exception.thrown("Did not expect a second number after LOD in " + modelName);
-				}
-				return { lodLevel : parsedInt, modelName : HxOverrides.substr(modelName,keyword.length,null)};
-			}
-		}
-		var maxCursor = modelName.length - keyword.length - 1;
-		if(HxOverrides.substr(modelName,maxCursor,keyword.length) == keyword) {
-			var parsedInt = Std.parseInt(modelName.charAt(modelName.length - 1));
-			if(parsedInt != null) {
-				return { lodLevel : parsedInt, modelName : HxOverrides.substr(modelName,0,maxCursor)};
-			}
-		}
-		return { lodLevel : -1, modelName : null};
-	}
-	,findLODs: function(modelName,materialCount) {
+	,findLODs: function(modelName,lod0) {
 		if(modelName == null) {
 			return null;
 		}
@@ -74932,7 +84613,7 @@ hxd_fmt_hmd_Library.prototype = {
 		while(_g < _g1.length) {
 			var curModel = _g1[_g];
 			++_g;
-			var lodInfos = this.getLODInfos(curModel);
+			var lodInfos = curModel.getLODInfos();
 			if(lodInfos.lodLevel < 1) {
 				continue;
 			}
@@ -74940,30 +84621,42 @@ hxd_fmt_hmd_Library.prototype = {
 				if(lods[lodInfos.lodLevel - 1] != null) {
 					throw haxe_Exception.thrown("Multiple LODs with the same level : " + curModel.name);
 				}
-				var geom = this.header.geometries[curModel.geometry];
-				if(geom.indexCounts.length != materialCount) {
-					var indexCounts = [];
-					var _g2 = 0;
-					var _g3 = materialCount;
-					while(_g2 < _g3) {
-						var i = _g2++;
-						indexCounts[i] = 0;
-					}
-					var _g_current = 0;
-					var _g_array = curModel.materials;
-					while(_g_current < _g_array.length) {
-						var _g_value = _g_array[_g_current];
-						var _g_key = _g_current++;
-						var i1 = _g_key;
-						var m = _g_value;
-						indexCounts[m] = geom.indexCounts[i1];
-					}
-					geom.indexCounts = indexCounts;
-				}
-				lods[lodInfos.lodLevel - 1] = this.header.geometries[curModel.geometry];
+				lods[lodInfos.lodLevel - 1] = curModel;
 			}
 		}
 		return lods;
+	}
+	,patchLodsMaterials: function(lod0,lods) {
+		var _g = 0;
+		while(_g < lods.length) {
+			var model = lods[_g];
+			++_g;
+			var _g1 = 0;
+			var _g2 = model.materials;
+			while(_g1 < _g2.length) {
+				var m = _g2[_g1];
+				++_g1;
+				if(lod0.materials.indexOf(m) != -1) {
+					continue;
+				}
+				throw haxe_Exception.thrown("Model " + model.name + " has a material that isn't used by " + lod0.name + ". This is not supported.");
+			}
+			var geom = this.header.geometries[model.geometry];
+			var indexCounts = [];
+			var j = 0;
+			var _g3 = 0;
+			var _g4 = lod0.materials.length;
+			while(_g3 < _g4) {
+				var i = _g3++;
+				if(lod0.materials[i] == model.materials[j]) {
+					indexCounts[i] = geom.indexCounts[j];
+					++j;
+				} else {
+					indexCounts[i] = 0;
+				}
+			}
+			geom.indexCounts = indexCounts;
+		}
 	}
 	,makeObject: function(loadTexture) {
 		if(loadTexture == null) {
@@ -75014,7 +84707,7 @@ hxd_fmt_hmd_Library.prototype = {
 					obj = new h3d_scene_MultiMaterial(prim,_g5);
 				}
 			}
-			obj.name = m.name;
+			obj.name = m.getObjectName();
 			var v = m.position.toMatrix();
 			obj.defaultTransform = v;
 			var f = 1;
@@ -75024,11 +84717,21 @@ hxd_fmt_hmd_Library.prototype = {
 			} else {
 				obj.flags &= ~f;
 			}
+			var c = b;
+			if(c && (obj.flags & 131072) != 0) {
+				var f1 = 262144;
+				obj.flags |= f1;
+			}
 			objs.push(obj);
 			var p = objs[m.parent];
 			if(p != null) {
 				p.addChild(obj);
 			}
+			var modelData = this.resource.entry.get_directory();
+			var tmp = ((obj) instanceof h3d_scene_Mesh) ? obj : null;
+			var value = tmp != null ? tmp.primitive : null;
+			var modelData1 = { resourceDirectory : modelData, resourceName : this.resource.entry.name, objectName : obj.name, hmd : ((value) instanceof h3d_prim_HMDModel) ? value : null, skin : ((obj) instanceof h3d_scene_Skin) ? obj : null};
+			h3d_prim_ModelDatabase.current.loadModelProps(modelData1);
 		}
 		var o = objs[0];
 		if(o != null) {
@@ -75679,6 +85382,10 @@ hxd_fmt_hmd_Reader.prototype = {
 			return hxd_fmt_hmd_Property.HasExtraTextures;
 		case 3:
 			return hxd_fmt_hmd_Property.FourBonesByVertex;
+		case 4:
+			return hxd_fmt_hmd_Property.HasLod;
+		case 5:
+			return hxd_fmt_hmd_Property.HasCollider;
 		default:
 			var unk = _g;
 			throw haxe_Exception.thrown("Unknown property #" + unk);
@@ -75806,6 +85513,17 @@ hxd_fmt_hmd_Reader.prototype = {
 		}
 		return s;
 	}
+	,readLods: function() {
+		var lodCount = this.i.readInt32();
+		var _g = [];
+		var _g1 = 0;
+		var _g2 = lodCount;
+		while(_g1 < _g2) {
+			var _ = _g1++;
+			_g.push(this.i.readInt32());
+		}
+		return _g;
+	}
 	,readHeader: function(fast) {
 		if(fast == null) {
 			fast = false;
@@ -75888,6 +85606,7 @@ hxd_fmt_hmd_Reader.prototype = {
 			d.materials.push(m);
 		}
 		d.models = [];
+		var hasCollider = false;
 		var _g = 0;
 		var _g1 = this.i.readInt32();
 		while(_g < _g1) {
@@ -75915,6 +85634,13 @@ hxd_fmt_hmd_Reader.prototype = {
 				m.materials.push(this.i.readInt32());
 			}
 			m.skin = this.readSkin();
+			if(m.props != null) {
+				m.lods = m.props.indexOf(hxd_fmt_hmd_Property.HasLod) != -1 ? this.readLods() : null;
+				if(m.props.indexOf(hxd_fmt_hmd_Property.HasCollider) != -1) {
+					m.collider = this.i.readInt32();
+					hasCollider = true;
+				}
+			}
 		}
 		d.animations = [];
 		var _g = 0;
@@ -75998,6 +85724,36 @@ hxd_fmt_hmd_Reader.prototype = {
 				s.indexCount = this.i.readInt32();
 				s.remapPosition = this.i.readInt32();
 				d.shapes.push(s);
+			}
+		}
+		if(hasCollider) {
+			d.colliders = [];
+			var colliderLength = this.i.readInt32();
+			var _g = 0;
+			var _g1 = colliderLength;
+			while(_g < _g1) {
+				var k = _g++;
+				var c = new hxd_fmt_hmd_Collider();
+				var n = this.i.readInt32();
+				var _g2 = [];
+				var _g3 = 0;
+				var _g4 = n;
+				while(_g3 < _g4) {
+					var v = _g3++;
+					_g2.push(this.i.readInt32());
+				}
+				c.vertexCounts = _g2;
+				c.vertexPosition = this.i.readInt32();
+				var _g5 = [];
+				var _g6 = 0;
+				var _g7 = n;
+				while(_g6 < _g7) {
+					var v1 = _g6++;
+					_g5.push(this.i.readInt32());
+				}
+				c.indexCounts = _g5;
+				c.indexPosition = this.i.readInt32();
+				d.colliders.push(c);
 			}
 		}
 		return d;
@@ -76512,6 +86268,28 @@ hxd_fs_NotFound.prototype = {
 	}
 	,__class__: hxd_fs_NotFound
 };
+var hxd_fs_SourceLoader = function() { };
+$hxClasses["hxd.fs.SourceLoader"] = hxd_fs_SourceLoader;
+hxd_fs_SourceLoader.__name__ = "hxd.fs.SourceLoader";
+hxd_fs_SourceLoader.isActive = function() {
+	return hxd_fs_SourceLoader.RELOAD_LFS.length > 0;
+};
+hxd_fs_SourceLoader.resolve = function(path) {
+	var _g = 0;
+	var _g1 = hxd_fs_SourceLoader.RELOAD_LFS;
+	while(_g < _g1.length) {
+		var fs = _g1[_g];
+		++_g;
+		try {
+			return fs.get(path);
+		} catch( _g2 ) {
+			if(!((haxe_Exception.caught(_g2).unwrap()) instanceof hxd_fs_NotFound)) {
+				throw _g2;
+			}
+		}
+	}
+	return null;
+};
 var hxd_impl_AllocPos = function() {
 	this.stack = [];
 	var curStack = haxe_CallStack.callStack();
@@ -76587,29 +86365,51 @@ hxd_impl_Allocator.get = function() {
 	return hxd_impl_Allocator.inst;
 };
 hxd_impl_Allocator.prototype = {
-	allocBuffer: function(vertices,format,flags) {
+	toBufferFlags: function(flags) {
+		switch(flags) {
+		case 0:
+			return [h3d_BufferFlag.Dynamic];
+		case 1:
+			return null;
+		case 2:
+			return [h3d_BufferFlag.UniformBuffer,h3d_BufferFlag.Dynamic];
+		case 3:
+			return [h3d_BufferFlag.UniformBuffer,h3d_BufferFlag.ReadWriteBuffer];
+		case 4:
+			return [h3d_BufferFlag.UniformBuffer];
+		}
+	}
+	,fromBufferFlags: function(flags) {
+		if(flags == 0) {
+			return 1;
+		}
+		if(flags == haxe_EnumFlags.from(h3d_BufferFlag.Dynamic)) {
+			return 0;
+		}
+		var i = 1 << h3d_BufferFlag.UniformBuffer._hx_index | 1 << h3d_BufferFlag.Dynamic._hx_index;
+		if(i == null) {
+			i = 0;
+		}
+		if(flags == i) {
+			return 2;
+		}
+		var i = 1 << h3d_BufferFlag.UniformBuffer._hx_index | 1 << h3d_BufferFlag.ReadWriteBuffer._hx_index;
+		if(i == null) {
+			i = 0;
+		}
+		if(flags == i) {
+			return 3;
+		}
+		if(flags == haxe_EnumFlags.from(h3d_BufferFlag.UniformBuffer)) {
+			return 4;
+		}
+		return 0;
+	}
+	,allocBuffer: function(vertices,format,flags) {
 		if(flags == null) {
 			flags = 0;
 		}
-		var tmp;
-		switch(flags) {
-		case 0:
-			tmp = [h3d_BufferFlag.Dynamic];
-			break;
-		case 1:
-			tmp = null;
-			break;
-		case 2:
-			tmp = [h3d_BufferFlag.UniformBuffer,h3d_BufferFlag.Dynamic];
-			break;
-		case 3:
-			tmp = [h3d_BufferFlag.UniformBuffer,h3d_BufferFlag.ReadWriteBuffer];
-			break;
-		case 4:
-			tmp = [h3d_BufferFlag.UniformBuffer];
-			break;
-		}
-		return new h3d_Buffer(vertices,format,tmp);
+		return new h3d_Buffer(vertices,format,this.toBufferFlags(flags));
 	}
 	,ofFloats: function(v,format,flags) {
 		if(flags == null) {
@@ -77044,6 +86844,9 @@ hxd_res_Any.prototype = $extend(hxd_res_Resource.prototype,{
 	,toPrefab: function() {
 		return this.loader.loadCache(this.entry.get_path(),hxd_res_Resource);
 	}
+	,toAnimGraph: function() {
+		return this.loader.loadCache(this.entry.get_path(),hxd_res_Resource);
+	}
 	,to: function(c) {
 		return this.loader.loadCache(this.entry.get_path(),c);
 	}
@@ -77127,7 +86930,7 @@ hxd_res_DefaultFont.get = function() {
 	var fnt = engine.resCache.h[hxd_res_DefaultFont.__id__];
 	if(fnt == null) {
 		var BYTES = hxd_res_Any.fromBytes("hxd/res/defaultFont.png",haxe_Unserializer.run("s3176:iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAOxAAADsQBlSsOGwAACPBJREFUeJztnelypDoMRp2p%:6v3PNjhrlCLX1aLIPBPlWppI03bCG0QOfn8:m0zbr8KupnS9FDqRKAzUOhAvBRfqO:tfrSZ86H:ET79o6Rhc%JzzNSD7Xn:XyEH9RPtP4X:6GDDj6ttR:Hb62d9pmX8b487StA4:DFlup5z5MSWS%tL:f6eG4BXDppGQdtApJEtPm0zkf427Oo1fAxtfO2hDIruGXCLgnAD:jNyzSsKxa18yBphyqQ1jqwBN1zHmgcU3V3jHui9xaArkS0%XzTohOX%jvGauzvjMrlUJXuqSeV07G0ekgTovWS1t61vr0CQAez7nkj7uFIELJqmdN7RWvzil7hnnXV5qLOzSMAmlcQub9ZRuEsaNoq0w5RZbN0rye1ASzplWyAiGEXQVK3kZOdRcgy9:FLoRogI02WNc7rRQw3jzsZAfWB7skR44%3jdo6Wv2qfr4rFuUCZlftrT1jjpezSih4b75ClQDMvrizz%82uA1wMCqsKvUv3YO045rxma2vjY3mpPUvuV1WKDzbLtqfNu9:AjA6tl69QM3Zn1Wfl1M8G:CUW4s6b%sWIEXWtM:omNeXrnaDRm:OyIsE1UOfQ1gCwMOLdFCqWnj8Grl5nsjVakRjHMj1DgnEcQvw%OV0AE0wGisfqTKrbBYrZ4BiB:T4ldE8dPsMxU2oEWgZZtoAyMCq2GxtLlWCFbEB%PGIYWv1kxECq0%TbDKITjpirVr9SW2zC:skqqKdUp%QwwbILKwlgZk2mkBlmUVgPPOI3IbL0GwASY2PiMdbPrfVF6:vVctIq5SoVqNdxtrvWXt1:EguYHVL:ZV4Q8F781%KVwD25r8UagTyYE4TjkllmfrU4udtI%XZdrRcm5c1T%3cPXjq9RqEYTewIrau1a%ODVSBomgeL4cLudedG%H2pah4KBQx8gSnWMC:8AvDKwS0fXU5n59Uf7gAXA1dfG1TtM1Bm2ZtKi%PCGaVlpXKrf67ngeI%uFXoW1WdvNH0ztuV3vNBvAOrC30wR0LG7kX0:p3MjoCqPYfiQNI3BK%BEhq31vfYtS5UkN5lCD%NGWMSBxAWyyeyKkAJYc2Z6JrfqpvGYF0IzxqNWoDoPrSeNJ8POMgtJg76rtSEyDNErGzUF5F3ZOq9wI2D%VtbuBsaFfkNGwBGMtUmy3BjUAtxs3x3LOk8mi7zWB6Xw7leCNlb%LRXkrk%wEOpESIlezxlvM%uSWuzQXNx1Ofjqd5Aah:qW5PGDfbjpZzRCGlbwZ5T0TqMHMVoLgCP56Nj0fqo7mhLOeMGoDPx4wE0sW64mRmXLSDaCZvxPjSeNnAGKx:hxcw8%a3Zkc7tTqjyWgbs:4d3w8wW:7AC42l3zF:dH9H9SGedwO9rmEEz4nMpCXuznFoSS5tf9x9e24ByFjqodKAQio6EjfP9C8duzLHoZ0r8oD%LzRyAZY1XN2umux8n0L3OkeygcdnDzMYTSvQvc47G7g4q3xL2EqE8jhbAN6H9YDJ6TaxBeCduJNy3AjkrghySay8QXOU84lZSQ8plj:ioYuIG%axvLUrcoRxHHGHXelgKzkTWSxtLK:7whM8UaGLzs3qJ7P5IxNI0axh%hbAgxhWMGJ01M%KVKIASXQcipVR7MEz524XboQNoKVwPZPNhkpRjD5yRdM53B0c0qKDvE4X9PVw78JYWPc7usEo9cm1TAa0%R:hh44n1UXz1sjaB0dbJATdGoB:R1Dv:c4DGktSez33TNqW96MZtVo:R53sPLQxvGseCWu7y2d7Kji70MgQRUIwM5nNb%1bc8HyK%MAHiMtq2q5ypaOS39rdTz9jMaac4kg87eDpSsp4%bx:iS3UZLOqMQPM44Y3jGuSoCVabERyaCsj:90qs7TG1soWePZbICViWharvnSgrfTwYsz0gjckvUApHcDOdwa9waDvIGjCFZ:2vwzfVeGj7W%qs4ns0ettbMASJvG:WfJ%JAGHOVvI6GSxtMEUfNENK%FH%NtNaz1qzif7B79mcC2AdbG8zVxyNqMtrGkTQqZWmHUqvJjDJg%BZ9Rf552I8qtY%a:jUMnEG3j9V1RvWgUryfqFyXql1etX2aP:vGER8JWCCLdxhME4OlMbWTdLQCRhA%qX1WegVrZEbtjCjQjsDnKM200Y8nLjDaAx%WdVgg8:zfQY%1620Q8grcxpRDcfQvwMN2ivYm7s4GSRkGZLuRvV5T3AP1tAe08q8qtY38KJo4Ejgglbxh3awCJQyL35l:AjAKwN:5CKozAqpRm7zibBBUCMDJFi:p5GlMKcJUbGAm4aIkdlPCpttK9xz1RxMhzAdVCkDmnE5H:GURPXLta7ypHcz248%GLWR6Q%cL7ZdHRVOddWHPt1VRWX6O1mERXuNt6HmBmooGXnlB178MX3vIr5nhCejkUbf7VhgyalyWwngcjqsorxxg5xy%oDeDZ:Du0Qub%2aP6M%XVfSFK90D6ihjranoC2pUgUVVe0VdUw2bmeEKyASx1OwvWfQ7dPqi1XlFe1Vd0nbu1C:%HEeEObuSH:LyRKzSW6QZKvjDXDNKxqvIsR19a:624vKKvW9Zy5nTw5swQO2zGbODmDNdmpWwBmJ%hNo7n7WAJ5L703FN4DD:Sr3RcK6uar0XVnHvHUbHeDqadawaLFA3jbTwW6tH2aC%5oqgfLXYRGcOab5SKOVvz8sY75AneZATyQd:qyt1ByFjkGoCrR6u8gXLtc2tn:51qD22s7Pwi5Z5jEryNtS6jy6U5qfS8HZwFTWp0ogWdj3Wu0nmPWJ8K3HO62gvoul:dhKbBPPWmp:fdwBXwXNGa8TY92ruBzVG%GpoqnUXtp9CeCdza4JvZLhDqyqb3hT8RRDtH5VmyavKKREn0XCW1f3WiDKWmpTpf7GTQc:F6OpCdC3guJdp5C8CzkTY9JAg8Ekh:bxaAPxVMf28WgP7XMMrWAovwhO8I2gxkC8DibAFYnC0Ai6OFgjeL4Pmm0M2L0dzAzSJY2cDNy:E8ELJ5MdsLWJwtAIuzBWBxtgAszhaAxdkCsDi:AYnqZwd25SoPAAAAAElFTkSuQmCC"));
-		var DESC = hxd_res_Any.fromBytes("hxd/res/defaultFont.fnt",haxe_Unserializer.run("s14030:PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPEZvbnQgc2l6ZT0iMTIiIGZhbWlseT0iUGl4ZWwgT3BlcmF0b3IiIGhlaWdodD0iMTYiIHN0eWxlPSJSZWd1bGFyIj4KIDxDaGFyIHdpZHRoPSI0IiBvZmZzZXQ9IjAgMTMiIHJlY3Q9IjEgMTIgMCAwIiBjb2RlPSIgIi8%CiA8Q2hhciB3aWR0aD0iMyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjIgMyAxIDkiIGNvZGU9IiEiLz4KIDxDaGFyIHdpZHRoPSI1IiBvZmZzZXQ9IjEgNCIgcmVjdD0iNCAzIDMgMyIgY29kZT0iJnF1b3Q7Ii8%CiA8Q2hhciB3aWR0aD0iOCIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjggMyA2IDkiIGNvZGU9IiMiLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgMiIgcmVjdD0iMTUgMSA1IDEzIiBjb2RlPSIkIi8%CiA8Q2hhciB3aWR0aD0iOSIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjIxIDMgNyA5IiBjb2RlPSIlIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjI5IDMgNSA5IiBjb2RlPSImYW1wOyIvPgogPENoYXIgd2lkdGg9IjMiIG9mZnNldD0iMSA0IiByZWN0PSIzNSAzIDEgMyIgY29kZT0iJyIvPgogPENoYXIgd2lkdGg9IjUiIG9mZnNldD0iMSA0IiByZWN0PSIzNyAzIDMgOSIgY29kZT0iKCIvPgogPENoYXIgd2lkdGg9IjUiIG9mZnNldD0iMSA0IiByZWN0PSI0MSAzIDMgOSIgY29kZT0iKSIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSI0NSAzIDUgNSIgY29kZT0iKiIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA2IiByZWN0PSI1MSA1IDUgNSIgY29kZT0iKyIvPgogPENoYXIgd2lkdGg9IjMiIG9mZnNldD0iMCAxMiIgcmVjdD0iNTcgMTEgMiAzIiBjb2RlPSIsIi8%CiA8Q2hhciB3aWR0aD0iNiIgb2Zmc2V0PSIxIDgiIHJlY3Q9IjYwIDcgNCAxIiBjb2RlPSItIi8%CiA8Q2hhciB3aWR0aD0iMyIgb2Zmc2V0PSIxIDEyIiByZWN0PSI2NSAxMSAxIDEiIGNvZGU9Ii4iLz4KIDxDaGFyIHdpZHRoPSI1IiBvZmZzZXQ9IjEgNCIgcmVjdD0iNjcgMyAzIDkiIGNvZGU9Ii8iLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iNzEgMyA1IDkiIGNvZGU9IjAiLz4KIDxDaGFyIHdpZHRoPSI1IiBvZmZzZXQ9IjEgNCIgcmVjdD0iNzcgMyAzIDkiIGNvZGU9IjEiLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iODEgMyA1IDkiIGNvZGU9IjIiLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iODcgMyA1IDkiIGNvZGU9IjMiLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iOTMgMyA1IDkiIGNvZGU9IjQiLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iOTkgMyA1IDkiIGNvZGU9IjUiLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iMTA1IDMgNSA5IiBjb2RlPSI2Ii8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjExMSAzIDUgOSIgY29kZT0iNyIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSIxMTcgMyA1IDkiIGNvZGU9IjgiLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iMSAxNSA1IDkiIGNvZGU9IjkiLz4KIDxDaGFyIHdpZHRoPSIzIiBvZmZzZXQ9IjEgNiIgcmVjdD0iNyAxNyAxIDciIGNvZGU9IjoiLz4KIDxDaGFyIHdpZHRoPSIzIiBvZmZzZXQ9IjAgNiIgcmVjdD0iOSAxNyAyIDkiIGNvZGU9IjsiLz4KIDxDaGFyIHdpZHRoPSI1IiBvZmZzZXQ9IjEgNiIgcmVjdD0iMTIgMTcgMyA1IiBjb2RlPSImbHQ7Ii8%CiA8Q2hhciB3aWR0aD0iNiIgb2Zmc2V0PSIxIDciIHJlY3Q9IjE2IDE4IDQgMyIgY29kZT0iPSIvPgogPENoYXIgd2lkdGg9IjUiIG9mZnNldD0iMSA2IiByZWN0PSIyMSAxNyAzIDUiIGNvZGU9Ij4iLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iMjUgMTUgNSA5IiBjb2RlPSI:Ii8%CiA8Q2hhciB3aWR0aD0iOSIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjMxIDE1IDcgOSIgY29kZT0iQCIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSIzOSAxNSA1IDkiIGNvZGU9IkEiLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iNDUgMTUgNSA5IiBjb2RlPSJCIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjUxIDE1IDUgOSIgY29kZT0iQyIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSI1NyAxNSA1IDkiIGNvZGU9IkQiLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iNjMgMTUgNSA5IiBjb2RlPSJFIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjY5IDE1IDUgOSIgY29kZT0iRiIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSI3NSAxNSA1IDkiIGNvZGU9IkciLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iODEgMTUgNSA5IiBjb2RlPSJIIi8%CiA8Q2hhciB3aWR0aD0iMyIgb2Zmc2V0PSIxIDQiIHJlY3Q9Ijg3IDE1IDEgOSIgY29kZT0iSSIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSI4OSAxNSA1IDkiIGNvZGU9IkoiLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iOTUgMTUgNSA5IiBjb2RlPSJLIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjEwMSAxNSA1IDkiIGNvZGU9IkwiLz4KIDxDaGFyIHdpZHRoPSI5IiBvZmZzZXQ9IjEgNCIgcmVjdD0iMTA3IDE1IDcgOSIgY29kZT0iTSIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSIxMTUgMTUgNSA5IiBjb2RlPSJOIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjEyMSAxNSA1IDkiIGNvZGU9Ik8iLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iMSAyNyA1IDkiIGNvZGU9IlAiLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iNyAyNyA1IDkiIGNvZGU9IlEiLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iMTMgMjcgNSA5IiBjb2RlPSJSIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjE5IDI3IDUgOSIgY29kZT0iUyIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSIyNSAyNyA1IDkiIGNvZGU9IlQiLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iMzEgMjcgNSA5IiBjb2RlPSJVIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjM3IDI3IDUgOSIgY29kZT0iViIvPgogPENoYXIgd2lkdGg9IjkiIG9mZnNldD0iMSA0IiByZWN0PSI0MyAyNyA3IDkiIGNvZGU9IlciLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iNTEgMjcgNSA5IiBjb2RlPSJYIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjU3IDI3IDUgOSIgY29kZT0iWSIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSI2MyAyNyA1IDkiIGNvZGU9IloiLz4KIDxDaGFyIHdpZHRoPSI1IiBvZmZzZXQ9IjEgNCIgcmVjdD0iNjkgMjcgMyA5IiBjb2RlPSJbIi8%CiA8Q2hhciB3aWR0aD0iNSIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjczIDI3IDMgOSIgY29kZT0iXCIvPgogPENoYXIgd2lkdGg9IjUiIG9mZnNldD0iMSA0IiByZWN0PSI3NyAyNyAzIDkiIGNvZGU9Il0iLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iODEgMjcgNSAzIiBjb2RlPSJeIi8%CiA8Q2hhciB3aWR0aD0iNSIgb2Zmc2V0PSIwIDE0IiByZWN0PSI4NyAzNyA1IDEiIGNvZGU9Il8iLz4KIDxDaGFyIHdpZHRoPSIzIiBvZmZzZXQ9IjAgNCIgcmVjdD0iOTMgMjcgMiAyIiBjb2RlPSJgIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDYiIHJlY3Q9Ijk2IDI5IDUgNyIgY29kZT0iYSIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSIxMDIgMjcgNSA5IiBjb2RlPSJiIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDYiIHJlY3Q9IjEwOCAyOSA1IDciIGNvZGU9ImMiLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iMTE0IDI3IDUgOSIgY29kZT0iZCIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA2IiByZWN0PSIxMjAgMjkgNSA3IiBjb2RlPSJlIi8%CiA8Q2hhciB3aWR0aD0iNiIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjEgMzkgNSA5IiBjb2RlPSJmIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDYiIHJlY3Q9IjcgNDEgNSA5IiBjb2RlPSJnIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjEzIDM5IDUgOSIgY29kZT0iaCIvPgogPENoYXIgd2lkdGg9IjMiIG9mZnNldD0iMSA0IiByZWN0PSIxOSAzOSAxIDkiIGNvZGU9ImkiLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iMjEgMzkgNSAxMSIgY29kZT0iaiIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSIyNyAzOSA1IDkiIGNvZGU9ImsiLz4KIDxDaGFyIHdpZHRoPSIzIiBvZmZzZXQ9IjEgNCIgcmVjdD0iMzMgMzkgMSA5IiBjb2RlPSJsIi8%CiA8Q2hhciB3aWR0aD0iOSIgb2Zmc2V0PSIxIDYiIHJlY3Q9IjM1IDQxIDcgNyIgY29kZT0ibSIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA2IiByZWN0PSI0MyA0MSA1IDciIGNvZGU9Im4iLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNiIgcmVjdD0iNDkgNDEgNSA3IiBjb2RlPSJvIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDYiIHJlY3Q9IjU1IDQxIDUgOSIgY29kZT0icCIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA2IiByZWN0PSI2MSA0MSA1IDkiIGNvZGU9InEiLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNiIgcmVjdD0iNjcgNDEgNSA3IiBjb2RlPSJyIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDYiIHJlY3Q9IjczIDQxIDUgNyIgY29kZT0icyIvPgogPENoYXIgd2lkdGg9IjYiIG9mZnNldD0iMSA1IiByZWN0PSI3OSA0MCA1IDgiIGNvZGU9InQiLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNiIgcmVjdD0iODUgNDEgNSA3IiBjb2RlPSJ1Ii8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDYiIHJlY3Q9IjkxIDQxIDUgNyIgY29kZT0idiIvPgogPENoYXIgd2lkdGg9IjkiIG9mZnNldD0iMSA2IiByZWN0PSI5NyA0MSA3IDciIGNvZGU9InciLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNiIgcmVjdD0iMTA1IDQxIDUgNyIgY29kZT0ieCIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA2IiByZWN0PSIxMTEgNDEgNSA5IiBjb2RlPSJ5Ii8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDYiIHJlY3Q9IjExNyA0MSA1IDciIGNvZGU9InoiLz4KIDxDaGFyIHdpZHRoPSI2IiBvZmZzZXQ9IjEgNCIgcmVjdD0iMSA1NCA0IDkiIGNvZGU9InsiLz4KIDxDaGFyIHdpZHRoPSIzIiBvZmZzZXQ9IjEgNCIgcmVjdD0iNiA1NCAxIDkiIGNvZGU9InwiLz4KIDxDaGFyIHdpZHRoPSI2IiBvZmZzZXQ9IjEgNCIgcmVjdD0iOCA1NCA0IDkiIGNvZGU9In0iLz4KIDxDaGFyIHdpZHRoPSI4IiBvZmZzZXQ9IjEgNCIgcmVjdD0iMTMgNTQgNiAyIiBjb2RlPSJ%Ii8%CiA8Q2hhciB3aWR0aD0iMyIgb2Zmc2V0PSIxIDYiIHJlY3Q9IjIwIDU2IDEgOSIgY29kZT0iwqEiLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iMjIgNTQgNSAxMSIgY29kZT0iwqIiLz4KIDxDaGFyIHdpZHRoPSI4IiBvZmZzZXQ9IjEgNCIgcmVjdD0iMjggNTQgNiA5IiBjb2RlPSLCoyIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSIzNSA1NCA1IDkiIGNvZGU9IsKlIi8%CiA8Q2hhciB3aWR0aD0iMyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjQxIDU0IDEgOSIgY29kZT0iwqYiLz4KIDxDaGFyIHdpZHRoPSI1IiBvZmZzZXQ9IjEgNCIgcmVjdD0iNDMgNTQgMyAxIiBjb2RlPSLCqCIvPgogPENoYXIgd2lkdGg9IjkiIG9mZnNldD0iMSA0IiByZWN0PSI0NyA1NCA3IDkiIGNvZGU9IsKpIi8%CiA8Q2hhciB3aWR0aD0iOCIgb2Zmc2V0PSIxIDYiIHJlY3Q9IjU1IDU2IDYgNSIgY29kZT0iwqsiLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgOCIgcmVjdD0iNjIgNTggNSAzIiBjb2RlPSLCrCIvPgogPENoYXIgd2lkdGg9IjYiIG9mZnNldD0iMSA0IiByZWN0PSI2OCA1NCA0IDQiIGNvZGU9IsKwIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDYiIHJlY3Q9IjczIDU2IDUgNyIgY29kZT0iwrEiLz4KIDxDaGFyIHdpZHRoPSIzIiBvZmZzZXQ9IjEgNCIgcmVjdD0iNzkgNTQgMiAyIiBjb2RlPSLCtCIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA2IiByZWN0PSI4MiA1NiA1IDkiIGNvZGU9IsK1Ii8%CiA8Q2hhciB3aWR0aD0iOCIgb2Zmc2V0PSIxIDQiIHJlY3Q9Ijg4IDU0IDcgOSIgY29kZT0iwrYiLz4KIDxDaGFyIHdpZHRoPSIzIiBvZmZzZXQ9IjEgOCIgcmVjdD0iOTYgNTggMSAxIiBjb2RlPSLCtyIvPgogPENoYXIgd2lkdGg9IjUiIG9mZnNldD0iMCAxMyIgcmVjdD0iOTggNjMgMyAyIiBjb2RlPSLCuCIvPgogPENoYXIgd2lkdGg9IjgiIG9mZnNldD0iMSA2IiByZWN0PSIxMDIgNTYgNiA1IiBjb2RlPSLCuyIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA2IiByZWN0PSIxMDkgNTYgNSA5IiBjb2RlPSLCvyIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSAxIiByZWN0PSIxMTUgNTEgNSAxMiIgY29kZT0iw4AiLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgMSIgcmVjdD0iMTIxIDUxIDUgMTIiIGNvZGU9IsOBIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDEiIHJlY3Q9IjEgNjcgNSAxMiIgY29kZT0iw4IiLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgMSIgcmVjdD0iNyA2NyA2IDEyIiBjb2RlPSLDgyIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSAyIiByZWN0PSIxNCA2OCA1IDExIiBjb2RlPSLDhCIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSAwIiByZWN0PSIyMCA2NiA1IDEzIiBjb2RlPSLDhSIvPgogPENoYXIgd2lkdGg9IjExIiBvZmZzZXQ9IjEgNCIgcmVjdD0iMjYgNzAgOSA5IiBjb2RlPSLDhiIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSIzNiA3MCA1IDExIiBjb2RlPSLDhyIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSAxIiByZWN0PSI0MiA2NyA1IDEyIiBjb2RlPSLDiCIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSAxIiByZWN0PSI0OCA2NyA1IDEyIiBjb2RlPSLDiSIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSAxIiByZWN0PSI1NCA2NyA1IDEyIiBjb2RlPSLDiiIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSAyIiByZWN0PSI2MCA2OCA1IDExIiBjb2RlPSLDiyIvPgogPENoYXIgd2lkdGg9IjMiIG9mZnNldD0iMCAxIiByZWN0PSI2NiA2NyAyIDEyIiBjb2RlPSLDjCIvPgogPENoYXIgd2lkdGg9IjMiIG9mZnNldD0iMSAxIiByZWN0PSI2OSA2NyAyIDEyIiBjb2RlPSLDjSIvPgogPENoYXIgd2lkdGg9IjMiIG9mZnNldD0iMCAxIiByZWN0PSI3MiA2NyAzIDEyIiBjb2RlPSLDjiIvPgogPENoYXIgd2lkdGg9IjMiIG9mZnNldD0iMCAyIiByZWN0PSI3NiA2OCAzIDExIiBjb2RlPSLDjyIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMCA0IiByZWN0PSI4MCA3MCA2IDkiIGNvZGU9IsOQIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDEiIHJlY3Q9Ijg3IDY3IDYgMTIiIGNvZGU9IsORIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDEiIHJlY3Q9Ijk0IDY3IDUgMTIiIGNvZGU9IsOSIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDEiIHJlY3Q9IjEwMCA2NyA1IDEyIiBjb2RlPSLDkyIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSAxIiByZWN0PSIxMDYgNjcgNSAxMiIgY29kZT0iw5QiLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgMSIgcmVjdD0iMTEyIDY3IDYgMTIiIGNvZGU9IsOVIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDIiIHJlY3Q9IjExOSA2OCA1IDExIiBjb2RlPSLDliIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA2IiByZWN0PSIxIDg3IDUgNSIgY29kZT0iw5ciLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjAgNCIgcmVjdD0iNyA4NSA3IDkiIGNvZGU9IsOYIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDEiIHJlY3Q9IjE1IDgyIDUgMTIiIGNvZGU9IsOZIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDEiIHJlY3Q9IjIxIDgyIDUgMTIiIGNvZGU9IsOaIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDEiIHJlY3Q9IjI3IDgyIDUgMTIiIGNvZGU9IsObIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDIiIHJlY3Q9IjMzIDgzIDUgMTEiIGNvZGU9IsOcIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDEiIHJlY3Q9IjM5IDgyIDUgMTIiIGNvZGU9IsOdIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjQ1IDg1IDUgOSIgY29kZT0iw54iLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iNTEgODUgNSA5IiBjb2RlPSLDnyIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSAzIiByZWN0PSI1NyA4NCA1IDEwIiBjb2RlPSLDoCIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSAzIiByZWN0PSI2MyA4NCA1IDEwIiBjb2RlPSLDoSIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSAzIiByZWN0PSI2OSA4NCA1IDEwIiBjb2RlPSLDoiIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSAzIiByZWN0PSI3NSA4NCA2IDEwIiBjb2RlPSLDoyIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSI4MiA4NSA1IDkiIGNvZGU9IsOkIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDIiIHJlY3Q9Ijg4IDgzIDUgMTEiIGNvZGU9IsOlIi8%CiA8Q2hhciB3aWR0aD0iMTEiIG9mZnNldD0iMSA2IiByZWN0PSI5NCA4NyA5IDciIGNvZGU9IsOmIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDYiIHJlY3Q9IjEwNCA4NyA1IDkiIGNvZGU9IsOnIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDMiIHJlY3Q9IjExMCA4NCA1IDEwIiBjb2RlPSLDqCIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSAzIiByZWN0PSIxMTYgODQgNSAxMCIgY29kZT0iw6kiLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgMyIgcmVjdD0iMSA5NyA1IDEwIiBjb2RlPSLDqiIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSI3IDk4IDUgOSIgY29kZT0iw6siLz4KIDxDaGFyIHdpZHRoPSIzIiBvZmZzZXQ9IjAgMyIgcmVjdD0iMTMgOTcgMiAxMCIgY29kZT0iw6wiLz4KIDxDaGFyIHdpZHRoPSIzIiBvZmZzZXQ9IjEgMyIgcmVjdD0iMTYgOTcgMiAxMCIgY29kZT0iw60iLz4KIDxDaGFyIHdpZHRoPSIzIiBvZmZzZXQ9IjAgMyIgcmVjdD0iMTkgOTcgMyAxMCIgY29kZT0iw64iLz4KIDxDaGFyIHdpZHRoPSIzIiBvZmZzZXQ9IjAgNCIgcmVjdD0iMjMgOTggMyA5IiBjb2RlPSLDryIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSIyNyA5OCA2IDkiIGNvZGU9IsOwIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDMiIHJlY3Q9IjM0IDk3IDYgMTAiIGNvZGU9IsOxIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDMiIHJlY3Q9IjQxIDk3IDUgMTAiIGNvZGU9IsOyIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDMiIHJlY3Q9IjQ3IDk3IDUgMTAiIGNvZGU9IsOzIi8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDMiIHJlY3Q9IjUzIDk3IDUgMTAiIGNvZGU9IsO0Ii8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDMiIHJlY3Q9IjU5IDk3IDYgMTAiIGNvZGU9IsO1Ii8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjY2IDk4IDUgOSIgY29kZT0iw7YiLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNiIgcmVjdD0iNzIgMTAwIDUgNSIgY29kZT0iw7ciLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjAgNiIgcmVjdD0iNzggMTAwIDcgNyIgY29kZT0iw7giLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgMyIgcmVjdD0iODYgOTcgNSAxMCIgY29kZT0iw7kiLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgMyIgcmVjdD0iOTIgOTcgNSAxMCIgY29kZT0iw7oiLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgMyIgcmVjdD0iOTggOTcgNSAxMCIgY29kZT0iw7siLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iMTA0IDk4IDUgOSIgY29kZT0iw7wiLz4KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgMyIgcmVjdD0iMTEwIDk3IDUgMTIiIGNvZGU9IsO9Ii8%CiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjExNiA5OCA1IDExIiBjb2RlPSLDviIvPgogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSIxIDExMCA1IDExIiBjb2RlPSLDvyIvPgo8L0ZvbnQ%Cg"));
+		var DESC = hxd_res_Any.fromBytes("hxd/res/defaultFont.fnt",haxe_Unserializer.run("s14270:PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4NCjxGb250IHNpemU9IjEyIiBmYW1pbHk9IlBpeGVsIE9wZXJhdG9yIiBoZWlnaHQ9IjE2IiBzdHlsZT0iUmVndWxhciI%DQogPENoYXIgd2lkdGg9IjQiIG9mZnNldD0iMCAxMyIgcmVjdD0iMSAxMiAwIDAiIGNvZGU9IiAiLz4NCiA8Q2hhciB3aWR0aD0iMyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjIgMyAxIDkiIGNvZGU9IiEiLz4NCiA8Q2hhciB3aWR0aD0iNSIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjQgMyAzIDMiIGNvZGU9IiZxdW90OyIvPg0KIDxDaGFyIHdpZHRoPSI4IiBvZmZzZXQ9IjEgNCIgcmVjdD0iOCAzIDYgOSIgY29kZT0iIyIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgMiIgcmVjdD0iMTUgMSA1IDEzIiBjb2RlPSIkIi8%DQogPENoYXIgd2lkdGg9IjkiIG9mZnNldD0iMSA0IiByZWN0PSIyMSAzIDcgOSIgY29kZT0iJSIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iMjkgMyA1IDkiIGNvZGU9IiZhbXA7Ii8%DQogPENoYXIgd2lkdGg9IjMiIG9mZnNldD0iMSA0IiByZWN0PSIzNSAzIDEgMyIgY29kZT0iJyIvPg0KIDxDaGFyIHdpZHRoPSI1IiBvZmZzZXQ9IjEgNCIgcmVjdD0iMzcgMyAzIDkiIGNvZGU9IigiLz4NCiA8Q2hhciB3aWR0aD0iNSIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjQxIDMgMyA5IiBjb2RlPSIpIi8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSI0NSAzIDUgNSIgY29kZT0iKiIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNiIgcmVjdD0iNTEgNSA1IDUiIGNvZGU9IisiLz4NCiA8Q2hhciB3aWR0aD0iMyIgb2Zmc2V0PSIwIDEyIiByZWN0PSI1NyAxMSAyIDMiIGNvZGU9IiwiLz4NCiA8Q2hhciB3aWR0aD0iNiIgb2Zmc2V0PSIxIDgiIHJlY3Q9IjYwIDcgNCAxIiBjb2RlPSItIi8%DQogPENoYXIgd2lkdGg9IjMiIG9mZnNldD0iMSAxMiIgcmVjdD0iNjUgMTEgMSAxIiBjb2RlPSIuIi8%DQogPENoYXIgd2lkdGg9IjUiIG9mZnNldD0iMSA0IiByZWN0PSI2NyAzIDMgOSIgY29kZT0iLyIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iNzEgMyA1IDkiIGNvZGU9IjAiLz4NCiA8Q2hhciB3aWR0aD0iNSIgb2Zmc2V0PSIxIDQiIHJlY3Q9Ijc3IDMgMyA5IiBjb2RlPSIxIi8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSI4MSAzIDUgOSIgY29kZT0iMiIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iODcgMyA1IDkiIGNvZGU9IjMiLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjkzIDMgNSA5IiBjb2RlPSI0Ii8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSI5OSAzIDUgOSIgY29kZT0iNSIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iMTA1IDMgNSA5IiBjb2RlPSI2Ii8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSIxMTEgMyA1IDkiIGNvZGU9IjciLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjExNyAzIDUgOSIgY29kZT0iOCIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iMSAxNSA1IDkiIGNvZGU9IjkiLz4NCiA8Q2hhciB3aWR0aD0iMyIgb2Zmc2V0PSIxIDYiIHJlY3Q9IjcgMTcgMSA3IiBjb2RlPSI6Ii8%DQogPENoYXIgd2lkdGg9IjMiIG9mZnNldD0iMCA2IiByZWN0PSI5IDE3IDIgOSIgY29kZT0iOyIvPg0KIDxDaGFyIHdpZHRoPSI1IiBvZmZzZXQ9IjEgNiIgcmVjdD0iMTIgMTcgMyA1IiBjb2RlPSImbHQ7Ii8%DQogPENoYXIgd2lkdGg9IjYiIG9mZnNldD0iMSA3IiByZWN0PSIxNiAxOCA0IDMiIGNvZGU9Ij0iLz4NCiA8Q2hhciB3aWR0aD0iNSIgb2Zmc2V0PSIxIDYiIHJlY3Q9IjIxIDE3IDMgNSIgY29kZT0iPiIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iMjUgMTUgNSA5IiBjb2RlPSI:Ii8%DQogPENoYXIgd2lkdGg9IjkiIG9mZnNldD0iMSA0IiByZWN0PSIzMSAxNSA3IDkiIGNvZGU9IkAiLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjM5IDE1IDUgOSIgY29kZT0iQSIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iNDUgMTUgNSA5IiBjb2RlPSJCIi8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSI1MSAxNSA1IDkiIGNvZGU9IkMiLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjU3IDE1IDUgOSIgY29kZT0iRCIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iNjMgMTUgNSA5IiBjb2RlPSJFIi8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSI2OSAxNSA1IDkiIGNvZGU9IkYiLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDQiIHJlY3Q9Ijc1IDE1IDUgOSIgY29kZT0iRyIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iODEgMTUgNSA5IiBjb2RlPSJIIi8%DQogPENoYXIgd2lkdGg9IjMiIG9mZnNldD0iMSA0IiByZWN0PSI4NyAxNSAxIDkiIGNvZGU9IkkiLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDQiIHJlY3Q9Ijg5IDE1IDUgOSIgY29kZT0iSiIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iOTUgMTUgNSA5IiBjb2RlPSJLIi8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSIxMDEgMTUgNSA5IiBjb2RlPSJMIi8%DQogPENoYXIgd2lkdGg9IjkiIG9mZnNldD0iMSA0IiByZWN0PSIxMDcgMTUgNyA5IiBjb2RlPSJNIi8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSIxMTUgMTUgNSA5IiBjb2RlPSJOIi8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSIxMjEgMTUgNSA5IiBjb2RlPSJPIi8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSIxIDI3IDUgOSIgY29kZT0iUCIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iNyAyNyA1IDkiIGNvZGU9IlEiLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjEzIDI3IDUgOSIgY29kZT0iUiIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iMTkgMjcgNSA5IiBjb2RlPSJTIi8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSIyNSAyNyA1IDkiIGNvZGU9IlQiLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjMxIDI3IDUgOSIgY29kZT0iVSIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iMzcgMjcgNSA5IiBjb2RlPSJWIi8%DQogPENoYXIgd2lkdGg9IjkiIG9mZnNldD0iMSA0IiByZWN0PSI0MyAyNyA3IDkiIGNvZGU9IlciLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjUxIDI3IDUgOSIgY29kZT0iWCIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iNTcgMjcgNSA5IiBjb2RlPSJZIi8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSI2MyAyNyA1IDkiIGNvZGU9IloiLz4NCiA8Q2hhciB3aWR0aD0iNSIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjY5IDI3IDMgOSIgY29kZT0iWyIvPg0KIDxDaGFyIHdpZHRoPSI1IiBvZmZzZXQ9IjEgNCIgcmVjdD0iNzMgMjcgMyA5IiBjb2RlPSJcIi8%DQogPENoYXIgd2lkdGg9IjUiIG9mZnNldD0iMSA0IiByZWN0PSI3NyAyNyAzIDkiIGNvZGU9Il0iLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjgxIDI3IDUgMyIgY29kZT0iXiIvPg0KIDxDaGFyIHdpZHRoPSI1IiBvZmZzZXQ9IjAgMTQiIHJlY3Q9Ijg3IDM3IDUgMSIgY29kZT0iXyIvPg0KIDxDaGFyIHdpZHRoPSIzIiBvZmZzZXQ9IjAgNCIgcmVjdD0iOTMgMjcgMiAyIiBjb2RlPSJgIi8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA2IiByZWN0PSI5NiAyOSA1IDciIGNvZGU9ImEiLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjEwMiAyNyA1IDkiIGNvZGU9ImIiLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDYiIHJlY3Q9IjEwOCAyOSA1IDciIGNvZGU9ImMiLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjExNCAyNyA1IDkiIGNvZGU9ImQiLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDYiIHJlY3Q9IjEyMCAyOSA1IDciIGNvZGU9ImUiLz4NCiA8Q2hhciB3aWR0aD0iNiIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjEgMzkgNSA5IiBjb2RlPSJmIi8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA2IiByZWN0PSI3IDQxIDUgOSIgY29kZT0iZyIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iMTMgMzkgNSA5IiBjb2RlPSJoIi8%DQogPENoYXIgd2lkdGg9IjMiIG9mZnNldD0iMSA0IiByZWN0PSIxOSAzOSAxIDkiIGNvZGU9ImkiLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjIxIDM5IDUgMTEiIGNvZGU9ImoiLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjI3IDM5IDUgOSIgY29kZT0iayIvPg0KIDxDaGFyIHdpZHRoPSIzIiBvZmZzZXQ9IjEgNCIgcmVjdD0iMzMgMzkgMSA5IiBjb2RlPSJsIi8%DQogPENoYXIgd2lkdGg9IjkiIG9mZnNldD0iMSA2IiByZWN0PSIzNSA0MSA3IDciIGNvZGU9Im0iLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDYiIHJlY3Q9IjQzIDQxIDUgNyIgY29kZT0ibiIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNiIgcmVjdD0iNDkgNDEgNSA3IiBjb2RlPSJvIi8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA2IiByZWN0PSI1NSA0MSA1IDkiIGNvZGU9InAiLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDYiIHJlY3Q9IjYxIDQxIDUgOSIgY29kZT0icSIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNiIgcmVjdD0iNjcgNDEgNSA3IiBjb2RlPSJyIi8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA2IiByZWN0PSI3MyA0MSA1IDciIGNvZGU9InMiLz4NCiA8Q2hhciB3aWR0aD0iNiIgb2Zmc2V0PSIxIDUiIHJlY3Q9Ijc5IDQwIDUgOCIgY29kZT0idCIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNiIgcmVjdD0iODUgNDEgNSA3IiBjb2RlPSJ1Ii8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA2IiByZWN0PSI5MSA0MSA1IDciIGNvZGU9InYiLz4NCiA8Q2hhciB3aWR0aD0iOSIgb2Zmc2V0PSIxIDYiIHJlY3Q9Ijk3IDQxIDcgNyIgY29kZT0idyIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNiIgcmVjdD0iMTA1IDQxIDUgNyIgY29kZT0ieCIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNiIgcmVjdD0iMTExIDQxIDUgOSIgY29kZT0ieSIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNiIgcmVjdD0iMTE3IDQxIDUgNyIgY29kZT0ieiIvPg0KIDxDaGFyIHdpZHRoPSI2IiBvZmZzZXQ9IjEgNCIgcmVjdD0iMSA1NCA0IDkiIGNvZGU9InsiLz4NCiA8Q2hhciB3aWR0aD0iMyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjYgNTQgMSA5IiBjb2RlPSJ8Ii8%DQogPENoYXIgd2lkdGg9IjYiIG9mZnNldD0iMSA0IiByZWN0PSI4IDU0IDQgOSIgY29kZT0ifSIvPg0KIDxDaGFyIHdpZHRoPSI4IiBvZmZzZXQ9IjEgNCIgcmVjdD0iMTMgNTQgNiAyIiBjb2RlPSJ%Ii8%DQogPENoYXIgd2lkdGg9IjMiIG9mZnNldD0iMSA2IiByZWN0PSIyMCA1NiAxIDkiIGNvZGU9IsKhIi8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSIyMiA1NCA1IDExIiBjb2RlPSLCoiIvPg0KIDxDaGFyIHdpZHRoPSI4IiBvZmZzZXQ9IjEgNCIgcmVjdD0iMjggNTQgNiA5IiBjb2RlPSLCoyIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iMzUgNTQgNSA5IiBjb2RlPSLCpSIvPg0KIDxDaGFyIHdpZHRoPSIzIiBvZmZzZXQ9IjEgNCIgcmVjdD0iNDEgNTQgMSA5IiBjb2RlPSLCpiIvPg0KIDxDaGFyIHdpZHRoPSI1IiBvZmZzZXQ9IjEgNCIgcmVjdD0iNDMgNTQgMyAxIiBjb2RlPSLCqCIvPg0KIDxDaGFyIHdpZHRoPSI5IiBvZmZzZXQ9IjEgNCIgcmVjdD0iNDcgNTQgNyA5IiBjb2RlPSLCqSIvPg0KIDxDaGFyIHdpZHRoPSI4IiBvZmZzZXQ9IjEgNiIgcmVjdD0iNTUgNTYgNiA1IiBjb2RlPSLCqyIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgOCIgcmVjdD0iNjIgNTggNSAzIiBjb2RlPSLCrCIvPg0KIDxDaGFyIHdpZHRoPSI2IiBvZmZzZXQ9IjEgNCIgcmVjdD0iNjggNTQgNCA0IiBjb2RlPSLCsCIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNiIgcmVjdD0iNzMgNTYgNSA3IiBjb2RlPSLCsSIvPg0KIDxDaGFyIHdpZHRoPSIzIiBvZmZzZXQ9IjEgNCIgcmVjdD0iNzkgNTQgMiAyIiBjb2RlPSLCtCIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNiIgcmVjdD0iODIgNTYgNSA5IiBjb2RlPSLCtSIvPg0KIDxDaGFyIHdpZHRoPSI4IiBvZmZzZXQ9IjEgNCIgcmVjdD0iODggNTQgNyA5IiBjb2RlPSLCtiIvPg0KIDxDaGFyIHdpZHRoPSIzIiBvZmZzZXQ9IjEgOCIgcmVjdD0iOTYgNTggMSAxIiBjb2RlPSLCtyIvPg0KIDxDaGFyIHdpZHRoPSI1IiBvZmZzZXQ9IjAgMTMiIHJlY3Q9Ijk4IDYzIDMgMiIgY29kZT0iwrgiLz4NCiA8Q2hhciB3aWR0aD0iOCIgb2Zmc2V0PSIxIDYiIHJlY3Q9IjEwMiA1NiA2IDUiIGNvZGU9IsK7Ii8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA2IiByZWN0PSIxMDkgNTYgNSA5IiBjb2RlPSLCvyIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgMSIgcmVjdD0iMTE1IDUxIDUgMTIiIGNvZGU9IsOAIi8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSAxIiByZWN0PSIxMjEgNTEgNSAxMiIgY29kZT0iw4EiLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDEiIHJlY3Q9IjEgNjcgNSAxMiIgY29kZT0iw4IiLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDEiIHJlY3Q9IjcgNjcgNiAxMiIgY29kZT0iw4MiLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDIiIHJlY3Q9IjE0IDY4IDUgMTEiIGNvZGU9IsOEIi8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSAwIiByZWN0PSIyMCA2NiA1IDEzIiBjb2RlPSLDhSIvPg0KIDxDaGFyIHdpZHRoPSIxMSIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjI2IDcwIDkgOSIgY29kZT0iw4YiLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjM2IDcwIDUgMTEiIGNvZGU9IsOHIi8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSAxIiByZWN0PSI0MiA2NyA1IDEyIiBjb2RlPSLDiCIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgMSIgcmVjdD0iNDggNjcgNSAxMiIgY29kZT0iw4kiLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDEiIHJlY3Q9IjU0IDY3IDUgMTIiIGNvZGU9IsOKIi8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSAyIiByZWN0PSI2MCA2OCA1IDExIiBjb2RlPSLDiyIvPg0KIDxDaGFyIHdpZHRoPSIzIiBvZmZzZXQ9IjAgMSIgcmVjdD0iNjYgNjcgMiAxMiIgY29kZT0iw4wiLz4NCiA8Q2hhciB3aWR0aD0iMyIgb2Zmc2V0PSIxIDEiIHJlY3Q9IjY5IDY3IDIgMTIiIGNvZGU9IsONIi8%DQogPENoYXIgd2lkdGg9IjMiIG9mZnNldD0iMCAxIiByZWN0PSI3MiA2NyAzIDEyIiBjb2RlPSLDjiIvPg0KIDxDaGFyIHdpZHRoPSIzIiBvZmZzZXQ9IjAgMiIgcmVjdD0iNzYgNjggMyAxMSIgY29kZT0iw48iLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIwIDQiIHJlY3Q9IjgwIDcwIDYgOSIgY29kZT0iw5AiLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDEiIHJlY3Q9Ijg3IDY3IDYgMTIiIGNvZGU9IsORIi8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSAxIiByZWN0PSI5NCA2NyA1IDEyIiBjb2RlPSLDkiIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgMSIgcmVjdD0iMTAwIDY3IDUgMTIiIGNvZGU9IsOTIi8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSAxIiByZWN0PSIxMDYgNjcgNSAxMiIgY29kZT0iw5QiLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDEiIHJlY3Q9IjExMiA2NyA2IDEyIiBjb2RlPSLDlSIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgMiIgcmVjdD0iMTE5IDY4IDUgMTEiIGNvZGU9IsOWIi8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA2IiByZWN0PSIxIDg3IDUgNSIgY29kZT0iw5ciLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIwIDQiIHJlY3Q9IjcgODUgNyA5IiBjb2RlPSLDmCIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgMSIgcmVjdD0iMTUgODIgNSAxMiIgY29kZT0iw5kiLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDEiIHJlY3Q9IjIxIDgyIDUgMTIiIGNvZGU9IsOaIi8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSAxIiByZWN0PSIyNyA4MiA1IDEyIiBjb2RlPSLDmyIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgMiIgcmVjdD0iMzMgODMgNSAxMSIgY29kZT0iw5wiLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDEiIHJlY3Q9IjM5IDgyIDUgMTIiIGNvZGU9IsOdIi8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSI0NSA4NSA1IDkiIGNvZGU9IsOeIi8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSI1MSA4NSA1IDkiIGNvZGU9IsOfIi8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSAzIiByZWN0PSI1NyA4NCA1IDEwIiBjb2RlPSLDoCIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgMyIgcmVjdD0iNjMgODQgNSAxMCIgY29kZT0iw6EiLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDMiIHJlY3Q9IjY5IDg0IDUgMTAiIGNvZGU9IsOiIi8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSAzIiByZWN0PSI3NSA4NCA2IDEwIiBjb2RlPSLDoyIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iODIgODUgNSA5IiBjb2RlPSLDpCIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgMiIgcmVjdD0iODggODMgNSAxMSIgY29kZT0iw6UiLz4NCiA8Q2hhciB3aWR0aD0iMTEiIG9mZnNldD0iMSA2IiByZWN0PSI5NCA4NyA5IDciIGNvZGU9IsOmIi8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA2IiByZWN0PSIxMDQgODcgNSA5IiBjb2RlPSLDpyIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgMyIgcmVjdD0iMTEwIDg0IDUgMTAiIGNvZGU9IsOoIi8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSAzIiByZWN0PSIxMTYgODQgNSAxMCIgY29kZT0iw6kiLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDMiIHJlY3Q9IjEgOTcgNSAxMCIgY29kZT0iw6oiLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjcgOTggNSA5IiBjb2RlPSLDqyIvPg0KIDxDaGFyIHdpZHRoPSIzIiBvZmZzZXQ9IjAgMyIgcmVjdD0iMTMgOTcgMiAxMCIgY29kZT0iw6wiLz4NCiA8Q2hhciB3aWR0aD0iMyIgb2Zmc2V0PSIxIDMiIHJlY3Q9IjE2IDk3IDIgMTAiIGNvZGU9IsOtIi8%DQogPENoYXIgd2lkdGg9IjMiIG9mZnNldD0iMCAzIiByZWN0PSIxOSA5NyAzIDEwIiBjb2RlPSLDriIvPg0KIDxDaGFyIHdpZHRoPSIzIiBvZmZzZXQ9IjAgNCIgcmVjdD0iMjMgOTggMyA5IiBjb2RlPSLDryIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iMjcgOTggNiA5IiBjb2RlPSLDsCIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgMyIgcmVjdD0iMzQgOTcgNiAxMCIgY29kZT0iw7EiLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDMiIHJlY3Q9IjQxIDk3IDUgMTAiIGNvZGU9IsOyIi8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSAzIiByZWN0PSI0NyA5NyA1IDEwIiBjb2RlPSLDsyIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgMyIgcmVjdD0iNTMgOTcgNSAxMCIgY29kZT0iw7QiLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDMiIHJlY3Q9IjU5IDk3IDYgMTAiIGNvZGU9IsO1Ii8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA0IiByZWN0PSI2NiA5OCA1IDkiIGNvZGU9IsO2Ii8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSA2IiByZWN0PSI3MiAxMDAgNSA1IiBjb2RlPSLDtyIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjAgNiIgcmVjdD0iNzggMTAwIDcgNyIgY29kZT0iw7giLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDMiIHJlY3Q9Ijg2IDk3IDUgMTAiIGNvZGU9IsO5Ii8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSAzIiByZWN0PSI5MiA5NyA1IDEwIiBjb2RlPSLDuiIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgMyIgcmVjdD0iOTggOTcgNSAxMCIgY29kZT0iw7siLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjEwNCA5OCA1IDkiIGNvZGU9IsO8Ii8%DQogPENoYXIgd2lkdGg9IjciIG9mZnNldD0iMSAzIiByZWN0PSIxMTAgOTcgNSAxMiIgY29kZT0iw70iLz4NCiA8Q2hhciB3aWR0aD0iNyIgb2Zmc2V0PSIxIDQiIHJlY3Q9IjExNiA5OCA1IDExIiBjb2RlPSLDviIvPg0KIDxDaGFyIHdpZHRoPSI3IiBvZmZzZXQ9IjEgNCIgcmVjdD0iMSAxMTAgNSAxMSIgY29kZT0iw78iLz4NCjwvRm9udD4NCg"));
 		var bmp = new hxd_res_BitmapFont(DESC.entry);
 		bmp.loader = BYTES.loader;
 		fnt = bmp.toFont();
@@ -77969,11 +87772,16 @@ hxd_res_Image.prototype = $extend(hxd_res_Resource.prototype,{
 		return bmp;
 	}
 	,watchCallb: function() {
-		var w = this.inf.width;
-		var h = this.inf.height;
+		var prevInfo = this.inf;
 		this.inf = null;
+		try {
+			this.getInfo();
+		} catch( _g ) {
+			this.inf = prevInfo;
+			return;
+		}
 		var s = this.getInfo();
-		if(w != s.width || h != s.height) {
+		if(prevInfo.width != s.width || prevInfo.height != s.height) {
 			this.tex.resize(s.width,s.height);
 		}
 		this.tex.realloc = null;
@@ -78110,7 +87918,7 @@ hxd_res_Image.prototype = $extend(hxd_res_Resource.prototype,{
 					fmtStr = false;
 				}
 				var fmtStr1 = fmtStr ? "DXT" : hxd_res_ImageFormat.getName(_gthis.inf.dataFormat);
-				haxe_Log.trace(fmtStr1 + " " + (time | 0) + "." + (time * 10 | 0) % 10 + "ms " + _gthis.inf.width + "x" + _gthis.inf.height + " " + _gthis.entry.get_path(),{ fileName : "hxd/res/Image.hx", lineNumber : 619, className : "hxd.res.Image", methodName : "loadTexture"});
+				haxe_Log.trace(fmtStr1 + " " + (time | 0) + "." + (time * 10 | 0) % 10 + "ms " + _gthis.inf.width + "x" + _gthis.inf.height + " " + _gthis.entry.get_path(),{ fileName : "hxd/res/Image.hx", lineNumber : 625, className : "hxd.res.Image", methodName : "loadTexture"});
 			}
 			_gthis.tex.realloc = function() {
 				_gthis.loadTexture();
@@ -82852,12 +92660,14 @@ hxd_snd_webaudio_SpatializationDriver.prototype = $extend(hxd_snd_EffectDriver.p
 });
 var hxsl_BufferKind = $hxEnums["hxsl.BufferKind"] = { __ename__:true,__constructs__:null
 	,Uniform: {_hx_name:"Uniform",_hx_index:0,__enum__:"hxsl.BufferKind",toString:$estr}
-	,RW: {_hx_name:"RW",_hx_index:1,__enum__:"hxsl.BufferKind",toString:$estr}
-	,Partial: {_hx_name:"Partial",_hx_index:2,__enum__:"hxsl.BufferKind",toString:$estr}
-	,RWPartial: {_hx_name:"RWPartial",_hx_index:3,__enum__:"hxsl.BufferKind",toString:$estr}
+	,Storage: {_hx_name:"Storage",_hx_index:1,__enum__:"hxsl.BufferKind",toString:$estr}
+	,RW: {_hx_name:"RW",_hx_index:2,__enum__:"hxsl.BufferKind",toString:$estr}
+	,Partial: {_hx_name:"Partial",_hx_index:3,__enum__:"hxsl.BufferKind",toString:$estr}
+	,StoragePartial: {_hx_name:"StoragePartial",_hx_index:4,__enum__:"hxsl.BufferKind",toString:$estr}
+	,RWPartial: {_hx_name:"RWPartial",_hx_index:5,__enum__:"hxsl.BufferKind",toString:$estr}
 };
-hxsl_BufferKind.__constructs__ = [hxsl_BufferKind.Uniform,hxsl_BufferKind.RW,hxsl_BufferKind.Partial,hxsl_BufferKind.RWPartial];
-hxsl_BufferKind.__empty_constructs__ = [hxsl_BufferKind.Uniform,hxsl_BufferKind.RW,hxsl_BufferKind.Partial,hxsl_BufferKind.RWPartial];
+hxsl_BufferKind.__constructs__ = [hxsl_BufferKind.Uniform,hxsl_BufferKind.Storage,hxsl_BufferKind.RW,hxsl_BufferKind.Partial,hxsl_BufferKind.StoragePartial,hxsl_BufferKind.RWPartial];
+hxsl_BufferKind.__empty_constructs__ = [hxsl_BufferKind.Uniform,hxsl_BufferKind.Storage,hxsl_BufferKind.RW,hxsl_BufferKind.Partial,hxsl_BufferKind.StoragePartial,hxsl_BufferKind.RWPartial];
 var hxsl_TexDimension = $hxEnums["hxsl.TexDimension"] = { __ename__:true,__constructs__:null
 	,T1D: {_hx_name:"T1D",_hx_index:0,__enum__:"hxsl.TexDimension",toString:$estr}
 	,T2D: {_hx_name:"T2D",_hx_index:1,__enum__:"hxsl.TexDimension",toString:$estr}
@@ -82942,9 +92752,10 @@ var hxsl_VarQualifier = $hxEnums["hxsl.VarQualifier"] = { __ename__:true,__const
 	,Borrow: ($_=function(source) { return {_hx_index:11,source:source,__enum__:"hxsl.VarQualifier",toString:$estr}; },$_._hx_name="Borrow",$_.__params__ = ["source"],$_)
 	,Sampler: ($_=function(name) { return {_hx_index:12,name:name,__enum__:"hxsl.VarQualifier",toString:$estr}; },$_._hx_name="Sampler",$_.__params__ = ["name"],$_)
 	,Final: {_hx_name:"Final",_hx_index:13,__enum__:"hxsl.VarQualifier",toString:$estr}
+	,Flat: {_hx_name:"Flat",_hx_index:14,__enum__:"hxsl.VarQualifier",toString:$estr}
 };
-hxsl_VarQualifier.__constructs__ = [hxsl_VarQualifier.Const,hxsl_VarQualifier.Private,hxsl_VarQualifier.Nullable,hxsl_VarQualifier.PerObject,hxsl_VarQualifier.Name,hxsl_VarQualifier.Shared,hxsl_VarQualifier.Precision,hxsl_VarQualifier.Range,hxsl_VarQualifier.Ignore,hxsl_VarQualifier.PerInstance,hxsl_VarQualifier.Doc,hxsl_VarQualifier.Borrow,hxsl_VarQualifier.Sampler,hxsl_VarQualifier.Final];
-hxsl_VarQualifier.__empty_constructs__ = [hxsl_VarQualifier.Private,hxsl_VarQualifier.Nullable,hxsl_VarQualifier.PerObject,hxsl_VarQualifier.Shared,hxsl_VarQualifier.Ignore,hxsl_VarQualifier.Final];
+hxsl_VarQualifier.__constructs__ = [hxsl_VarQualifier.Const,hxsl_VarQualifier.Private,hxsl_VarQualifier.Nullable,hxsl_VarQualifier.PerObject,hxsl_VarQualifier.Name,hxsl_VarQualifier.Shared,hxsl_VarQualifier.Precision,hxsl_VarQualifier.Range,hxsl_VarQualifier.Ignore,hxsl_VarQualifier.PerInstance,hxsl_VarQualifier.Doc,hxsl_VarQualifier.Borrow,hxsl_VarQualifier.Sampler,hxsl_VarQualifier.Final,hxsl_VarQualifier.Flat];
+hxsl_VarQualifier.__empty_constructs__ = [hxsl_VarQualifier.Private,hxsl_VarQualifier.Nullable,hxsl_VarQualifier.PerObject,hxsl_VarQualifier.Shared,hxsl_VarQualifier.Ignore,hxsl_VarQualifier.Final,hxsl_VarQualifier.Flat];
 var hxsl_Prec = $hxEnums["hxsl.Prec"] = { __ename__:true,__constructs__:null
 	,Low: {_hx_name:"Low",_hx_index:0,__enum__:"hxsl.Prec",toString:$estr}
 	,Medium: {_hx_name:"Medium",_hx_index:1,__enum__:"hxsl.Prec",toString:$estr}
@@ -83009,8 +92820,9 @@ var hxsl_TExprDef = $hxEnums["hxsl.TExprDef"] = { __ename__:true,__constructs__:
 	,TWhile: ($_=function(e,loop,normalWhile) { return {_hx_index:19,e:e,loop:loop,normalWhile:normalWhile,__enum__:"hxsl.TExprDef",toString:$estr}; },$_._hx_name="TWhile",$_.__params__ = ["e","loop","normalWhile"],$_)
 	,TMeta: ($_=function(m,args,e) { return {_hx_index:20,m:m,args:args,e:e,__enum__:"hxsl.TExprDef",toString:$estr}; },$_._hx_name="TMeta",$_.__params__ = ["m","args","e"],$_)
 	,TField: ($_=function(e,name) { return {_hx_index:21,e:e,name:name,__enum__:"hxsl.TExprDef",toString:$estr}; },$_._hx_name="TField",$_.__params__ = ["e","name"],$_)
+	,TSyntax: ($_=function(target,code,args) { return {_hx_index:22,target:target,code:code,args:args,__enum__:"hxsl.TExprDef",toString:$estr}; },$_._hx_name="TSyntax",$_.__params__ = ["target","code","args"],$_)
 };
-hxsl_TExprDef.__constructs__ = [hxsl_TExprDef.TConst,hxsl_TExprDef.TVar,hxsl_TExprDef.TGlobal,hxsl_TExprDef.TParenthesis,hxsl_TExprDef.TBlock,hxsl_TExprDef.TBinop,hxsl_TExprDef.TUnop,hxsl_TExprDef.TVarDecl,hxsl_TExprDef.TCall,hxsl_TExprDef.TSwiz,hxsl_TExprDef.TIf,hxsl_TExprDef.TDiscard,hxsl_TExprDef.TReturn,hxsl_TExprDef.TFor,hxsl_TExprDef.TContinue,hxsl_TExprDef.TBreak,hxsl_TExprDef.TArray,hxsl_TExprDef.TArrayDecl,hxsl_TExprDef.TSwitch,hxsl_TExprDef.TWhile,hxsl_TExprDef.TMeta,hxsl_TExprDef.TField];
+hxsl_TExprDef.__constructs__ = [hxsl_TExprDef.TConst,hxsl_TExprDef.TVar,hxsl_TExprDef.TGlobal,hxsl_TExprDef.TParenthesis,hxsl_TExprDef.TBlock,hxsl_TExprDef.TBinop,hxsl_TExprDef.TUnop,hxsl_TExprDef.TVarDecl,hxsl_TExprDef.TCall,hxsl_TExprDef.TSwiz,hxsl_TExprDef.TIf,hxsl_TExprDef.TDiscard,hxsl_TExprDef.TReturn,hxsl_TExprDef.TFor,hxsl_TExprDef.TContinue,hxsl_TExprDef.TBreak,hxsl_TExprDef.TArray,hxsl_TExprDef.TArrayDecl,hxsl_TExprDef.TSwitch,hxsl_TExprDef.TWhile,hxsl_TExprDef.TMeta,hxsl_TExprDef.TField,hxsl_TExprDef.TSyntax];
 hxsl_TExprDef.__empty_constructs__ = [hxsl_TExprDef.TDiscard,hxsl_TExprDef.TContinue,hxsl_TExprDef.TBreak];
 var hxsl_FunctionKind = $hxEnums["hxsl.FunctionKind"] = { __ename__:true,__constructs__:null
 	,Vertex: {_hx_name:"Vertex",_hx_index:0,__enum__:"hxsl.FunctionKind",toString:$estr}
@@ -83047,69 +92859,79 @@ var hxsl_TGlobal = $hxEnums["hxsl.TGlobal"] = { __ename__:true,__constructs__:nu
 	,Max: {_hx_name:"Max",_hx_index:22,__enum__:"hxsl.TGlobal",toString:$estr}
 	,Clamp: {_hx_name:"Clamp",_hx_index:23,__enum__:"hxsl.TGlobal",toString:$estr}
 	,Mix: {_hx_name:"Mix",_hx_index:24,__enum__:"hxsl.TGlobal",toString:$estr}
-	,Step: {_hx_name:"Step",_hx_index:25,__enum__:"hxsl.TGlobal",toString:$estr}
-	,Smoothstep: {_hx_name:"Smoothstep",_hx_index:26,__enum__:"hxsl.TGlobal",toString:$estr}
-	,Length: {_hx_name:"Length",_hx_index:27,__enum__:"hxsl.TGlobal",toString:$estr}
-	,Distance: {_hx_name:"Distance",_hx_index:28,__enum__:"hxsl.TGlobal",toString:$estr}
-	,Dot: {_hx_name:"Dot",_hx_index:29,__enum__:"hxsl.TGlobal",toString:$estr}
-	,Cross: {_hx_name:"Cross",_hx_index:30,__enum__:"hxsl.TGlobal",toString:$estr}
-	,Normalize: {_hx_name:"Normalize",_hx_index:31,__enum__:"hxsl.TGlobal",toString:$estr}
-	,LReflect: {_hx_name:"LReflect",_hx_index:32,__enum__:"hxsl.TGlobal",toString:$estr}
-	,Texture: {_hx_name:"Texture",_hx_index:33,__enum__:"hxsl.TGlobal",toString:$estr}
-	,TextureLod: {_hx_name:"TextureLod",_hx_index:34,__enum__:"hxsl.TGlobal",toString:$estr}
-	,Texel: {_hx_name:"Texel",_hx_index:35,__enum__:"hxsl.TGlobal",toString:$estr}
-	,TextureSize: {_hx_name:"TextureSize",_hx_index:36,__enum__:"hxsl.TGlobal",toString:$estr}
-	,ToInt: {_hx_name:"ToInt",_hx_index:37,__enum__:"hxsl.TGlobal",toString:$estr}
-	,ToFloat: {_hx_name:"ToFloat",_hx_index:38,__enum__:"hxsl.TGlobal",toString:$estr}
-	,ToBool: {_hx_name:"ToBool",_hx_index:39,__enum__:"hxsl.TGlobal",toString:$estr}
-	,Vec2: {_hx_name:"Vec2",_hx_index:40,__enum__:"hxsl.TGlobal",toString:$estr}
-	,Vec3: {_hx_name:"Vec3",_hx_index:41,__enum__:"hxsl.TGlobal",toString:$estr}
-	,Vec4: {_hx_name:"Vec4",_hx_index:42,__enum__:"hxsl.TGlobal",toString:$estr}
-	,IVec2: {_hx_name:"IVec2",_hx_index:43,__enum__:"hxsl.TGlobal",toString:$estr}
-	,IVec3: {_hx_name:"IVec3",_hx_index:44,__enum__:"hxsl.TGlobal",toString:$estr}
-	,IVec4: {_hx_name:"IVec4",_hx_index:45,__enum__:"hxsl.TGlobal",toString:$estr}
-	,BVec2: {_hx_name:"BVec2",_hx_index:46,__enum__:"hxsl.TGlobal",toString:$estr}
-	,BVec3: {_hx_name:"BVec3",_hx_index:47,__enum__:"hxsl.TGlobal",toString:$estr}
-	,BVec4: {_hx_name:"BVec4",_hx_index:48,__enum__:"hxsl.TGlobal",toString:$estr}
-	,Mat2: {_hx_name:"Mat2",_hx_index:49,__enum__:"hxsl.TGlobal",toString:$estr}
-	,Mat3: {_hx_name:"Mat3",_hx_index:50,__enum__:"hxsl.TGlobal",toString:$estr}
-	,Mat4: {_hx_name:"Mat4",_hx_index:51,__enum__:"hxsl.TGlobal",toString:$estr}
-	,Mat3x4: {_hx_name:"Mat3x4",_hx_index:52,__enum__:"hxsl.TGlobal",toString:$estr}
-	,Saturate: {_hx_name:"Saturate",_hx_index:53,__enum__:"hxsl.TGlobal",toString:$estr}
-	,Pack: {_hx_name:"Pack",_hx_index:54,__enum__:"hxsl.TGlobal",toString:$estr}
-	,Unpack: {_hx_name:"Unpack",_hx_index:55,__enum__:"hxsl.TGlobal",toString:$estr}
-	,PackNormal: {_hx_name:"PackNormal",_hx_index:56,__enum__:"hxsl.TGlobal",toString:$estr}
-	,UnpackNormal: {_hx_name:"UnpackNormal",_hx_index:57,__enum__:"hxsl.TGlobal",toString:$estr}
-	,ScreenToUv: {_hx_name:"ScreenToUv",_hx_index:58,__enum__:"hxsl.TGlobal",toString:$estr}
-	,UvToScreen: {_hx_name:"UvToScreen",_hx_index:59,__enum__:"hxsl.TGlobal",toString:$estr}
-	,DFdx: {_hx_name:"DFdx",_hx_index:60,__enum__:"hxsl.TGlobal",toString:$estr}
-	,DFdy: {_hx_name:"DFdy",_hx_index:61,__enum__:"hxsl.TGlobal",toString:$estr}
-	,Fwidth: {_hx_name:"Fwidth",_hx_index:62,__enum__:"hxsl.TGlobal",toString:$estr}
-	,ChannelRead: {_hx_name:"ChannelRead",_hx_index:63,__enum__:"hxsl.TGlobal",toString:$estr}
-	,ChannelReadLod: {_hx_name:"ChannelReadLod",_hx_index:64,__enum__:"hxsl.TGlobal",toString:$estr}
-	,ChannelFetch: {_hx_name:"ChannelFetch",_hx_index:65,__enum__:"hxsl.TGlobal",toString:$estr}
-	,ChannelTextureSize: {_hx_name:"ChannelTextureSize",_hx_index:66,__enum__:"hxsl.TGlobal",toString:$estr}
-	,Trace: {_hx_name:"Trace",_hx_index:67,__enum__:"hxsl.TGlobal",toString:$estr}
-	,VertexID: {_hx_name:"VertexID",_hx_index:68,__enum__:"hxsl.TGlobal",toString:$estr}
-	,InstanceID: {_hx_name:"InstanceID",_hx_index:69,__enum__:"hxsl.TGlobal",toString:$estr}
-	,FragCoord: {_hx_name:"FragCoord",_hx_index:70,__enum__:"hxsl.TGlobal",toString:$estr}
-	,FrontFacing: {_hx_name:"FrontFacing",_hx_index:71,__enum__:"hxsl.TGlobal",toString:$estr}
-	,FloatBitsToInt: {_hx_name:"FloatBitsToInt",_hx_index:72,__enum__:"hxsl.TGlobal",toString:$estr}
-	,FloatBitsToUint: {_hx_name:"FloatBitsToUint",_hx_index:73,__enum__:"hxsl.TGlobal",toString:$estr}
-	,IntBitsToFloat: {_hx_name:"IntBitsToFloat",_hx_index:74,__enum__:"hxsl.TGlobal",toString:$estr}
-	,UintBitsToFloat: {_hx_name:"UintBitsToFloat",_hx_index:75,__enum__:"hxsl.TGlobal",toString:$estr}
-	,RoundEven: {_hx_name:"RoundEven",_hx_index:76,__enum__:"hxsl.TGlobal",toString:$estr}
-	,SetLayout: {_hx_name:"SetLayout",_hx_index:77,__enum__:"hxsl.TGlobal",toString:$estr}
-	,ImageStore: {_hx_name:"ImageStore",_hx_index:78,__enum__:"hxsl.TGlobal",toString:$estr}
-	,ComputeVar_GlobalInvocation: {_hx_name:"ComputeVar_GlobalInvocation",_hx_index:79,__enum__:"hxsl.TGlobal",toString:$estr}
-	,ComputeVar_LocalInvocation: {_hx_name:"ComputeVar_LocalInvocation",_hx_index:80,__enum__:"hxsl.TGlobal",toString:$estr}
-	,ComputeVar_WorkGroup: {_hx_name:"ComputeVar_WorkGroup",_hx_index:81,__enum__:"hxsl.TGlobal",toString:$estr}
-	,ComputeVar_LocalInvocationIndex: {_hx_name:"ComputeVar_LocalInvocationIndex",_hx_index:82,__enum__:"hxsl.TGlobal",toString:$estr}
-	,AtomicAdd: {_hx_name:"AtomicAdd",_hx_index:83,__enum__:"hxsl.TGlobal",toString:$estr}
-	,GroupMemoryBarrier: {_hx_name:"GroupMemoryBarrier",_hx_index:84,__enum__:"hxsl.TGlobal",toString:$estr}
+	,InvLerp: {_hx_name:"InvLerp",_hx_index:25,__enum__:"hxsl.TGlobal",toString:$estr}
+	,Step: {_hx_name:"Step",_hx_index:26,__enum__:"hxsl.TGlobal",toString:$estr}
+	,Smoothstep: {_hx_name:"Smoothstep",_hx_index:27,__enum__:"hxsl.TGlobal",toString:$estr}
+	,Length: {_hx_name:"Length",_hx_index:28,__enum__:"hxsl.TGlobal",toString:$estr}
+	,Distance: {_hx_name:"Distance",_hx_index:29,__enum__:"hxsl.TGlobal",toString:$estr}
+	,Dot: {_hx_name:"Dot",_hx_index:30,__enum__:"hxsl.TGlobal",toString:$estr}
+	,Cross: {_hx_name:"Cross",_hx_index:31,__enum__:"hxsl.TGlobal",toString:$estr}
+	,Normalize: {_hx_name:"Normalize",_hx_index:32,__enum__:"hxsl.TGlobal",toString:$estr}
+	,LReflect: {_hx_name:"LReflect",_hx_index:33,__enum__:"hxsl.TGlobal",toString:$estr}
+	,Texture: {_hx_name:"Texture",_hx_index:34,__enum__:"hxsl.TGlobal",toString:$estr}
+	,TextureLod: {_hx_name:"TextureLod",_hx_index:35,__enum__:"hxsl.TGlobal",toString:$estr}
+	,Texel: {_hx_name:"Texel",_hx_index:36,__enum__:"hxsl.TGlobal",toString:$estr}
+	,TextureSize: {_hx_name:"TextureSize",_hx_index:37,__enum__:"hxsl.TGlobal",toString:$estr}
+	,ToInt: {_hx_name:"ToInt",_hx_index:38,__enum__:"hxsl.TGlobal",toString:$estr}
+	,ToFloat: {_hx_name:"ToFloat",_hx_index:39,__enum__:"hxsl.TGlobal",toString:$estr}
+	,ToBool: {_hx_name:"ToBool",_hx_index:40,__enum__:"hxsl.TGlobal",toString:$estr}
+	,Vec2: {_hx_name:"Vec2",_hx_index:41,__enum__:"hxsl.TGlobal",toString:$estr}
+	,Vec3: {_hx_name:"Vec3",_hx_index:42,__enum__:"hxsl.TGlobal",toString:$estr}
+	,Vec4: {_hx_name:"Vec4",_hx_index:43,__enum__:"hxsl.TGlobal",toString:$estr}
+	,IVec2: {_hx_name:"IVec2",_hx_index:44,__enum__:"hxsl.TGlobal",toString:$estr}
+	,IVec3: {_hx_name:"IVec3",_hx_index:45,__enum__:"hxsl.TGlobal",toString:$estr}
+	,IVec4: {_hx_name:"IVec4",_hx_index:46,__enum__:"hxsl.TGlobal",toString:$estr}
+	,BVec2: {_hx_name:"BVec2",_hx_index:47,__enum__:"hxsl.TGlobal",toString:$estr}
+	,BVec3: {_hx_name:"BVec3",_hx_index:48,__enum__:"hxsl.TGlobal",toString:$estr}
+	,BVec4: {_hx_name:"BVec4",_hx_index:49,__enum__:"hxsl.TGlobal",toString:$estr}
+	,Mat2: {_hx_name:"Mat2",_hx_index:50,__enum__:"hxsl.TGlobal",toString:$estr}
+	,Mat3: {_hx_name:"Mat3",_hx_index:51,__enum__:"hxsl.TGlobal",toString:$estr}
+	,Mat4: {_hx_name:"Mat4",_hx_index:52,__enum__:"hxsl.TGlobal",toString:$estr}
+	,Mat3x4: {_hx_name:"Mat3x4",_hx_index:53,__enum__:"hxsl.TGlobal",toString:$estr}
+	,Saturate: {_hx_name:"Saturate",_hx_index:54,__enum__:"hxsl.TGlobal",toString:$estr}
+	,Pack: {_hx_name:"Pack",_hx_index:55,__enum__:"hxsl.TGlobal",toString:$estr}
+	,Unpack: {_hx_name:"Unpack",_hx_index:56,__enum__:"hxsl.TGlobal",toString:$estr}
+	,PackNormal: {_hx_name:"PackNormal",_hx_index:57,__enum__:"hxsl.TGlobal",toString:$estr}
+	,UnpackNormal: {_hx_name:"UnpackNormal",_hx_index:58,__enum__:"hxsl.TGlobal",toString:$estr}
+	,ScreenToUv: {_hx_name:"ScreenToUv",_hx_index:59,__enum__:"hxsl.TGlobal",toString:$estr}
+	,UvToScreen: {_hx_name:"UvToScreen",_hx_index:60,__enum__:"hxsl.TGlobal",toString:$estr}
+	,DFdx: {_hx_name:"DFdx",_hx_index:61,__enum__:"hxsl.TGlobal",toString:$estr}
+	,DFdy: {_hx_name:"DFdy",_hx_index:62,__enum__:"hxsl.TGlobal",toString:$estr}
+	,Fwidth: {_hx_name:"Fwidth",_hx_index:63,__enum__:"hxsl.TGlobal",toString:$estr}
+	,ChannelRead: {_hx_name:"ChannelRead",_hx_index:64,__enum__:"hxsl.TGlobal",toString:$estr}
+	,ChannelReadLod: {_hx_name:"ChannelReadLod",_hx_index:65,__enum__:"hxsl.TGlobal",toString:$estr}
+	,ChannelFetch: {_hx_name:"ChannelFetch",_hx_index:66,__enum__:"hxsl.TGlobal",toString:$estr}
+	,ChannelTextureSize: {_hx_name:"ChannelTextureSize",_hx_index:67,__enum__:"hxsl.TGlobal",toString:$estr}
+	,Trace: {_hx_name:"Trace",_hx_index:68,__enum__:"hxsl.TGlobal",toString:$estr}
+	,VertexID: {_hx_name:"VertexID",_hx_index:69,__enum__:"hxsl.TGlobal",toString:$estr}
+	,InstanceID: {_hx_name:"InstanceID",_hx_index:70,__enum__:"hxsl.TGlobal",toString:$estr}
+	,FragCoord: {_hx_name:"FragCoord",_hx_index:71,__enum__:"hxsl.TGlobal",toString:$estr}
+	,FrontFacing: {_hx_name:"FrontFacing",_hx_index:72,__enum__:"hxsl.TGlobal",toString:$estr}
+	,FloatBitsToInt: {_hx_name:"FloatBitsToInt",_hx_index:73,__enum__:"hxsl.TGlobal",toString:$estr}
+	,FloatBitsToUint: {_hx_name:"FloatBitsToUint",_hx_index:74,__enum__:"hxsl.TGlobal",toString:$estr}
+	,IntBitsToFloat: {_hx_name:"IntBitsToFloat",_hx_index:75,__enum__:"hxsl.TGlobal",toString:$estr}
+	,UintBitsToFloat: {_hx_name:"UintBitsToFloat",_hx_index:76,__enum__:"hxsl.TGlobal",toString:$estr}
+	,RoundEven: {_hx_name:"RoundEven",_hx_index:77,__enum__:"hxsl.TGlobal",toString:$estr}
+	,SetLayout: {_hx_name:"SetLayout",_hx_index:78,__enum__:"hxsl.TGlobal",toString:$estr}
+	,ImageStore: {_hx_name:"ImageStore",_hx_index:79,__enum__:"hxsl.TGlobal",toString:$estr}
+	,ComputeVar_GlobalInvocation: {_hx_name:"ComputeVar_GlobalInvocation",_hx_index:80,__enum__:"hxsl.TGlobal",toString:$estr}
+	,ComputeVar_LocalInvocation: {_hx_name:"ComputeVar_LocalInvocation",_hx_index:81,__enum__:"hxsl.TGlobal",toString:$estr}
+	,ComputeVar_WorkGroup: {_hx_name:"ComputeVar_WorkGroup",_hx_index:82,__enum__:"hxsl.TGlobal",toString:$estr}
+	,ComputeVar_LocalInvocationIndex: {_hx_name:"ComputeVar_LocalInvocationIndex",_hx_index:83,__enum__:"hxsl.TGlobal",toString:$estr}
+	,AtomicAdd: {_hx_name:"AtomicAdd",_hx_index:84,__enum__:"hxsl.TGlobal",toString:$estr}
+	,GroupMemoryBarrier: {_hx_name:"GroupMemoryBarrier",_hx_index:85,__enum__:"hxsl.TGlobal",toString:$estr}
+	,UnpackSnorm4x8: {_hx_name:"UnpackSnorm4x8",_hx_index:86,__enum__:"hxsl.TGlobal",toString:$estr}
+	,UnpackUnorm4x8: {_hx_name:"UnpackUnorm4x8",_hx_index:87,__enum__:"hxsl.TGlobal",toString:$estr}
 };
-hxsl_TGlobal.__constructs__ = [hxsl_TGlobal.Radians,hxsl_TGlobal.Degrees,hxsl_TGlobal.Sin,hxsl_TGlobal.Cos,hxsl_TGlobal.Tan,hxsl_TGlobal.Asin,hxsl_TGlobal.Acos,hxsl_TGlobal.Atan,hxsl_TGlobal.Pow,hxsl_TGlobal.Exp,hxsl_TGlobal.Log,hxsl_TGlobal.Exp2,hxsl_TGlobal.Log2,hxsl_TGlobal.Sqrt,hxsl_TGlobal.Inversesqrt,hxsl_TGlobal.Abs,hxsl_TGlobal.Sign,hxsl_TGlobal.Floor,hxsl_TGlobal.Ceil,hxsl_TGlobal.Fract,hxsl_TGlobal.Mod,hxsl_TGlobal.Min,hxsl_TGlobal.Max,hxsl_TGlobal.Clamp,hxsl_TGlobal.Mix,hxsl_TGlobal.Step,hxsl_TGlobal.Smoothstep,hxsl_TGlobal.Length,hxsl_TGlobal.Distance,hxsl_TGlobal.Dot,hxsl_TGlobal.Cross,hxsl_TGlobal.Normalize,hxsl_TGlobal.LReflect,hxsl_TGlobal.Texture,hxsl_TGlobal.TextureLod,hxsl_TGlobal.Texel,hxsl_TGlobal.TextureSize,hxsl_TGlobal.ToInt,hxsl_TGlobal.ToFloat,hxsl_TGlobal.ToBool,hxsl_TGlobal.Vec2,hxsl_TGlobal.Vec3,hxsl_TGlobal.Vec4,hxsl_TGlobal.IVec2,hxsl_TGlobal.IVec3,hxsl_TGlobal.IVec4,hxsl_TGlobal.BVec2,hxsl_TGlobal.BVec3,hxsl_TGlobal.BVec4,hxsl_TGlobal.Mat2,hxsl_TGlobal.Mat3,hxsl_TGlobal.Mat4,hxsl_TGlobal.Mat3x4,hxsl_TGlobal.Saturate,hxsl_TGlobal.Pack,hxsl_TGlobal.Unpack,hxsl_TGlobal.PackNormal,hxsl_TGlobal.UnpackNormal,hxsl_TGlobal.ScreenToUv,hxsl_TGlobal.UvToScreen,hxsl_TGlobal.DFdx,hxsl_TGlobal.DFdy,hxsl_TGlobal.Fwidth,hxsl_TGlobal.ChannelRead,hxsl_TGlobal.ChannelReadLod,hxsl_TGlobal.ChannelFetch,hxsl_TGlobal.ChannelTextureSize,hxsl_TGlobal.Trace,hxsl_TGlobal.VertexID,hxsl_TGlobal.InstanceID,hxsl_TGlobal.FragCoord,hxsl_TGlobal.FrontFacing,hxsl_TGlobal.FloatBitsToInt,hxsl_TGlobal.FloatBitsToUint,hxsl_TGlobal.IntBitsToFloat,hxsl_TGlobal.UintBitsToFloat,hxsl_TGlobal.RoundEven,hxsl_TGlobal.SetLayout,hxsl_TGlobal.ImageStore,hxsl_TGlobal.ComputeVar_GlobalInvocation,hxsl_TGlobal.ComputeVar_LocalInvocation,hxsl_TGlobal.ComputeVar_WorkGroup,hxsl_TGlobal.ComputeVar_LocalInvocationIndex,hxsl_TGlobal.AtomicAdd,hxsl_TGlobal.GroupMemoryBarrier];
-hxsl_TGlobal.__empty_constructs__ = [hxsl_TGlobal.Radians,hxsl_TGlobal.Degrees,hxsl_TGlobal.Sin,hxsl_TGlobal.Cos,hxsl_TGlobal.Tan,hxsl_TGlobal.Asin,hxsl_TGlobal.Acos,hxsl_TGlobal.Atan,hxsl_TGlobal.Pow,hxsl_TGlobal.Exp,hxsl_TGlobal.Log,hxsl_TGlobal.Exp2,hxsl_TGlobal.Log2,hxsl_TGlobal.Sqrt,hxsl_TGlobal.Inversesqrt,hxsl_TGlobal.Abs,hxsl_TGlobal.Sign,hxsl_TGlobal.Floor,hxsl_TGlobal.Ceil,hxsl_TGlobal.Fract,hxsl_TGlobal.Mod,hxsl_TGlobal.Min,hxsl_TGlobal.Max,hxsl_TGlobal.Clamp,hxsl_TGlobal.Mix,hxsl_TGlobal.Step,hxsl_TGlobal.Smoothstep,hxsl_TGlobal.Length,hxsl_TGlobal.Distance,hxsl_TGlobal.Dot,hxsl_TGlobal.Cross,hxsl_TGlobal.Normalize,hxsl_TGlobal.LReflect,hxsl_TGlobal.Texture,hxsl_TGlobal.TextureLod,hxsl_TGlobal.Texel,hxsl_TGlobal.TextureSize,hxsl_TGlobal.ToInt,hxsl_TGlobal.ToFloat,hxsl_TGlobal.ToBool,hxsl_TGlobal.Vec2,hxsl_TGlobal.Vec3,hxsl_TGlobal.Vec4,hxsl_TGlobal.IVec2,hxsl_TGlobal.IVec3,hxsl_TGlobal.IVec4,hxsl_TGlobal.BVec2,hxsl_TGlobal.BVec3,hxsl_TGlobal.BVec4,hxsl_TGlobal.Mat2,hxsl_TGlobal.Mat3,hxsl_TGlobal.Mat4,hxsl_TGlobal.Mat3x4,hxsl_TGlobal.Saturate,hxsl_TGlobal.Pack,hxsl_TGlobal.Unpack,hxsl_TGlobal.PackNormal,hxsl_TGlobal.UnpackNormal,hxsl_TGlobal.ScreenToUv,hxsl_TGlobal.UvToScreen,hxsl_TGlobal.DFdx,hxsl_TGlobal.DFdy,hxsl_TGlobal.Fwidth,hxsl_TGlobal.ChannelRead,hxsl_TGlobal.ChannelReadLod,hxsl_TGlobal.ChannelFetch,hxsl_TGlobal.ChannelTextureSize,hxsl_TGlobal.Trace,hxsl_TGlobal.VertexID,hxsl_TGlobal.InstanceID,hxsl_TGlobal.FragCoord,hxsl_TGlobal.FrontFacing,hxsl_TGlobal.FloatBitsToInt,hxsl_TGlobal.FloatBitsToUint,hxsl_TGlobal.IntBitsToFloat,hxsl_TGlobal.UintBitsToFloat,hxsl_TGlobal.RoundEven,hxsl_TGlobal.SetLayout,hxsl_TGlobal.ImageStore,hxsl_TGlobal.ComputeVar_GlobalInvocation,hxsl_TGlobal.ComputeVar_LocalInvocation,hxsl_TGlobal.ComputeVar_WorkGroup,hxsl_TGlobal.ComputeVar_LocalInvocationIndex,hxsl_TGlobal.AtomicAdd,hxsl_TGlobal.GroupMemoryBarrier];
+hxsl_TGlobal.__constructs__ = [hxsl_TGlobal.Radians,hxsl_TGlobal.Degrees,hxsl_TGlobal.Sin,hxsl_TGlobal.Cos,hxsl_TGlobal.Tan,hxsl_TGlobal.Asin,hxsl_TGlobal.Acos,hxsl_TGlobal.Atan,hxsl_TGlobal.Pow,hxsl_TGlobal.Exp,hxsl_TGlobal.Log,hxsl_TGlobal.Exp2,hxsl_TGlobal.Log2,hxsl_TGlobal.Sqrt,hxsl_TGlobal.Inversesqrt,hxsl_TGlobal.Abs,hxsl_TGlobal.Sign,hxsl_TGlobal.Floor,hxsl_TGlobal.Ceil,hxsl_TGlobal.Fract,hxsl_TGlobal.Mod,hxsl_TGlobal.Min,hxsl_TGlobal.Max,hxsl_TGlobal.Clamp,hxsl_TGlobal.Mix,hxsl_TGlobal.InvLerp,hxsl_TGlobal.Step,hxsl_TGlobal.Smoothstep,hxsl_TGlobal.Length,hxsl_TGlobal.Distance,hxsl_TGlobal.Dot,hxsl_TGlobal.Cross,hxsl_TGlobal.Normalize,hxsl_TGlobal.LReflect,hxsl_TGlobal.Texture,hxsl_TGlobal.TextureLod,hxsl_TGlobal.Texel,hxsl_TGlobal.TextureSize,hxsl_TGlobal.ToInt,hxsl_TGlobal.ToFloat,hxsl_TGlobal.ToBool,hxsl_TGlobal.Vec2,hxsl_TGlobal.Vec3,hxsl_TGlobal.Vec4,hxsl_TGlobal.IVec2,hxsl_TGlobal.IVec3,hxsl_TGlobal.IVec4,hxsl_TGlobal.BVec2,hxsl_TGlobal.BVec3,hxsl_TGlobal.BVec4,hxsl_TGlobal.Mat2,hxsl_TGlobal.Mat3,hxsl_TGlobal.Mat4,hxsl_TGlobal.Mat3x4,hxsl_TGlobal.Saturate,hxsl_TGlobal.Pack,hxsl_TGlobal.Unpack,hxsl_TGlobal.PackNormal,hxsl_TGlobal.UnpackNormal,hxsl_TGlobal.ScreenToUv,hxsl_TGlobal.UvToScreen,hxsl_TGlobal.DFdx,hxsl_TGlobal.DFdy,hxsl_TGlobal.Fwidth,hxsl_TGlobal.ChannelRead,hxsl_TGlobal.ChannelReadLod,hxsl_TGlobal.ChannelFetch,hxsl_TGlobal.ChannelTextureSize,hxsl_TGlobal.Trace,hxsl_TGlobal.VertexID,hxsl_TGlobal.InstanceID,hxsl_TGlobal.FragCoord,hxsl_TGlobal.FrontFacing,hxsl_TGlobal.FloatBitsToInt,hxsl_TGlobal.FloatBitsToUint,hxsl_TGlobal.IntBitsToFloat,hxsl_TGlobal.UintBitsToFloat,hxsl_TGlobal.RoundEven,hxsl_TGlobal.SetLayout,hxsl_TGlobal.ImageStore,hxsl_TGlobal.ComputeVar_GlobalInvocation,hxsl_TGlobal.ComputeVar_LocalInvocation,hxsl_TGlobal.ComputeVar_WorkGroup,hxsl_TGlobal.ComputeVar_LocalInvocationIndex,hxsl_TGlobal.AtomicAdd,hxsl_TGlobal.GroupMemoryBarrier,hxsl_TGlobal.UnpackSnorm4x8,hxsl_TGlobal.UnpackUnorm4x8];
+hxsl_TGlobal.__empty_constructs__ = [hxsl_TGlobal.Radians,hxsl_TGlobal.Degrees,hxsl_TGlobal.Sin,hxsl_TGlobal.Cos,hxsl_TGlobal.Tan,hxsl_TGlobal.Asin,hxsl_TGlobal.Acos,hxsl_TGlobal.Atan,hxsl_TGlobal.Pow,hxsl_TGlobal.Exp,hxsl_TGlobal.Log,hxsl_TGlobal.Exp2,hxsl_TGlobal.Log2,hxsl_TGlobal.Sqrt,hxsl_TGlobal.Inversesqrt,hxsl_TGlobal.Abs,hxsl_TGlobal.Sign,hxsl_TGlobal.Floor,hxsl_TGlobal.Ceil,hxsl_TGlobal.Fract,hxsl_TGlobal.Mod,hxsl_TGlobal.Min,hxsl_TGlobal.Max,hxsl_TGlobal.Clamp,hxsl_TGlobal.Mix,hxsl_TGlobal.InvLerp,hxsl_TGlobal.Step,hxsl_TGlobal.Smoothstep,hxsl_TGlobal.Length,hxsl_TGlobal.Distance,hxsl_TGlobal.Dot,hxsl_TGlobal.Cross,hxsl_TGlobal.Normalize,hxsl_TGlobal.LReflect,hxsl_TGlobal.Texture,hxsl_TGlobal.TextureLod,hxsl_TGlobal.Texel,hxsl_TGlobal.TextureSize,hxsl_TGlobal.ToInt,hxsl_TGlobal.ToFloat,hxsl_TGlobal.ToBool,hxsl_TGlobal.Vec2,hxsl_TGlobal.Vec3,hxsl_TGlobal.Vec4,hxsl_TGlobal.IVec2,hxsl_TGlobal.IVec3,hxsl_TGlobal.IVec4,hxsl_TGlobal.BVec2,hxsl_TGlobal.BVec3,hxsl_TGlobal.BVec4,hxsl_TGlobal.Mat2,hxsl_TGlobal.Mat3,hxsl_TGlobal.Mat4,hxsl_TGlobal.Mat3x4,hxsl_TGlobal.Saturate,hxsl_TGlobal.Pack,hxsl_TGlobal.Unpack,hxsl_TGlobal.PackNormal,hxsl_TGlobal.UnpackNormal,hxsl_TGlobal.ScreenToUv,hxsl_TGlobal.UvToScreen,hxsl_TGlobal.DFdx,hxsl_TGlobal.DFdy,hxsl_TGlobal.Fwidth,hxsl_TGlobal.ChannelRead,hxsl_TGlobal.ChannelReadLod,hxsl_TGlobal.ChannelFetch,hxsl_TGlobal.ChannelTextureSize,hxsl_TGlobal.Trace,hxsl_TGlobal.VertexID,hxsl_TGlobal.InstanceID,hxsl_TGlobal.FragCoord,hxsl_TGlobal.FrontFacing,hxsl_TGlobal.FloatBitsToInt,hxsl_TGlobal.FloatBitsToUint,hxsl_TGlobal.IntBitsToFloat,hxsl_TGlobal.UintBitsToFloat,hxsl_TGlobal.RoundEven,hxsl_TGlobal.SetLayout,hxsl_TGlobal.ImageStore,hxsl_TGlobal.ComputeVar_GlobalInvocation,hxsl_TGlobal.ComputeVar_LocalInvocation,hxsl_TGlobal.ComputeVar_WorkGroup,hxsl_TGlobal.ComputeVar_LocalInvocationIndex,hxsl_TGlobal.AtomicAdd,hxsl_TGlobal.GroupMemoryBarrier,hxsl_TGlobal.UnpackSnorm4x8,hxsl_TGlobal.UnpackUnorm4x8];
+var hxsl_SyntaxArgAccess = $hxEnums["hxsl.SyntaxArgAccess"] = { __ename__:true,__constructs__:null
+	,Read: {_hx_name:"Read",_hx_index:0,__enum__:"hxsl.SyntaxArgAccess",toString:$estr}
+	,Write: {_hx_name:"Write",_hx_index:1,__enum__:"hxsl.SyntaxArgAccess",toString:$estr}
+	,ReadWrite: {_hx_name:"ReadWrite",_hx_index:2,__enum__:"hxsl.SyntaxArgAccess",toString:$estr}
+};
+hxsl_SyntaxArgAccess.__constructs__ = [hxsl_SyntaxArgAccess.Read,hxsl_SyntaxArgAccess.Write,hxsl_SyntaxArgAccess.ReadWrite];
+hxsl_SyntaxArgAccess.__empty_constructs__ = [hxsl_SyntaxArgAccess.Read,hxsl_SyntaxArgAccess.Write,hxsl_SyntaxArgAccess.ReadWrite];
 var hxsl_Component = $hxEnums["hxsl.Component"] = { __ename__:true,__constructs__:null
 	,X: {_hx_name:"X",_hx_index:0,__enum__:"hxsl.Component",toString:$estr}
 	,Y: {_hx_name:"Y",_hx_index:1,__enum__:"hxsl.Component",toString:$estr}
@@ -83224,7 +93046,7 @@ hxsl_Tools.getConstBits = function(v) {
 		var _g1 = _g.t;
 		var _g1 = _g.size;
 		switch(_g.kind._hx_index) {
-		case 2:case 3:
+		case 3:case 4:case 5:
 			return hxsl_Tools.MAX_PARTIAL_MAPPINGS_BITS;
 		default:
 		}
@@ -83244,7 +93066,7 @@ hxsl_Tools.isConst = function(v) {
 		var _g1 = _g.t;
 		var _g1 = _g.size;
 		switch(_g.kind._hx_index) {
-		case 2:case 3:
+		case 3:case 4:case 5:
 			tmp = true;
 			break;
 		default:
@@ -83407,12 +93229,18 @@ hxsl_Tools.toString = function(t) {
 			prefix = "Buffer";
 			break;
 		case 1:
-			prefix = "RWBuffer";
+			prefix = "StorageBuffer";
 			break;
 		case 2:
-			prefix = "PartialBuffer";
+			prefix = "RWBuffer";
 			break;
 		case 3:
+			prefix = "PartialBuffer";
+			break;
+		case 4:
+			prefix = "StoragePartialBuffer";
+			break;
+		case 5:
 			prefix = "RWPartialBuffer";
 			break;
 		}
@@ -83504,7 +93332,7 @@ hxsl_Tools.hasSideEffect = function(e) {
 		var _g4 = _g1.p;
 		var _g4 = _g1.t;
 		if(_g3._hx_index == 2) {
-			if(_g3.g._hx_index == 77) {
+			if(_g3.g._hx_index == 78) {
 				return true;
 			} else {
 				var e = _g1;
@@ -83513,7 +93341,7 @@ hxsl_Tools.hasSideEffect = function(e) {
 				if(_g3._hx_index == 2) {
 					var _g4 = _g3.g;
 					switch(_g4._hx_index) {
-					case 78:case 83:case 84:
+					case 79:case 84:case 85:
 						return true;
 					default:
 						var g = _g4;
@@ -83538,7 +93366,7 @@ hxsl_Tools.hasSideEffect = function(e) {
 			if(_g1._hx_index == 2) {
 				var _g2 = _g1.g;
 				switch(_g2._hx_index) {
-				case 78:case 83:case 84:
+				case 79:case 84:case 85:
 					return true;
 				default:
 					var g = _g2;
@@ -83660,6 +93488,11 @@ hxsl_Tools.hasSideEffect = function(e) {
 		var _g1 = _g.name;
 		var e = _g.e;
 		return hxsl_Tools.hasSideEffect(e);
+	case 22:
+		var _g1 = _g.target;
+		var _g1 = _g.code;
+		var _g1 = _g.args;
+		return true;
 	}
 };
 hxsl_Tools.iter = function(e,f) {
@@ -83802,6 +93635,17 @@ hxsl_Tools.iter = function(e,f) {
 		var e = _g.e;
 		f(e);
 		break;
+	case 22:
+		var _g1 = _g.target;
+		var _g1 = _g.code;
+		var args = _g.args;
+		var _g = 0;
+		while(_g < args.length) {
+			var arg = args[_g];
+			++_g;
+			f(arg.e);
+		}
+		break;
 	}
 };
 hxsl_Tools.map = function(e,f) {
@@ -83943,6 +93787,19 @@ hxsl_Tools.map = function(e,f) {
 		var name = _g.name;
 		ed = hxsl_TExprDef.TField(f(e1),name);
 		break;
+	case 22:
+		var target = _g.target;
+		var code = _g.code;
+		var args = _g.args;
+		var _g = [];
+		var _g1 = 0;
+		while(_g1 < args.length) {
+			var arg = args[_g1];
+			++_g1;
+			_g.push({ e : f(arg.e), access : arg.access});
+		}
+		ed = hxsl_TExprDef.TSyntax(target,code,_g);
+		break;
 	}
 	return { e : ed, t : e.t, p : e.p};
 };
@@ -84050,7 +93907,7 @@ hxsl_Tools.evalConst = function(e) {
 		var _g3 = _g1.t;
 		if(_g._hx_index == 2) {
 			switch(_g.g._hx_index) {
-			case 40:case 41:
+			case 41:case 42:
 				var args = _g2;
 				var _g = [];
 				var _g1 = 0;
@@ -84088,7 +93945,7 @@ hxsl_Tools.evalConst = function(e) {
 					x = 0.;
 				}
 				return new h3d_VectorImpl(x,y,z);
-			case 42:
+			case 43:
 				var args = _g2;
 				var _g = [];
 				var _g1 = 0;
@@ -85397,6 +95254,4384 @@ var hxsl_Channel = $hxEnums["hxsl.Channel"] = { __ename__:true,__constructs__:nu
 };
 hxsl_Channel.__constructs__ = [hxsl_Channel.Unknown,hxsl_Channel.R,hxsl_Channel.G,hxsl_Channel.B,hxsl_Channel.A,hxsl_Channel.PackedFloat,hxsl_Channel.PackedNormal];
 hxsl_Channel.__empty_constructs__ = [hxsl_Channel.Unknown,hxsl_Channel.R,hxsl_Channel.G,hxsl_Channel.B,hxsl_Channel.A,hxsl_Channel.PackedFloat,hxsl_Channel.PackedNormal];
+var hxsl__$Checker_FieldAccess = $hxEnums["hxsl._Checker.FieldAccess"] = { __ename__:true,__constructs__:null
+	,FField: ($_=function(e) { return {_hx_index:0,e:e,__enum__:"hxsl._Checker.FieldAccess",toString:$estr}; },$_._hx_name="FField",$_.__params__ = ["e"],$_)
+	,FGlobal: ($_=function(g,arg,variants) { return {_hx_index:1,g:g,arg:arg,variants:variants,__enum__:"hxsl._Checker.FieldAccess",toString:$estr}; },$_._hx_name="FGlobal",$_.__params__ = ["g","arg","variants"],$_)
+};
+hxsl__$Checker_FieldAccess.__constructs__ = [hxsl__$Checker_FieldAccess.FField,hxsl__$Checker_FieldAccess.FGlobal];
+hxsl__$Checker_FieldAccess.__empty_constructs__ = [];
+var hxsl__$Checker_WithType = $hxEnums["hxsl._Checker.WithType"] = { __ename__:true,__constructs__:null
+	,NoValue: {_hx_name:"NoValue",_hx_index:0,__enum__:"hxsl._Checker.WithType",toString:$estr}
+	,Value: {_hx_name:"Value",_hx_index:1,__enum__:"hxsl._Checker.WithType",toString:$estr}
+	,InBlock: {_hx_name:"InBlock",_hx_index:2,__enum__:"hxsl._Checker.WithType",toString:$estr}
+	,With: ($_=function(t) { return {_hx_index:3,t:t,__enum__:"hxsl._Checker.WithType",toString:$estr}; },$_._hx_name="With",$_.__params__ = ["t"],$_)
+};
+hxsl__$Checker_WithType.__constructs__ = [hxsl__$Checker_WithType.NoValue,hxsl__$Checker_WithType.Value,hxsl__$Checker_WithType.InBlock,hxsl__$Checker_WithType.With];
+hxsl__$Checker_WithType.__empty_constructs__ = [hxsl__$Checker_WithType.NoValue,hxsl__$Checker_WithType.Value,hxsl__$Checker_WithType.InBlock];
+var hxsl_Checker = function() {
+	this.globals = hxsl_Checker.initGlobals();
+};
+$hxClasses["hxsl.Checker"] = hxsl_Checker;
+hxsl_Checker.__name__ = "hxsl.Checker";
+hxsl_Checker.initGlobals = function() {
+	var globals = hxsl_Checker.GLOBALS;
+	if(hxsl_Checker.GLOBALS != null) {
+		return hxsl_Checker.GLOBALS;
+	}
+	var globals = new haxe_ds_StringMap();
+	var genType = [hxsl_Type.TFloat,hxsl_Checker.vec2,hxsl_Checker.vec3,hxsl_Checker.vec4];
+	var genIType = [hxsl_Type.TInt,hxsl_Checker.ivec2,hxsl_Checker.ivec3,hxsl_Checker.ivec4];
+	var baseType = [hxsl_Type.TFloat,hxsl_Type.TBool,hxsl_Type.TInt];
+	var _g = [];
+	var _g1 = 0;
+	while(_g1 < genType.length) {
+		var t = genType[_g1];
+		++_g1;
+		_g.push({ args : [{ name : "value", type : t}], ret : t});
+	}
+	var genFloat = _g;
+	var _g = [];
+	var _g1 = 0;
+	while(_g1 < genType.length) {
+		var t = genType[_g1];
+		++_g1;
+		_g.push({ args : [{ name : "a", type : t},{ name : "b", type : t}], ret : t});
+	}
+	var genFloat2 = _g;
+	var _g = [];
+	var _g1 = 0;
+	while(_g1 < genType.length) {
+		var t = genType[_g1];
+		++_g1;
+		_g.push({ args : [{ name : "a", type : t},{ name : "b", type : hxsl_Type.TFloat}], ret : t});
+	}
+	var genWithFloat = _g;
+	var texDefs = [{ dim : hxsl_TexDimension.T1D, arr : false, uv : hxsl_Type.TFloat, iuv : hxsl_Type.TInt},{ dim : hxsl_TexDimension.T2D, arr : false, uv : hxsl_Checker.vec2, iuv : hxsl_Checker.ivec2},{ dim : hxsl_TexDimension.T3D, arr : false, uv : hxsl_Checker.vec3, iuv : hxsl_Checker.ivec3},{ dim : hxsl_TexDimension.TCube, arr : false, uv : hxsl_Checker.vec3, iuv : hxsl_Checker.ivec3},{ dim : hxsl_TexDimension.T1D, arr : true, uv : hxsl_Checker.vec2, iuv : hxsl_Checker.ivec2},{ dim : hxsl_TexDimension.T2D, arr : true, uv : hxsl_Checker.vec3, iuv : hxsl_Checker.ivec3},{ dim : hxsl_TexDimension.TCube, arr : true, uv : hxsl_Checker.vec4, iuv : hxsl_Checker.ivec4}];
+	var gvars_h = Object.create(null);
+	var _g = 0;
+	var _g1 = hxsl_TGlobal.__empty_constructs__.slice();
+	while(_g < _g1.length) {
+		var g = _g1[_g];
+		++_g;
+		var def;
+		switch(g._hx_index) {
+		case 7:
+			def = genFloat.concat(genFloat2);
+			break;
+		case 8:
+			def = genFloat2;
+			break;
+		case 20:case 21:case 22:
+			def = genFloat2.concat(genWithFloat);
+			break;
+		case 23:
+			var r = [{ args : [{ name : "value", type : hxsl_Type.TInt},{ name : "min", type : hxsl_Type.TInt},{ name : "max", type : hxsl_Type.TInt}], ret : hxsl_Type.TInt}];
+			var _g2 = 0;
+			while(_g2 < genType.length) {
+				var t = genType[_g2];
+				++_g2;
+				r.push({ args : [{ name : "value", type : t},{ name : "min", type : t},{ name : "max", type : t}], ret : t});
+				if(t != hxsl_Type.TFloat) {
+					r.push({ args : [{ name : "value", type : t},{ name : "min", type : hxsl_Type.TFloat},{ name : "max", type : hxsl_Type.TFloat}], ret : t});
+				}
+			}
+			def = r;
+			break;
+		case 24:
+			var r1 = [];
+			var _g3 = 0;
+			while(_g3 < genType.length) {
+				var t1 = genType[_g3];
+				++_g3;
+				r1.push({ args : [{ name : "x", type : t1},{ name : "y", type : t1},{ name : "a", type : t1}], ret : t1});
+				if(t1 != hxsl_Type.TFloat) {
+					r1.push({ args : [{ name : "x", type : t1},{ name : "y", type : t1},{ name : "a", type : hxsl_Type.TFloat}], ret : t1});
+				}
+			}
+			def = r1;
+			break;
+		case 25:
+			def = [{ args : [{ name : "a", type : hxsl_Type.TFloat},{ name : "x", type : hxsl_Type.TFloat},{ name : "y", type : hxsl_Type.TFloat}], ret : hxsl_Type.TFloat}];
+			break;
+		case 26:
+			var r2 = [];
+			var _g4 = 0;
+			while(_g4 < genType.length) {
+				var t2 = genType[_g4];
+				++_g4;
+				r2.push({ args : [{ name : "edge", type : t2},{ name : "x", type : t2}], ret : t2});
+				if(t2 != hxsl_Type.TFloat) {
+					r2.push({ args : [{ name : "edge", type : hxsl_Type.TFloat},{ name : "x", type : t2}], ret : t2});
+				}
+			}
+			def = r2;
+			break;
+		case 27:
+			var r3 = [];
+			var _g5 = 0;
+			while(_g5 < genType.length) {
+				var t3 = genType[_g5];
+				++_g5;
+				r3.push({ args : [{ name : "edge0", type : t3},{ name : "edge1", type : t3},{ name : "x", type : t3}], ret : t3});
+				if(t3 != hxsl_Type.TFloat) {
+					r3.push({ args : [{ name : "edge0", type : hxsl_Type.TFloat},{ name : "edge1", type : hxsl_Type.TFloat},{ name : "x", type : t3}], ret : t3});
+				}
+			}
+			def = r3;
+			break;
+		case 28:
+			var _g6 = [];
+			var _g7 = 0;
+			while(_g7 < genType.length) {
+				var t4 = genType[_g7];
+				++_g7;
+				_g6.push({ args : [{ name : "value", type : t4}], ret : hxsl_Type.TFloat});
+			}
+			def = _g6;
+			break;
+		case 29:case 30:
+			var _g8 = [];
+			var _g9 = 0;
+			while(_g9 < genType.length) {
+				var t5 = genType[_g9];
+				++_g9;
+				_g8.push({ args : [{ name : "a", type : t5},{ name : "b", type : t5}], ret : hxsl_Type.TFloat});
+			}
+			def = _g8;
+			break;
+		case 31:
+			def = [{ args : [{ name : "a", type : hxsl_Checker.vec3},{ name : "b", type : hxsl_Checker.vec3}], ret : hxsl_Checker.vec3}];
+			break;
+		case 32:
+			def = genFloat;
+			break;
+		case 33:
+			def = genFloat2;
+			break;
+		case 34:
+			var _g10 = [];
+			var _g11 = 0;
+			while(_g11 < texDefs.length) {
+				var t6 = texDefs[_g11];
+				++_g11;
+				_g10.push({ args : [{ name : "tex", type : hxsl_Type.TSampler(t6.dim,t6.arr)},{ name : "uv", type : t6.uv}], ret : hxsl_Checker.vec4});
+			}
+			def = _g10;
+			break;
+		case 35:
+			var _g12 = [];
+			var _g13 = 0;
+			while(_g13 < texDefs.length) {
+				var t7 = texDefs[_g13];
+				++_g13;
+				_g12.push({ args : [{ name : "tex", type : hxsl_Type.TSampler(t7.dim,t7.arr)},{ name : "uv", type : t7.uv},{ name : "lod", type : hxsl_Type.TFloat}], ret : hxsl_Checker.vec4});
+			}
+			def = _g12;
+			break;
+		case 36:
+			var _g14 = [];
+			var _g15 = 0;
+			while(_g15 < texDefs.length) {
+				var t8 = texDefs[_g15];
+				++_g15;
+				_g14.push({ args : [{ name : "tex", type : hxsl_Type.TSampler(t8.dim,t8.arr)},{ name : "pos", type : t8.iuv}], ret : hxsl_Checker.vec4});
+			}
+			def = _g14;
+			break;
+		case 37:
+			def = [];
+			break;
+		case 38:
+			var _g16 = [];
+			var _g17 = 0;
+			while(_g17 < baseType.length) {
+				var t9 = baseType[_g17];
+				++_g17;
+				_g16.push({ args : [{ name : "value", type : t9}], ret : hxsl_Type.TInt});
+			}
+			def = _g16;
+			break;
+		case 39:
+			var _g18 = [];
+			var _g19 = 0;
+			while(_g19 < baseType.length) {
+				var t10 = baseType[_g19];
+				++_g19;
+				_g18.push({ args : [{ name : "value", type : t10}], ret : hxsl_Type.TFloat});
+			}
+			def = _g18;
+			break;
+		case 40:
+			var _g20 = [];
+			var _g21 = 0;
+			while(_g21 < baseType.length) {
+				var t11 = baseType[_g21];
+				++_g21;
+				_g20.push({ args : [{ name : "value", type : t11}], ret : hxsl_Type.TBool});
+			}
+			def = _g20;
+			break;
+		case 41:case 42:case 43:case 44:case 45:case 46:case 47:case 48:case 49:case 50:case 51:case 52:case 53:
+			def = [];
+			break;
+		case 0:case 1:case 2:case 3:case 4:case 5:case 6:case 9:case 10:case 11:case 12:case 13:case 14:case 15:case 16:case 17:case 18:case 19:case 54:case 77:
+			def = genFloat;
+			break;
+		case 55:
+			def = [{ args : [{ name : "value", type : hxsl_Type.TFloat}], ret : hxsl_Checker.vec4}];
+			break;
+		case 56:
+			def = [{ args : [{ name : "value", type : hxsl_Checker.vec4}], ret : hxsl_Type.TFloat}];
+			break;
+		case 57:
+			def = [{ args : [{ name : "value", type : hxsl_Checker.vec3}], ret : hxsl_Checker.vec4}];
+			break;
+		case 58:
+			def = [{ args : [{ name : "value", type : hxsl_Checker.vec4}], ret : hxsl_Checker.vec3}];
+			break;
+		case 59:
+			def = [{ args : [{ name : "screenPos", type : hxsl_Checker.vec2}], ret : hxsl_Checker.vec2}];
+			break;
+		case 60:
+			def = [{ args : [{ name : "uv", type : hxsl_Checker.vec2}], ret : hxsl_Checker.vec2}];
+			break;
+		case 61:case 62:case 63:
+			def = genFloat;
+			break;
+		case 64:
+			def = [{ args : [{ name : "channel", type : hxsl_Type.TChannel(1)},{ name : "uv", type : hxsl_Checker.vec2}], ret : hxsl_Type.TFloat},{ args : [{ name : "channel", type : hxsl_Type.TChannel(2)},{ name : "uv", type : hxsl_Checker.vec2}], ret : hxsl_Checker.vec2},{ args : [{ name : "channel", type : hxsl_Type.TChannel(3)},{ name : "uv", type : hxsl_Checker.vec2}], ret : hxsl_Checker.vec3},{ args : [{ name : "channel", type : hxsl_Type.TChannel(4)},{ name : "uv", type : hxsl_Checker.vec2}], ret : hxsl_Checker.vec4}];
+			break;
+		case 65:
+			def = [{ args : [{ name : "channel", type : hxsl_Type.TChannel(1)},{ name : "uv", type : hxsl_Checker.vec2},{ name : "lod", type : hxsl_Type.TFloat}], ret : hxsl_Type.TFloat},{ args : [{ name : "channel", type : hxsl_Type.TChannel(2)},{ name : "uv", type : hxsl_Checker.vec2},{ name : "lod", type : hxsl_Type.TFloat}], ret : hxsl_Checker.vec2},{ args : [{ name : "channel", type : hxsl_Type.TChannel(3)},{ name : "uv", type : hxsl_Checker.vec2},{ name : "lod", type : hxsl_Type.TFloat}], ret : hxsl_Checker.vec3},{ args : [{ name : "channel", type : hxsl_Type.TChannel(4)},{ name : "uv", type : hxsl_Checker.vec2},{ name : "lod", type : hxsl_Type.TFloat}], ret : hxsl_Checker.vec4}];
+			break;
+		case 66:
+			def = [{ args : [{ name : "channel", type : hxsl_Type.TChannel(1)},{ name : "pos", type : hxsl_Checker.ivec2}], ret : hxsl_Type.TFloat},{ args : [{ name : "channel", type : hxsl_Type.TChannel(2)},{ name : "pos", type : hxsl_Checker.ivec2}], ret : hxsl_Checker.vec2},{ args : [{ name : "channel", type : hxsl_Type.TChannel(3)},{ name : "pos", type : hxsl_Checker.ivec2}], ret : hxsl_Checker.vec3},{ args : [{ name : "channel", type : hxsl_Type.TChannel(4)},{ name : "pos", type : hxsl_Checker.ivec2}], ret : hxsl_Checker.vec4},{ args : [{ name : "channel", type : hxsl_Type.TChannel(1)},{ name : "pos", type : hxsl_Checker.ivec2},{ name : "lod", type : hxsl_Type.TInt}], ret : hxsl_Type.TFloat},{ args : [{ name : "channel", type : hxsl_Type.TChannel(2)},{ name : "pos", type : hxsl_Checker.ivec2},{ name : "lod", type : hxsl_Type.TInt}], ret : hxsl_Checker.vec2},{ args : [{ name : "channel", type : hxsl_Type.TChannel(3)},{ name : "pos", type : hxsl_Checker.ivec2},{ name : "lod", type : hxsl_Type.TInt}], ret : hxsl_Checker.vec3},{ args : [{ name : "channel", type : hxsl_Type.TChannel(4)},{ name : "pos", type : hxsl_Checker.ivec2},{ name : "lod", type : hxsl_Type.TInt}], ret : hxsl_Checker.vec4}];
+			break;
+		case 67:
+			def = [{ args : [{ name : "channel", type : hxsl_Type.TChannel(1)}], ret : hxsl_Checker.vec2},{ args : [{ name : "channel", type : hxsl_Type.TChannel(2)}], ret : hxsl_Checker.vec2},{ args : [{ name : "channel", type : hxsl_Type.TChannel(3)}], ret : hxsl_Checker.vec2},{ args : [{ name : "channel", type : hxsl_Type.TChannel(4)}], ret : hxsl_Checker.vec2},{ args : [{ name : "channel", type : hxsl_Type.TChannel(1)},{ name : "lod", type : hxsl_Type.TInt}], ret : hxsl_Checker.vec2},{ args : [{ name : "channel", type : hxsl_Type.TChannel(2)},{ name : "lod", type : hxsl_Type.TInt}], ret : hxsl_Checker.vec2},{ args : [{ name : "channel", type : hxsl_Type.TChannel(3)},{ name : "lod", type : hxsl_Type.TInt}], ret : hxsl_Checker.vec2},{ args : [{ name : "channel", type : hxsl_Type.TChannel(4)},{ name : "lod", type : hxsl_Type.TInt}], ret : hxsl_Checker.vec2}];
+			break;
+		case 69:case 70:case 71:case 72:
+			def = null;
+			break;
+		case 73:case 74:
+			var _g22 = [];
+			var _g_current = 0;
+			var _g_array = genType;
+			while(_g_current < _g_array.length) {
+				var _g_value = _g_array[_g_current];
+				var _g_key = _g_current++;
+				var i = _g_key;
+				var t12 = _g_value;
+				_g22.push({ args : [{ name : "x", type : t12}], ret : genIType[i]});
+			}
+			def = _g22;
+			break;
+		case 75:case 76:
+			var _g23 = [];
+			var _g_current1 = 0;
+			var _g_array1 = genType;
+			while(_g_current1 < _g_array1.length) {
+				var _g_value1 = _g_array1[_g_current1];
+				var _g_key1 = _g_current1++;
+				var i1 = _g_key1;
+				var t13 = _g_value1;
+				_g23.push({ args : [{ name : "x", type : genIType[i1]}], ret : t13});
+			}
+			def = _g23;
+			break;
+		case 78:
+			def = [{ args : [{ name : "x", type : hxsl_Type.TInt},{ name : "y", type : hxsl_Type.TInt},{ name : "z", type : hxsl_Type.TInt}], ret : hxsl_Type.TVoid},{ args : [{ name : "x", type : hxsl_Type.TInt},{ name : "y", type : hxsl_Type.TInt}], ret : hxsl_Type.TVoid},{ args : [{ name : "x", type : hxsl_Type.TInt}], ret : hxsl_Type.TVoid}];
+			break;
+		case 79:
+			def = [];
+			break;
+		case 84:
+			def = [{ args : [{ name : "buf", type : hxsl_Type.TBuffer(hxsl_Type.TInt,hxsl_SizeDecl.SConst(0),hxsl_BufferKind.RW)},{ name : "index", type : hxsl_Type.TInt},{ name : "data", type : hxsl_Type.TInt}], ret : hxsl_Type.TInt}];
+			break;
+		case 68:case 85:
+			def = [];
+			break;
+		case 86:
+			if($hxEnums[g.__enum__].__constructs__[g._hx_index]._hx_name.indexOf("_") > 0) {
+				var name = $hxEnums[g.__enum__].__constructs__[g._hx_index]._hx_name;
+				var idx = name.indexOf("_");
+				var vname = HxOverrides.substr(name,0,idx);
+				vname = vname.charAt(0).toLowerCase() + HxOverrides.substr(vname,1,null);
+				var vl = gvars_h[vname];
+				if(vl == null) {
+					vl = [];
+					gvars_h[vname] = vl;
+				}
+				var vt;
+				switch(g._hx_index) {
+				case 80:case 81:case 82:
+					vt = hxsl_Checker.ivec3;
+					break;
+				case 83:
+					vt = hxsl_Type.TInt;
+					break;
+				default:
+					throw haxe_Exception.thrown("Unknown type for global var " + Std.string(g));
+				}
+				var fname = HxOverrides.substr(name,idx + 1,null);
+				fname = fname.charAt(0).toLowerCase() + HxOverrides.substr(fname,1,null);
+				vl.push({ name : fname, type : vt});
+				def = null;
+			} else {
+				def = [{ args : [{ name : "value", type : hxsl_Type.TInt}], ret : hxsl_Checker.vec4}];
+			}
+			break;
+		case 87:
+			if($hxEnums[g.__enum__].__constructs__[g._hx_index]._hx_name.indexOf("_") > 0) {
+				var name1 = $hxEnums[g.__enum__].__constructs__[g._hx_index]._hx_name;
+				var idx1 = name1.indexOf("_");
+				var vname1 = HxOverrides.substr(name1,0,idx1);
+				vname1 = vname1.charAt(0).toLowerCase() + HxOverrides.substr(vname1,1,null);
+				var vl1 = gvars_h[vname1];
+				if(vl1 == null) {
+					vl1 = [];
+					gvars_h[vname1] = vl1;
+				}
+				var vt1;
+				switch(g._hx_index) {
+				case 80:case 81:case 82:
+					vt1 = hxsl_Checker.ivec3;
+					break;
+				case 83:
+					vt1 = hxsl_Type.TInt;
+					break;
+				default:
+					throw haxe_Exception.thrown("Unknown type for global var " + Std.string(g));
+				}
+				var fname1 = HxOverrides.substr(name1,idx1 + 1,null);
+				fname1 = fname1.charAt(0).toLowerCase() + HxOverrides.substr(fname1,1,null);
+				vl1.push({ name : fname1, type : vt1});
+				def = null;
+			} else {
+				def = [{ args : [{ name : "value", type : hxsl_Type.TInt}], ret : hxsl_Checker.vec4}];
+			}
+			break;
+		default:
+			if($hxEnums[g.__enum__].__constructs__[g._hx_index]._hx_name.indexOf("_") > 0) {
+				var name2 = $hxEnums[g.__enum__].__constructs__[g._hx_index]._hx_name;
+				var idx2 = name2.indexOf("_");
+				var vname2 = HxOverrides.substr(name2,0,idx2);
+				vname2 = vname2.charAt(0).toLowerCase() + HxOverrides.substr(vname2,1,null);
+				var vl2 = gvars_h[vname2];
+				if(vl2 == null) {
+					vl2 = [];
+					gvars_h[vname2] = vl2;
+				}
+				var vt2;
+				switch(g._hx_index) {
+				case 80:case 81:case 82:
+					vt2 = hxsl_Checker.ivec3;
+					break;
+				case 83:
+					vt2 = hxsl_Type.TInt;
+					break;
+				default:
+					throw haxe_Exception.thrown("Unknown type for global var " + Std.string(g));
+				}
+				var fname2 = HxOverrides.substr(name2,idx2 + 1,null);
+				fname2 = fname2.charAt(0).toLowerCase() + HxOverrides.substr(fname2,1,null);
+				vl2.push({ name : fname2, type : vt2});
+				def = null;
+			} else {
+				throw haxe_Exception.thrown("Unsupported global " + Std.string(g));
+			}
+		}
+		if(def != null) {
+			var key = hxsl_Tools2.toString(g);
+			globals.h[key] = { t : hxsl_Type.TFun(def), g : g};
+		}
+	}
+	globals.h["vertexID"] = { t : hxsl_Type.TInt, g : hxsl_TGlobal.VertexID};
+	globals.h["instanceID"] = { t : hxsl_Type.TInt, g : hxsl_TGlobal.InstanceID};
+	globals.h["fragCoord"] = { t : hxsl_Checker.vec4, g : hxsl_TGlobal.FragCoord};
+	globals.h["frontFacing"] = { t : hxsl_Type.TBool, g : hxsl_TGlobal.FrontFacing};
+	var h = gvars_h;
+	var _g_h = h;
+	var _g_keys = Object.keys(h);
+	var _g_length = _g_keys.length;
+	var _g_current = 0;
+	while(_g_current < _g_length) {
+		var key = _g_keys[_g_current++];
+		var _g_key = key;
+		var _g_value = _g_h[key];
+		var gname = _g_key;
+		var vl = _g_value;
+		var _g = [];
+		var _g1 = 0;
+		while(_g1 < vl.length) {
+			var v = vl[_g1];
+			++_g1;
+			_g.push({ name : v.name, kind : hxsl_VarKind.Global, type : v.type, id : 0});
+		}
+		globals.h[gname] = { t : hxsl_Type.TStruct(_g), g : null};
+	}
+	globals.h["int"] = globals.h["toInt"];
+	globals.h["float"] = globals.h["toFloat"];
+	globals.h["reflect"] = globals.h["lReflect"];
+	globals.h["ivec" + 2] = globals.h["iVec" + 2];
+	var key = "iVec" + 2;
+	if(Object.prototype.hasOwnProperty.call(globals.h,key)) {
+		delete(globals.h[key]);
+	}
+	globals.h["ivec" + 3] = globals.h["iVec" + 3];
+	var key = "iVec" + 3;
+	if(Object.prototype.hasOwnProperty.call(globals.h,key)) {
+		delete(globals.h[key]);
+	}
+	globals.h["ivec" + 4] = globals.h["iVec" + 4];
+	var key = "iVec" + 4;
+	if(Object.prototype.hasOwnProperty.call(globals.h,key)) {
+		delete(globals.h[key]);
+	}
+	if(Object.prototype.hasOwnProperty.call(globals.h,"lReflect")) {
+		delete(globals.h["lReflect"]);
+	}
+	if(Object.prototype.hasOwnProperty.call(globals.h,"toInt")) {
+		delete(globals.h["toInt"]);
+	}
+	if(Object.prototype.hasOwnProperty.call(globals.h,"toFloat")) {
+		delete(globals.h["toFloat"]);
+	}
+	hxsl_Checker.GLOBALS = globals;
+	return globals;
+};
+hxsl_Checker.prototype = {
+	error: function(msg,pos) {
+		return hxsl_Error.t(msg,pos);
+	}
+	,warning: function(msg,pos) {
+	}
+	,loadShader: function(path) {
+		throw haxe_Exception.thrown("Not implemented");
+	}
+	,check: function(name,shader) {
+		this.vars = new haxe_ds_StringMap();
+		this.inits = [];
+		this.inLoop = false;
+		this.inWhile = false;
+		var funs = [];
+		this.checkExpr(shader,funs,false,false);
+		var tfuns = [];
+		var _g = 0;
+		while(_g < funs.length) {
+			var f = funs[_g];
+			++_g;
+			var pos = f.p;
+			var f1 = f.f;
+			var _g1 = [];
+			var _g2 = 0;
+			var _g3 = f1.args;
+			while(_g2 < _g3.length) {
+				var a = _g3[_g2];
+				++_g2;
+				if(a.type == null) {
+					this.error("Argument type required",pos);
+				}
+				if(a.expr != null) {
+					this.error("Optional argument not supported",pos);
+				}
+				if(a.kind == null) {
+					a.kind = hxsl_VarKind.Local;
+				}
+				if(a.kind != hxsl_VarKind.Local) {
+					this.error("Argument should be local",pos);
+				}
+				if(a.qualifiers.length != 0) {
+					this.error("No qualifier allowed for argument",pos);
+				}
+				_g1.push({ id : hxsl_Tools.allocVarId(), name : a.name, kind : hxsl_VarKind.Local, type : a.type});
+			}
+			var args = _g1;
+			var kind;
+			switch(f1.name) {
+			case "fragment":
+				kind = hxsl_FunctionKind.Fragment;
+				break;
+			case "main":
+				kind = hxsl_FunctionKind.Main;
+				break;
+			case "vertex":
+				kind = hxsl_FunctionKind.Vertex;
+				break;
+			default:
+				kind = StringTools.startsWith(f1.name,"__init__") ? hxsl_FunctionKind.Init : hxsl_FunctionKind.Helper;
+			}
+			if(args.length != 0 && kind != hxsl_FunctionKind.Helper) {
+				this.error(Std.string(kind) + " function should have no argument",pos);
+			}
+			var fv = hxsl_Tools.allocVarId();
+			var f2 = f1.name;
+			var _g4 = [];
+			var _g5 = 0;
+			while(_g5 < args.length) {
+				var a1 = args[_g5];
+				++_g5;
+				_g4.push({ type : a1.type, name : a1.name});
+			}
+			var fv1 = { id : fv, name : f2, kind : hxsl_VarKind.Function, type : hxsl_Type.TFun([{ args : _g4, ret : f1.ret == null ? hxsl_Type.TVoid : f1.ret}])};
+			var f3 = { kind : kind, ref : fv1, args : args, ret : f1.ret == null ? hxsl_Type.TVoid : f1.ret, expr : null};
+			if(Object.prototype.hasOwnProperty.call(this.vars.h,fv1.name)) {
+				this.error("Duplicate function name",pos);
+			}
+			this.vars.h[fv1.name] = fv1;
+			tfuns.push(f3);
+		}
+		var _g = 0;
+		var _g1 = tfuns.length;
+		while(_g < _g1) {
+			var i = _g++;
+			this.typeFun(tfuns[i],funs[i].f.expr);
+		}
+		var localInits = [];
+		var _g = 0;
+		var _g1 = this.inits.slice();
+		while(_g < _g1.length) {
+			var i = _g1[_g];
+			++_g;
+			if(i.v.kind == hxsl_VarKind.Local) {
+				localInits.push({ e : hxsl_TExprDef.TBinop(haxe_macro_Binop.OpAssign,{ e : hxsl_TExprDef.TVar(i.v), p : i.e.p, t : i.v.type},i.e), p : i.e.p, t : i.v.type});
+				HxOverrides.remove(this.inits,i);
+			}
+		}
+		if(localInits.length > 0) {
+			var fv = { id : hxsl_Tools.allocVarId(), name : "__init__consts__", kind : hxsl_VarKind.Function, type : hxsl_Type.TFun([{ args : [], ret : hxsl_Type.TVoid}])};
+			if(Object.prototype.hasOwnProperty.call(this.vars.h,fv.name)) {
+				this.error("assert",localInits[0].p);
+			}
+			this.vars.h[fv.name] = fv;
+			tfuns.push({ kind : hxsl_FunctionKind.Init, ref : fv, args : [], ret : hxsl_Type.TVoid, expr : { e : hxsl_TExprDef.TBlock(localInits), p : localInits[0].p, t : hxsl_Type.TVoid}});
+		}
+		var vars = Lambda.array(this.vars);
+		vars.sort(function(v1,v2) {
+			return (v1.id < 0 ? -v1.id : v1.id) - (v2.id < 0 ? -v2.id : v2.id);
+		});
+		return { name : name, vars : vars, funs : tfuns};
+	}
+	,saveVars: function() {
+		var old = new haxe_ds_StringMap();
+		var h = this.vars.h;
+		var v_h = h;
+		var v_keys = Object.keys(h);
+		var v_length = v_keys.length;
+		var v_current = 0;
+		while(v_current < v_length) {
+			var v = v_keys[v_current++];
+			old.h[v] = this.vars.h[v];
+		}
+		return old;
+	}
+	,typeFun: function(f,e) {
+		var old = this.saveVars();
+		var _g = 0;
+		var _g1 = f.args;
+		while(_g < _g1.length) {
+			var a = _g1[_g];
+			++_g;
+			this.vars.h[a.name] = a;
+		}
+		this.curFun = f;
+		f.expr = this.typeExpr(e,hxsl__$Checker_WithType.NoValue);
+		this.vars = old;
+	}
+	,tryUnify: function(t1,t2) {
+		if(Type.enumEq(t1,t2)) {
+			return true;
+		}
+		switch(t1._hx_index) {
+		case 5:
+			if(t2._hx_index == 5) {
+				var s2 = t2.size;
+				var t21 = t2.t;
+				var t11 = t1.t;
+				var s1 = t1.size;
+				if(s1 == s2 && t11 == t21) {
+					return true;
+				}
+			}
+			break;
+		case 10:
+			if(t2._hx_index == 10) {
+				var dim2 = t2.dim;
+				var arr2 = t2.isArray;
+				var arr1 = t1.isArray;
+				var dim1 = t1.dim;
+				if(dim1 == dim2) {
+					return arr1 == arr2;
+				} else {
+					return false;
+				}
+			}
+			break;
+		case 11:
+			if(t2._hx_index == 11) {
+				var dim2 = t2.dim;
+				var arr2 = t2.isArray;
+				var chans2 = t2.channels;
+				var chans1 = t1.channels;
+				var arr1 = t1.isArray;
+				var dim1 = t1.dim;
+				if(dim1 == dim2 && arr1 == arr2) {
+					return chans1 == chans2;
+				} else {
+					return false;
+				}
+			}
+			break;
+		case 15:
+			if(t2._hx_index == 15) {
+				var t21 = t2.t;
+				var size2 = t2.size;
+				var size1 = t1.size;
+				var t11 = t1.t;
+				switch(size1._hx_index) {
+				case 0:
+					if(size2._hx_index == 0) {
+						var b = size2.v;
+						var a = size1.v;
+						if(a != b) {
+							return false;
+						}
+					} else {
+						return false;
+					}
+					break;
+				case 1:
+					if(size2._hx_index == 1) {
+						var v2 = size2.v;
+						var v1 = size1.v;
+						if(v1 != v2) {
+							return false;
+						}
+					} else {
+						return false;
+					}
+					break;
+				default:
+					return false;
+				}
+				return this.tryUnify(t11,t21);
+			}
+			break;
+		case 17:
+			if(t2._hx_index == 17) {
+				var n2 = t2.size;
+				var n1 = t1.size;
+				if(n1 == n2) {
+					return true;
+				}
+			}
+			break;
+		default:
+		}
+		return false;
+	}
+	,unify: function(t1,t2,p) {
+		if(!this.tryUnify(t1,t2)) {
+			this.error(hxsl_Tools.toString(t1) + " should be " + hxsl_Tools.toString(t2),p);
+		}
+	}
+	,unifyExpr: function(e,t) {
+		if(!this.tryUnify(e.t,t)) {
+			if(e.t == hxsl_Type.TInt && t == hxsl_Type.TFloat) {
+				this.toFloat(e);
+				return;
+			}
+			this.error(hxsl_Tools.toString(e.t) + " should be " + hxsl_Tools.toString(t),e.p);
+		}
+	}
+	,checkWrite: function(e) {
+		var _g = e.e;
+		switch(_g._hx_index) {
+		case 1:
+			var v = _g.v;
+			switch(v.kind._hx_index) {
+			case 2:
+				var _g1 = v.type;
+				var tmp;
+				switch(_g1._hx_index) {
+				case 11:
+					var _g2 = _g1.dim;
+					var _g2 = _g1.isArray;
+					var _g2 = _g1.channels;
+					tmp = true;
+					break;
+				case 16:
+					var _g2 = _g1.t;
+					var _g2 = _g1.size;
+					switch(_g1.kind._hx_index) {
+					case 2:case 5:
+						tmp = true;
+						break;
+					default:
+						tmp = false;
+					}
+					break;
+				default:
+					tmp = false;
+				}
+				if(tmp) {
+					return;
+				}
+				break;
+			case 4:
+				if(v.qualifiers == null || v.qualifiers.indexOf(hxsl_VarQualifier.Final) < 0) {
+					return;
+				} else {
+					var _g1 = v.type;
+					var tmp;
+					switch(_g1._hx_index) {
+					case 11:
+						var _g2 = _g1.dim;
+						var _g2 = _g1.isArray;
+						var _g2 = _g1.channels;
+						tmp = true;
+						break;
+					case 16:
+						var _g2 = _g1.t;
+						var _g2 = _g1.size;
+						switch(_g1.kind._hx_index) {
+						case 2:case 5:
+							tmp = true;
+							break;
+						default:
+							tmp = false;
+						}
+						break;
+					default:
+						tmp = false;
+					}
+					if(tmp) {
+						return;
+					}
+				}
+				break;
+			case 3:case 5:
+				return;
+			default:
+			}
+			break;
+		case 9:
+			var _g1 = _g.regs;
+			var e1 = _g.e;
+			this.checkWrite(e1);
+			return;
+		case 16:
+			var _g1 = _g.index;
+			var e1 = _g.e;
+			this.checkWrite(e1);
+			return;
+		case 21:
+			var _g1 = _g.name;
+			var e1 = _g.e;
+			this.checkWrite(e1);
+			return;
+		default:
+		}
+		this.error("This expression cannot be assigned",e.p);
+	}
+	,typeWith: function(e,t) {
+		if(t == null) {
+			return this.typeExpr(e,hxsl__$Checker_WithType.Value);
+		}
+		var e1 = this.typeExpr(e,hxsl__$Checker_WithType.With(t));
+		this.unifyExpr(e1,t);
+		return e1;
+	}
+	,typeExpr: function(e,$with) {
+		var _gthis = this;
+		var type = null;
+		var ed;
+		var _g = e.expr;
+		switch(_g._hx_index) {
+		case 0:
+			var c = _g.c;
+			switch(c._hx_index) {
+			case 0:
+				type = hxsl_Type.TVoid;
+				break;
+			case 1:
+				var _g1 = c.b;
+				type = hxsl_Type.TBool;
+				break;
+			case 2:
+				var i = c.v;
+				if($with._hx_index == 3) {
+					if($with.t._hx_index == 3) {
+						c = hxsl_Const.CFloat(i);
+						type = hxsl_Type.TFloat;
+					} else {
+						type = hxsl_Type.TInt;
+					}
+				} else {
+					type = hxsl_Type.TInt;
+				}
+				break;
+			case 3:
+				var _g1 = c.v;
+				type = hxsl_Type.TFloat;
+				break;
+			case 4:
+				var _g1 = c.v;
+				type = hxsl_Type.TString;
+				break;
+			}
+			ed = hxsl_TExprDef.TConst(c);
+			break;
+		case 1:
+			var name = _g.i;
+			var v = this.vars.h[name];
+			if(v != null) {
+				var canCall;
+				switch(name) {
+				case "fragment":case "main":case "vertex":
+					canCall = false;
+					break;
+				default:
+					canCall = !StringTools.startsWith(name,"__init__");
+				}
+				if(!canCall) {
+					this.error("Function cannot be accessed",e.pos);
+				}
+				type = v.type;
+				ed = hxsl_TExprDef.TVar(v);
+			} else {
+				var g = this.globals.h[name];
+				if(g != null && g.g != null) {
+					type = g.t;
+					ed = hxsl_TExprDef.TGlobal(g.g);
+				} else if(name == "PI") {
+					type = hxsl_Type.TFloat;
+					ed = hxsl_TExprDef.TConst(hxsl_Const.CFloat(Math.PI));
+				} else {
+					ed = this.error("Unknown identifier '" + name + "'",e.pos);
+				}
+			}
+			break;
+		case 2:
+			var e1 = _g.e;
+			var e2 = this.typeExpr(e1,$with);
+			type = e2.t;
+			ed = hxsl_TExprDef.TParenthesis(e2);
+			break;
+		case 3:
+			var _g1 = _g.e;
+			var _g2 = _g.f;
+			var _g3 = _g1.expr;
+			var _g4 = _g1.pos;
+			if(_g3._hx_index == 1) {
+				var name = _g3.i;
+				var f = _g2;
+				if(this.vars.h[name] == null && this.globals.h[name] != null && this.globals.h[name].g == null) {
+					var _g3 = this.globals.h[name].t;
+					if(_g3._hx_index == 13) {
+						var vl = _g3.vl;
+						var _g3 = 0;
+						while(_g3 < vl.length) {
+							var v = vl[_g3];
+							++_g3;
+							if(v.name == f) {
+								var g = name.charAt(0).toUpperCase() + HxOverrides.substr(name,1,null) + "_" + f.charAt(0).toUpperCase() + HxOverrides.substr(f,1,null);
+								return { e : hxsl_TExprDef.TGlobal(Type.createEnum(hxsl_TGlobal,g,null)), t : v.type, p : e.pos};
+							}
+						}
+						var ed1 = name + " field should be ";
+						var _g3 = [];
+						var _g4 = 0;
+						while(_g4 < vl.length) {
+							var v = vl[_g4];
+							++_g4;
+							_g3.push(v.name);
+						}
+						ed = this.error(ed1 + _g3.join("|"),e.pos);
+					} else {
+						throw haxe_Exception.thrown("assert");
+					}
+				} else {
+					var e1 = _g1;
+					var f = _g2;
+					var e11 = this.typeExpr(e1,hxsl__$Checker_WithType.Value);
+					var ef = this.fieldAccess(e11,f,$with,e.pos);
+					if(ef == null) {
+						this.error(hxsl_Tools.toString(e11.t) + " has no field '" + f + "'",e.pos);
+					}
+					switch(ef._hx_index) {
+					case 0:
+						var ef1 = ef.e;
+						type = ef1.t;
+						ed = ef1.e;
+						break;
+					case 1:
+						var _g3 = ef.g;
+						var _g3 = ef.arg;
+						var _g3 = ef.variants;
+						ed = this.error("Global function must be called immediately",e.pos);
+						break;
+					}
+				}
+			} else {
+				var e1 = _g1;
+				var f = _g2;
+				var e11 = this.typeExpr(e1,hxsl__$Checker_WithType.Value);
+				var ef = this.fieldAccess(e11,f,$with,e.pos);
+				if(ef == null) {
+					this.error(hxsl_Tools.toString(e11.t) + " has no field '" + f + "'",e.pos);
+				}
+				switch(ef._hx_index) {
+				case 0:
+					var ef1 = ef.e;
+					type = ef1.t;
+					ed = ef1.e;
+					break;
+				case 1:
+					var _g1 = ef.g;
+					var _g1 = ef.arg;
+					var _g1 = ef.variants;
+					ed = this.error("Global function must be called immediately",e.pos);
+					break;
+				}
+			}
+			break;
+		case 4:
+			var op = _g.op;
+			var e1 = _g.e1;
+			var e2 = _g.e2;
+			var e11 = this.typeExpr(e1,hxsl__$Checker_WithType.Value);
+			var e21 = this.typeExpr(e2,hxsl__$Checker_WithType.With(e11.t));
+			switch(op._hx_index) {
+			case 4:
+				this.checkWrite(e11);
+				this.unify(e21.t,e11.t,e21.p);
+				type = e11.t;
+				break;
+			case 20:
+				var op1 = op.op;
+				this.checkWrite(e11);
+				this.unify(this.typeBinop(op1,e11,e21,e.pos),e11.t,e21.p);
+				type = e11.t;
+				break;
+			default:
+				type = this.typeBinop(op,e11,e21,e.pos);
+			}
+			ed = hxsl_TExprDef.TBinop(op,e11,e21);
+			break;
+		case 5:
+			var op = _g.op;
+			var e1 = _g.e1;
+			var e11 = this.typeExpr(e1,hxsl__$Checker_WithType.Value);
+			switch(op._hx_index) {
+			case 0:case 1:
+				switch(e11.t._hx_index) {
+				case 1:case 3:
+					break;
+				default:
+					this.error("Cannot increment " + hxsl_Tools.toString(e11.t),e.pos);
+				}
+				type = hxsl_Type.TVoid;
+				ed = hxsl_TExprDef.TBinop(haxe_macro_Binop.OpAssignOp(op == haxe_macro_Unop.OpIncrement ? haxe_macro_Binop.OpAdd : haxe_macro_Binop.OpSub),e11,{ e : hxsl_TExprDef.TConst(hxsl_Const.CInt(1)), t : hxsl_Type.TInt, p : e11.p});
+				break;
+			case 2:
+				this.unifyExpr(e11,hxsl_Type.TBool);
+				type = hxsl_Type.TBool;
+				ed = hxsl_TExprDef.TUnop(op,e11);
+				break;
+			case 3:
+				var _g1 = e11.t;
+				switch(_g1._hx_index) {
+				case 1:case 3:
+					break;
+				case 5:
+					var _g2 = _g1.size;
+					switch(_g1.t._hx_index) {
+					case 0:case 1:
+						break;
+					default:
+						this.error("Cannot negate " + hxsl_Tools.toString(e11.t),e.pos);
+					}
+					break;
+				default:
+					this.error("Cannot negate " + hxsl_Tools.toString(e11.t),e.pos);
+				}
+				type = e11.t;
+				ed = hxsl_TExprDef.TUnop(op,e11);
+				break;
+			default:
+				ed = this.error("Operation non supported",e.pos);
+			}
+			break;
+		case 6:
+			var _g1 = _g.e;
+			var _g2 = _g.args;
+			var _g3 = _g1.expr;
+			var _g4 = _g1.pos;
+			if(_g3._hx_index == 3) {
+				var _g4 = _g3.e;
+				var _g5 = _g4.expr;
+				var _g6 = _g4.pos;
+				if(_g5._hx_index == 1) {
+					if(_g5.i == "Syntax") {
+						var target = _g3.f;
+						var args = _g2;
+						if(args.length == 0) {
+							this.error("Syntax." + target + " should have a string as first argument",e.pos);
+						}
+						var code;
+						var _g3 = args[0].expr;
+						if(_g3._hx_index == 0) {
+							var _g4 = _g3.c;
+							if(_g4._hx_index == 4) {
+								var code1 = _g4.v;
+								code = code1;
+							} else {
+								code = this.error("Syntax." + target + " should have a string as first argument",args[0].pos);
+							}
+						} else {
+							code = this.error("Syntax." + target + " should have a string as first argument",args[0].pos);
+						}
+						var sargs = [];
+						var _g3 = 1;
+						var _g4 = args.length;
+						while(_g3 < _g4) {
+							var i = _g3++;
+							var arg = args[i];
+							var _g5 = arg.expr;
+							if(_g5._hx_index == 20) {
+								var _g6 = _g5.name;
+								var _g7 = _g5.args;
+								var _g8 = _g5.e;
+								switch(_g6) {
+								case "r":case "rw":case "w":
+									var flags = _g6;
+									var flaggedArg = _g8;
+									var ed1 = this.typeExpr(flaggedArg,hxsl__$Checker_WithType.Value);
+									var ed2;
+									switch(flags) {
+									case "r":
+										ed2 = hxsl_SyntaxArgAccess.Read;
+										break;
+									case "rw":
+										ed2 = hxsl_SyntaxArgAccess.ReadWrite;
+										break;
+									case "w":
+										ed2 = hxsl_SyntaxArgAccess.Write;
+										break;
+									default:
+										throw haxe_Exception.thrown("assert");
+									}
+									sargs.push({ e : ed1, access : ed2});
+									break;
+								default:
+									this.error("Syntax." + target + " arguments should have an access meta of @r, @w or @rw",arg.pos);
+								}
+							} else {
+								this.error("Syntax." + target + " arguments should have an access meta of @r, @w or @rw",arg.pos);
+							}
+						}
+						return { e : hxsl_TExprDef.TSyntax(target,code,sargs), t : hxsl_Type.TVoid, p : e.pos};
+					} else {
+						var e1 = _g1;
+						var args = _g2;
+						var makeCall = function(e1) {
+							var _g = e1.t;
+							if(_g._hx_index == 14) {
+								var variants = _g.variants;
+								var e2 = _gthis.unifyCallParams(e1,args,variants,e.pos);
+								type = e2.t;
+								return e2.e;
+							} else {
+								return _gthis.error(hxsl_Tools.toString(e1.t) + " cannot be called",e.pos);
+							}
+						};
+						var _g3 = e1.expr;
+						if(_g3._hx_index == 3) {
+							var e11 = _g3.e;
+							var f = _g3.f;
+							var e12 = this.typeExpr(e11,hxsl__$Checker_WithType.Value);
+							var ef = this.fieldAccess(e12,f,$with,e.pos);
+							if(ef == null) {
+								this.error(hxsl_Tools.toString(e12.t) + " has no field '" + f + "'",e.pos);
+							}
+							switch(ef._hx_index) {
+							case 0:
+								var ef1 = ef.e;
+								ed = makeCall(ef1);
+								break;
+							case 1:
+								var g = ef.g;
+								var arg = ef.arg;
+								var variants = ef.variants;
+								var eg = { e : hxsl_TExprDef.TGlobal(g), t : hxsl_Type.TFun(variants), p : e12.p};
+								if(variants.length == 0) {
+									var _g3 = [];
+									var _g4 = 0;
+									while(_g4 < args.length) {
+										var a = args[_g4];
+										++_g4;
+										_g3.push(this.typeExpr(a,hxsl__$Checker_WithType.Value));
+									}
+									var args1 = _g3;
+									args1.unshift(arg);
+									var e2 = this.specialGlobal(g,eg,args1,e.pos);
+									type = e2.t;
+									ed = e2.e;
+								} else {
+									var e2 = this.unifyCallParams(eg,args,variants,e.pos);
+									var _g3 = e2.e;
+									var _g4 = eg.t;
+									if(_g3._hx_index == 8) {
+										var _g5 = _g3.e;
+										if(_g4._hx_index == 14) {
+											var _g5 = _g4.variants;
+											if(_g5.length == 1) {
+												var f = _g5[0];
+												var args1 = _g3.args;
+												args1.unshift(arg);
+												f.args.unshift({ name : "_", type : arg.t});
+											} else {
+												throw haxe_Exception.thrown("assert");
+											}
+										} else {
+											throw haxe_Exception.thrown("assert");
+										}
+									} else {
+										throw haxe_Exception.thrown("assert");
+									}
+									type = e2.t;
+									ed = e2.e;
+								}
+								break;
+							}
+						} else {
+							ed = makeCall(this.typeExpr(e1,hxsl__$Checker_WithType.Value));
+						}
+					}
+				} else {
+					var e1 = _g1;
+					var args1 = _g2;
+					var makeCall1 = function(e1) {
+						var _g = e1.t;
+						if(_g._hx_index == 14) {
+							var variants = _g.variants;
+							var e2 = _gthis.unifyCallParams(e1,args1,variants,e.pos);
+							type = e2.t;
+							return e2.e;
+						} else {
+							return _gthis.error(hxsl_Tools.toString(e1.t) + " cannot be called",e.pos);
+						}
+					};
+					var _g3 = e1.expr;
+					if(_g3._hx_index == 3) {
+						var e11 = _g3.e;
+						var f = _g3.f;
+						var e12 = this.typeExpr(e11,hxsl__$Checker_WithType.Value);
+						var ef = this.fieldAccess(e12,f,$with,e.pos);
+						if(ef == null) {
+							this.error(hxsl_Tools.toString(e12.t) + " has no field '" + f + "'",e.pos);
+						}
+						switch(ef._hx_index) {
+						case 0:
+							var ef1 = ef.e;
+							ed = makeCall1(ef1);
+							break;
+						case 1:
+							var g = ef.g;
+							var arg = ef.arg;
+							var variants = ef.variants;
+							var eg = { e : hxsl_TExprDef.TGlobal(g), t : hxsl_Type.TFun(variants), p : e12.p};
+							if(variants.length == 0) {
+								var _g3 = [];
+								var _g4 = 0;
+								while(_g4 < args1.length) {
+									var a = args1[_g4];
+									++_g4;
+									_g3.push(this.typeExpr(a,hxsl__$Checker_WithType.Value));
+								}
+								var args2 = _g3;
+								args2.unshift(arg);
+								var e2 = this.specialGlobal(g,eg,args2,e.pos);
+								type = e2.t;
+								ed = e2.e;
+							} else {
+								var e2 = this.unifyCallParams(eg,args1,variants,e.pos);
+								var _g3 = e2.e;
+								var _g4 = eg.t;
+								if(_g3._hx_index == 8) {
+									var _g5 = _g3.e;
+									if(_g4._hx_index == 14) {
+										var _g5 = _g4.variants;
+										if(_g5.length == 1) {
+											var f = _g5[0];
+											var args2 = _g3.args;
+											args2.unshift(arg);
+											f.args.unshift({ name : "_", type : arg.t});
+										} else {
+											throw haxe_Exception.thrown("assert");
+										}
+									} else {
+										throw haxe_Exception.thrown("assert");
+									}
+								} else {
+									throw haxe_Exception.thrown("assert");
+								}
+								type = e2.t;
+								ed = e2.e;
+							}
+							break;
+						}
+					} else {
+						ed = makeCall1(this.typeExpr(e1,hxsl__$Checker_WithType.Value));
+					}
+				}
+			} else {
+				var e1 = _g1;
+				var args2 = _g2;
+				var makeCall2 = function(e1) {
+					var _g = e1.t;
+					if(_g._hx_index == 14) {
+						var variants = _g.variants;
+						var e2 = _gthis.unifyCallParams(e1,args2,variants,e.pos);
+						type = e2.t;
+						return e2.e;
+					} else {
+						return _gthis.error(hxsl_Tools.toString(e1.t) + " cannot be called",e.pos);
+					}
+				};
+				var _g1 = e1.expr;
+				if(_g1._hx_index == 3) {
+					var e11 = _g1.e;
+					var f = _g1.f;
+					var e12 = this.typeExpr(e11,hxsl__$Checker_WithType.Value);
+					var ef = this.fieldAccess(e12,f,$with,e.pos);
+					if(ef == null) {
+						this.error(hxsl_Tools.toString(e12.t) + " has no field '" + f + "'",e.pos);
+					}
+					switch(ef._hx_index) {
+					case 0:
+						var ef1 = ef.e;
+						ed = makeCall2(ef1);
+						break;
+					case 1:
+						var g = ef.g;
+						var arg = ef.arg;
+						var variants = ef.variants;
+						var eg = { e : hxsl_TExprDef.TGlobal(g), t : hxsl_Type.TFun(variants), p : e12.p};
+						if(variants.length == 0) {
+							var _g1 = [];
+							var _g2 = 0;
+							while(_g2 < args2.length) {
+								var a = args2[_g2];
+								++_g2;
+								_g1.push(this.typeExpr(a,hxsl__$Checker_WithType.Value));
+							}
+							var args3 = _g1;
+							args3.unshift(arg);
+							var e2 = this.specialGlobal(g,eg,args3,e.pos);
+							type = e2.t;
+							ed = e2.e;
+						} else {
+							var e2 = this.unifyCallParams(eg,args2,variants,e.pos);
+							var _g1 = e2.e;
+							var _g2 = eg.t;
+							if(_g1._hx_index == 8) {
+								var _g3 = _g1.e;
+								if(_g2._hx_index == 14) {
+									var _g3 = _g2.variants;
+									if(_g3.length == 1) {
+										var f = _g3[0];
+										var args3 = _g1.args;
+										args3.unshift(arg);
+										f.args.unshift({ name : "_", type : arg.t});
+									} else {
+										throw haxe_Exception.thrown("assert");
+									}
+								} else {
+									throw haxe_Exception.thrown("assert");
+								}
+							} else {
+								throw haxe_Exception.thrown("assert");
+							}
+							type = e2.t;
+							ed = e2.e;
+						}
+						break;
+					}
+				} else {
+					ed = makeCall2(this.typeExpr(e1,hxsl__$Checker_WithType.Value));
+				}
+			}
+			break;
+		case 7:
+			var el = _g.el;
+			var old = this.saveVars();
+			var el1 = el.slice();
+			var tl = [];
+			$with = this.propagate($with);
+			if(el1.length == 0 && $with != hxsl__$Checker_WithType.NoValue) {
+				this.error("Value expected",e.pos);
+			}
+			while(true) {
+				var e1 = el1.shift();
+				if(e1 == null) {
+					break;
+				}
+				var _g1 = e1.expr;
+				if(_g1._hx_index == 8) {
+					var vl = _g1.v;
+					if(vl.length > 1) {
+						var v0 = vl.shift();
+						el1.unshift(e1);
+						e1 = { expr : hxsl_ExprDef.EVars([v0]), pos : e1.pos};
+					}
+				}
+				var ew;
+				var _g2 = e1.expr;
+				if(_g2._hx_index == 8) {
+					var _g3 = _g2.v;
+					ew = hxsl__$Checker_WithType.InBlock;
+				} else {
+					ew = el1.length == 0 ? $with : hxsl__$Checker_WithType.NoValue;
+				}
+				var et = this.typeExpr(e1,ew);
+				if(el1.length != 0 && !hxsl_Tools.hasSideEffect(et)) {
+					this.warning("This expression has no side effect",e1.pos);
+				}
+				tl.push(et);
+			}
+			this.vars = old;
+			type = $with == hxsl__$Checker_WithType.NoValue ? hxsl_Type.TVoid : tl[tl.length - 1].t;
+			ed = hxsl_TExprDef.TBlock(tl);
+			break;
+		case 8:
+			var vl = _g.v;
+			if($with != hxsl__$Checker_WithType.InBlock) {
+				this.error("Cannot declare a variable outside of a block",e.pos);
+			}
+			if(vl.length != 1) {
+				throw haxe_Exception.thrown("assert");
+			}
+			var v = vl[0];
+			if(v.kind == null) {
+				v.kind = hxsl_VarKind.Local;
+			}
+			if(v.kind != hxsl_VarKind.Local) {
+				this.error("Should be local var",e.pos);
+			}
+			if(v.qualifiers.length != 0) {
+				this.error("Unexpected qualifier",e.pos);
+			}
+			var tv = this.makeVar(vl[0],e.pos);
+			var init = v.expr == null ? null : this.typeWith(v.expr,tv.type);
+			if(tv.type == null) {
+				if(init == null) {
+					this.error("Type required for unitialized local var",e.pos);
+				}
+				tv.type = init.t;
+			}
+			this.vars.h[tv.name] = tv;
+			type = hxsl_Type.TVoid;
+			ed = hxsl_TExprDef.TVarDecl(tv,init);
+			break;
+		case 9:
+			var _g1 = _g.f;
+			throw haxe_Exception.thrown("assert");
+		case 10:
+			var cond = _g.econd;
+			var e1 = _g.eif;
+			var e2 = _g.eelse;
+			$with = this.propagate($with);
+			var cond1 = this.typeWith(cond,hxsl_Type.TBool);
+			var e11 = this.typeExpr(e1,$with);
+			var e21 = e2 == null ? null : this.typeExpr(e2,$with);
+			if($with == hxsl__$Checker_WithType.NoValue) {
+				type = hxsl_Type.TVoid;
+				ed = hxsl_TExprDef.TIf(cond1,e11,e21);
+			} else {
+				if(e21 == null) {
+					this.error("Missing else",e.pos);
+				}
+				if(this.tryUnify(e11.t,e21.t)) {
+					type = e11.t;
+				} else {
+					this.unifyExpr(e21,e11.t);
+					type = e21.t;
+				}
+				ed = hxsl_TExprDef.TIf(cond1,e11,e21);
+			}
+			break;
+		case 11:
+			type = hxsl_Type.TVoid;
+			ed = hxsl_TExprDef.TDiscard;
+			break;
+		case 12:
+			var v = _g.v;
+			var it = _g.loop;
+			var block = _g.block;
+			type = hxsl_Type.TVoid;
+			var it1 = this.typeExpr(it,hxsl__$Checker_WithType.Value);
+			var _g1 = it1.t;
+			if(_g1._hx_index == 15) {
+				var _g2 = _g1.size;
+				var t = _g1.t;
+				var v1 = { id : hxsl_Tools.allocVarId(), name : v, type : t, kind : hxsl_VarKind.Local};
+				var old = this.vars.h[v1.name];
+				this.vars.h[v1.name] = v1;
+				var oldL = this.inLoop;
+				this.inLoop = true;
+				var block1 = this.typeExpr(block,hxsl__$Checker_WithType.NoValue);
+				this.inLoop = oldL;
+				if(old == null) {
+					var key = v1.name;
+					var _this = this.vars;
+					if(Object.prototype.hasOwnProperty.call(_this.h,key)) {
+						delete(_this.h[key]);
+					}
+				} else {
+					this.vars.h[v1.name] = old;
+				}
+				ed = hxsl_TExprDef.TFor(v1,it1,block1);
+			} else {
+				ed = this.error("Cannot iterate on " + hxsl_Tools.toString(it1.t),it1.p);
+			}
+			break;
+		case 13:
+			var e1 = _g.e;
+			if(e1 == null != (this.curFun.ret == hxsl_Type.TVoid)) {
+				this.error("This function should return " + hxsl_Tools.toString(this.curFun.ret),e.pos);
+			}
+			var e2 = e1 == null ? null : this.typeWith(e1,this.curFun.ret);
+			type = hxsl_Type.TVoid;
+			ed = hxsl_TExprDef.TReturn(e2);
+			break;
+		case 14:
+			if(!this.inLoop) {
+				this.error("Break outside loop",e.pos);
+			}
+			type = hxsl_Type.TVoid;
+			ed = hxsl_TExprDef.TBreak;
+			break;
+		case 15:
+			if(!this.inLoop) {
+				this.error("Continue outside loop",e.pos);
+			}
+			type = hxsl_Type.TVoid;
+			ed = hxsl_TExprDef.TContinue;
+			break;
+		case 16:
+			var e1 = _g.e;
+			var e2 = _g.eindex;
+			var e11 = this.typeExpr(e1,hxsl__$Checker_WithType.Value);
+			var e21 = this.typeExpr(e2,hxsl__$Checker_WithType.With(hxsl_Type.TInt));
+			this.unify(e21.t,hxsl_Type.TInt,e21.p);
+			var _g1 = e11.t;
+			switch(_g1._hx_index) {
+			case 5:
+				var _g2 = _g1.size;
+				switch(_g1.t._hx_index) {
+				case 0:
+					type = hxsl_Type.TInt;
+					break;
+				case 1:
+					type = hxsl_Type.TFloat;
+					break;
+				default:
+					this.error("Cannot index " + hxsl_Tools.toString(e11.t) + " : should be an array",e.pos);
+				}
+				break;
+			case 6:
+				type = hxsl_Checker.vec3;
+				break;
+			case 7:case 8:
+				type = hxsl_Checker.vec4;
+				break;
+			case 12:
+				type = hxsl_Checker.vec2;
+				break;
+			case 15:
+				var t = _g1.t;
+				var size = _g1.size;
+				var _g2 = e21.e;
+				if(size._hx_index == 0) {
+					if(_g2._hx_index == 0) {
+						var _g3 = _g2.c;
+						if(_g3._hx_index == 2) {
+							var _g4 = _g3.v;
+							var i = _g4;
+							var v = size.v;
+							if(i >= v) {
+								this.error("Indexing outside array bounds",e.pos);
+							} else {
+								var i = _g4;
+								if(i < 0) {
+									this.error("Cannot index with negative value",e.pos);
+								}
+							}
+						}
+					}
+				} else if(_g2._hx_index == 0) {
+					var _g3 = _g2.c;
+					if(_g3._hx_index == 2) {
+						var i = _g3.v;
+						if(i < 0) {
+							this.error("Cannot index with negative value",e.pos);
+						}
+					}
+				}
+				type = t;
+				break;
+			case 16:
+				var _g2 = _g1.t;
+				var _g3 = _g1.size;
+				switch(_g1.kind._hx_index) {
+				case 0:case 3:
+					var size = _g3;
+					var t = _g2;
+					var _g1 = e21.e;
+					if(size._hx_index == 0) {
+						if(_g1._hx_index == 0) {
+							var _g4 = _g1.c;
+							if(_g4._hx_index == 2) {
+								var _g5 = _g4.v;
+								var i = _g5;
+								var v = size.v;
+								if(i >= v) {
+									this.error("Indexing outside array bounds",e.pos);
+								} else {
+									var i = _g5;
+									if(i < 0) {
+										this.error("Cannot index with negative value",e.pos);
+									}
+								}
+							}
+						}
+					} else if(_g1._hx_index == 0) {
+						var _g4 = _g1.c;
+						if(_g4._hx_index == 2) {
+							var i = _g4.v;
+							if(i < 0) {
+								this.error("Cannot index with negative value",e.pos);
+							}
+						}
+					}
+					type = t;
+					break;
+				default:
+					var size = _g3;
+					var t = _g2;
+					type = t;
+				}
+				break;
+			default:
+				this.error("Cannot index " + hxsl_Tools.toString(e11.t) + " : should be an array",e.pos);
+			}
+			ed = hxsl_TExprDef.TArray(e11,e21);
+			break;
+		case 17:
+			var el = _g.el;
+			if(el.length == 0) {
+				this.error("Empty array not supported",e.pos);
+			}
+			var _g1 = [];
+			var _g2 = 0;
+			while(_g2 < el.length) {
+				var e1 = el[_g2];
+				++_g2;
+				_g1.push(this.typeExpr(e1,hxsl__$Checker_WithType.Value));
+			}
+			var el = _g1;
+			var t = el[0].t;
+			var _g1 = 1;
+			var _g2 = el.length;
+			while(_g1 < _g2) {
+				var i = _g1++;
+				this.unifyExpr(el[i],t);
+			}
+			type = hxsl_Type.TArray(t,hxsl_SizeDecl.SConst(el.length));
+			ed = hxsl_TExprDef.TArrayDecl(el);
+			break;
+		case 18:
+			var e1 = _g.e;
+			var cases = _g.cases;
+			var def = _g.def;
+			var et = this.typeExpr(e1,hxsl__$Checker_WithType.Value);
+			var _g1 = [];
+			var _g2 = 0;
+			while(_g2 < cases.length) {
+				var c = cases[_g2];
+				++_g2;
+				var _g3 = [];
+				var _g4 = 0;
+				var _g5 = c.values;
+				while(_g4 < _g5.length) {
+					var v = _g5[_g4];
+					++_g4;
+					_g3.push(this.typeWith(v,et.t));
+				}
+				_g1.push({ values : _g3, expr : this.typeExpr(c.expr,$with)});
+			}
+			var cases = _g1;
+			var def1 = def == null ? null : this.typeExpr(def,$with);
+			type = hxsl_Type.TVoid;
+			ed = hxsl_TExprDef.TSwitch(et,cases,def1);
+			break;
+		case 19:
+			var cond = _g.cond;
+			var loop = _g.loop;
+			var normalWhile = _g.normalWhile;
+			type = hxsl_Type.TVoid;
+			var cond1 = this.typeWith(cond,hxsl_Type.TBool);
+			var oldL = this.inLoop;
+			var oldW = this.inWhile;
+			this.inLoop = true;
+			this.inWhile = true;
+			var loop1 = this.typeExpr(loop,hxsl__$Checker_WithType.NoValue);
+			this.inLoop = oldL;
+			this.inWhile = oldW;
+			ed = hxsl_TExprDef.TWhile(cond1,loop1,normalWhile);
+			break;
+		case 20:
+			var name = _g.name;
+			var args3 = _g.args;
+			var e1 = _g.e;
+			var e2 = this.typeExpr(e1,$with);
+			type = e2.t;
+			var _g = [];
+			var _g1 = 0;
+			while(_g1 < args3.length) {
+				var c = args3[_g1];
+				++_g1;
+				var _g2 = c.expr;
+				var ed1;
+				switch(_g2._hx_index) {
+				case 0:
+					var c1 = _g2.c;
+					ed1 = c1;
+					break;
+				case 1:
+					var i = _g2.i;
+					ed1 = hxsl_Const.CString(i);
+					break;
+				default:
+					ed1 = this.error("Metadata parameter should be constant",c.pos);
+				}
+				_g.push(ed1);
+			}
+			ed = hxsl_TExprDef.TMeta(name,_g,e2);
+			break;
+		}
+		if(type == null) {
+			throw haxe_Exception.thrown("assert");
+		}
+		return { e : ed, t : type, p : e.pos};
+	}
+	,propagate: function($with) {
+		if($with._hx_index == 2) {
+			return hxsl__$Checker_WithType.NoValue;
+		} else {
+			return $with;
+		}
+	}
+	,checkExpr: function(e,funs,isImport,isExtends) {
+		var _gthis = this;
+		var _g = e.expr;
+		switch(_g._hx_index) {
+		case 6:
+			var _g1 = _g.e;
+			var _g2 = _g.args;
+			var _g3 = _g1.expr;
+			var _g4 = _g1.pos;
+			if(_g3._hx_index == 1) {
+				switch(_g3.i) {
+				case "extends":
+					if(_g2.length == 1) {
+						var e1 = _g2[0];
+						var path = [];
+						var loop = null;
+						loop = function(e) {
+							var _g = e.expr;
+							switch(_g._hx_index) {
+							case 0:
+								var _g1 = _g.c;
+								if(_g1._hx_index == 4) {
+									var s = _g1.v;
+									path.push(s);
+								} else {
+									_gthis.error("Should be a shader type path",e.pos);
+								}
+								break;
+							case 1:
+								var n = _g.i;
+								path.push(n);
+								break;
+							case 3:
+								var e1 = _g.e;
+								var f = _g.f;
+								loop(e1);
+								path.push(f);
+								break;
+							default:
+								_gthis.error("Should be a shader type path",e.pos);
+							}
+						};
+						loop(e1);
+						var sexpr = null;
+						try {
+							sexpr = this.loadShader(path.join("."));
+						} catch( _g1 ) {
+							var _g3 = haxe_Exception.caught(_g1).unwrap();
+							if(((_g3) instanceof hxsl_Error)) {
+								var err = _g3;
+								this.error(Std.string(err),e1.pos);
+							} else {
+								throw _g1;
+							}
+						}
+						if(sexpr != null) {
+							this.checkExpr(sexpr,funs,isImport,true);
+						}
+					} else {
+						this.error("This expression is not allowed at shader declaration level",e.pos);
+					}
+					break;
+				case "import":
+					if(_g2.length == 1) {
+						var e1 = _g2[0];
+						var path1 = [];
+						var loop1 = null;
+						loop1 = function(e) {
+							var _g = e.expr;
+							switch(_g._hx_index) {
+							case 1:
+								var n = _g.i;
+								path1.push(n);
+								break;
+							case 3:
+								var e1 = _g.e;
+								var f = _g.f;
+								loop1(e1);
+								path1.push(f);
+								break;
+							default:
+								_gthis.error("Should be a shader type path",e.pos);
+							}
+						};
+						loop1(e1);
+						var sexpr = null;
+						try {
+							sexpr = this.loadShader(path1.join("."));
+						} catch( _g1 ) {
+							var _g2 = haxe_Exception.caught(_g1);
+							var _g3 = _g2.unwrap();
+							if(((_g2) instanceof haxe_macro_Error)) {
+								var err = _g2;
+								throw err;
+							} else {
+								var err = _g3;
+								this.error(Std.string(err),e1.pos);
+							}
+						}
+						if(sexpr != null) {
+							this.checkExpr(sexpr,funs,true,isExtends);
+						}
+					} else {
+						this.error("This expression is not allowed at shader declaration level",e.pos);
+					}
+					break;
+				default:
+					this.error("This expression is not allowed at shader declaration level",e.pos);
+				}
+			} else {
+				this.error("This expression is not allowed at shader declaration level",e.pos);
+			}
+			break;
+		case 7:
+			var el = _g.el;
+			var _g1 = 0;
+			while(_g1 < el.length) {
+				var e1 = el[_g1];
+				++_g1;
+				this.checkExpr(e1,funs,isImport,isExtends);
+			}
+			break;
+		case 8:
+			var vl = _g.v;
+			var _g1 = 0;
+			while(_g1 < vl.length) {
+				var v = vl[_g1];
+				++_g1;
+				if(v.kind == null) {
+					v.kind = hxsl_VarKind.Local;
+					var _g2 = 0;
+					var _g3 = v.qualifiers;
+					while(_g2 < _g3.length) {
+						var q = _g3[_g2];
+						++_g2;
+						if(q._hx_index == 0) {
+							var _g4 = q.max;
+							v.kind = hxsl_VarKind.Param;
+						}
+					}
+				}
+				var einit = null;
+				if(v.expr != null) {
+					if(v.kind != hxsl_VarKind.Param && v.kind != hxsl_VarKind.Local) {
+						this.error("Cannot initialize variable declaration if not @param or local",v.expr.pos);
+					}
+					var e1 = this.typeExpr(v.expr,v.type == null ? hxsl__$Checker_WithType.Value : hxsl__$Checker_WithType.With(v.type));
+					if(v.type == null) {
+						v.type = e1.t;
+					} else {
+						this.unify(e1.t,v.type,v.expr.pos);
+					}
+					this.checkConst(e1);
+					einit = e1;
+				}
+				if(v.type == null) {
+					this.error("Type required for variable declaration",e.pos);
+				}
+				if(isImport && v.kind == hxsl_VarKind.Param) {
+					continue;
+				}
+				if(Object.prototype.hasOwnProperty.call(this.vars.h,v.name)) {
+					this.error("Duplicate var decl '" + v.name + "'",e.pos);
+				}
+				var v1 = this.makeVar(v,e.pos);
+				var _g5 = v1.type;
+				switch(_g5._hx_index) {
+				case 10:
+					if(_g5.dim._hx_index == 2) {
+						if(_g5.isArray == true) {
+							this.error("Unsupported texture type",e.pos);
+						}
+					}
+					break;
+				case 11:
+					var _g6 = _g5.channels;
+					if(_g5.dim._hx_index == 2) {
+						if(_g5.isArray == true) {
+							this.error("Unsupported texture type",e.pos);
+						} else if(_g6 == 3) {
+							this.error("Unsupported texture type",e.pos);
+						}
+					} else if(_g6 == 3) {
+						this.error("Unsupported texture type",e.pos);
+					}
+					break;
+				default:
+				}
+				if(einit != null) {
+					this.inits.push({ v : v1, e : einit});
+				} else if(v1.qualifiers != null && v1.qualifiers.indexOf(hxsl_VarQualifier.Final) >= 0) {
+					this.error("Final variable needs initializer",e.pos);
+				}
+				this.vars.h[v1.name] = v1;
+			}
+			break;
+		case 9:
+			var f = _g.f;
+			if(isImport && (f.name == "fragment" || f.name == "vertex" || StringTools.startsWith(f.name,"__init__"))) {
+				return;
+			}
+			var _g = 0;
+			var _g1 = funs.slice();
+			while(_g < _g1.length) {
+				var f2 = _g1[_g];
+				++_g;
+				if(f2.f.name == f.name && f2.inherit) {
+					HxOverrides.remove(funs,f2);
+				}
+			}
+			funs.push({ f : f, p : e.pos, inherit : isExtends || isImport});
+			break;
+		default:
+			this.error("This expression is not allowed at shader declaration level",e.pos);
+		}
+	}
+	,checkConst: function(e) {
+		var _g = e.e;
+		switch(_g._hx_index) {
+		case 0:
+			var _g1 = _g.c;
+			break;
+		case 3:
+			var e1 = _g.e;
+			this.checkConst(e1);
+			break;
+		case 8:
+			var _g1 = _g.e;
+			var _g2 = _g.args;
+			var _g3 = _g1.e;
+			var _g4 = _g1.p;
+			var _g4 = _g1.t;
+			if(_g3._hx_index == 2) {
+				switch(_g3.g._hx_index) {
+				case 41:case 42:case 43:case 44:case 45:case 46:
+					var args = _g2;
+					var _g1 = 0;
+					while(_g1 < args.length) {
+						var a = args[_g1];
+						++_g1;
+						this.checkConst(a);
+					}
+					break;
+				default:
+					this.error("This expression should be constant",e.p);
+				}
+			} else {
+				this.error("This expression should be constant",e.p);
+			}
+			break;
+		case 17:
+			var el = _g.el;
+			var _g = 0;
+			while(_g < el.length) {
+				var e1 = el[_g];
+				++_g;
+				this.checkConst(e1);
+			}
+			break;
+		default:
+			this.error("This expression should be constant",e.p);
+		}
+	}
+	,makeVar: function(v,pos,parent) {
+		var tv = { id : hxsl_Tools.allocVarId(), name : v.name, kind : v.kind, type : v.type, qualifiers : v.qualifiers};
+		if(parent != null) {
+			tv.parent = parent;
+		}
+		if(tv.kind == null) {
+			if(parent == null) {
+				tv.kind = hxsl_VarKind.Local;
+			} else {
+				tv.kind = parent.kind;
+			}
+		} else if(parent != null && tv.kind != parent.kind) {
+			if(parent.kind._hx_index == 0) {
+				if(tv.kind._hx_index != 3) {
+					this.error("Variable " + Std.string(parent.kind) + " cannot be changed to " + Std.string(tv.kind),pos);
+				}
+			} else {
+				this.error("Variable " + Std.string(parent.kind) + " cannot be changed to " + Std.string(tv.kind),pos);
+			}
+		}
+		if(v.qualifiers.length > 0) {
+			tv.qualifiers = v.qualifiers;
+			var _g = 0;
+			var _g1 = v.qualifiers;
+			while(_g < _g1.length) {
+				var q = _g1[_g];
+				++_g;
+				switch(q._hx_index) {
+				case 0:
+					var _g2 = q.max;
+					var p = parent;
+					while(p != null) {
+						if(!hxsl_Tools.isStruct(p)) {
+							this.error("@const only allowed in structure",pos);
+						}
+						p = p.parent;
+					}
+					if(tv.kind != hxsl_VarKind.Global && tv.kind != hxsl_VarKind.Param) {
+						this.error("@const only allowed on parameter or global",pos);
+					}
+					break;
+				case 1:
+					break;
+				case 2:
+					if(tv.kind != hxsl_VarKind.Param) {
+						this.error("@nullable only allowed on parameter or global",pos);
+					}
+					break;
+				case 3:
+					if(tv.kind != hxsl_VarKind.Global) {
+						this.error("@perObject only allowed on global",pos);
+					}
+					break;
+				case 4:
+					var _g3 = q.n;
+					if(parent != null) {
+						this.error("Cannot have an explicit name for a structure variable",pos);
+					}
+					if(tv.kind != hxsl_VarKind.Global) {
+						this.error("Explicit name is only allowed for global var",pos);
+					}
+					break;
+				case 5:
+					if(parent != null) {
+						this.error("Cannot share a structure field",pos);
+					}
+					if(tv.kind != hxsl_VarKind.Param) {
+						this.error("Can only share a @param",pos);
+					}
+					break;
+				case 6:
+					var _g4 = q.p;
+					var _g5 = v.type;
+					if(_g5 == null) {
+						this.error("Precision qualifier not supported on " + Std.string(v.type),pos);
+					} else {
+						switch(_g5._hx_index) {
+						case 3:
+							break;
+						case 5:
+							var _g6 = _g5.size;
+							if(_g5.t._hx_index != 1) {
+								this.error("Precision qualifier not supported on " + Std.string(v.type),pos);
+							}
+							break;
+						default:
+							this.error("Precision qualifier not supported on " + Std.string(v.type),pos);
+						}
+					}
+					break;
+				case 7:
+					var min = q.min;
+					var max = q.max;
+					var _g7 = v.type;
+					if(_g7 == null) {
+						this.error("Precision qualifier not supported on " + Std.string(v.type),pos);
+					} else {
+						switch(_g7._hx_index) {
+						case 1:case 3:
+							break;
+						case 5:
+							var _g8 = _g7.size;
+							if(_g7.t._hx_index != 1) {
+								this.error("Precision qualifier not supported on " + Std.string(v.type),pos);
+							}
+							break;
+						default:
+							this.error("Precision qualifier not supported on " + Std.string(v.type),pos);
+						}
+					}
+					break;
+				case 8:
+					break;
+				case 9:
+					var _g9 = q.v;
+					if(tv.kind != hxsl_VarKind.Input && tv.kind != hxsl_VarKind.Param && (tv.kind != hxsl_VarKind.Global || v.qualifiers.indexOf(hxsl_VarQualifier.PerObject) < 0)) {
+						this.error("@perInstance only allowed on input/param",pos);
+					}
+					break;
+				case 10:
+					var _g10 = q.s;
+					break;
+				case 11:
+					var source = q.source;
+					if(v.kind != hxsl_VarKind.Local) {
+						this.error("Borrow should not have a type qualifier",pos);
+					}
+					break;
+				case 12:
+					var _g11 = q.name;
+					var _g12 = v.type;
+					if(_g12 == null) {
+						this.error("Sampler should be on sampler type or sampler array",pos);
+					} else {
+						switch(_g12._hx_index) {
+						case 10:
+							var _g13 = _g12.dim;
+							var _g14 = _g12.isArray;
+							break;
+						case 15:
+							var _g15 = _g12.t;
+							var _g16 = _g12.size;
+							if(_g15._hx_index == 10) {
+								var _g17 = _g15.dim;
+								var _g18 = _g15.isArray;
+							} else {
+								this.error("Sampler should be on sampler type or sampler array",pos);
+							}
+							break;
+						default:
+							this.error("Sampler should be on sampler type or sampler array",pos);
+						}
+					}
+					break;
+				case 13:
+					if(tv.kind != hxsl_VarKind.Local) {
+						this.error("final only allowed on local",pos);
+					}
+					break;
+				case 14:
+					if(tv.kind != hxsl_VarKind.Local) {
+						this.error("flat only allowed on local",pos);
+					}
+					break;
+				}
+			}
+		}
+		if(tv.type != null) {
+			tv.type = this.makeVarType(tv.type,tv,pos);
+		}
+		return tv;
+	}
+	,makeVarType: function(vt,parent,pos) {
+		switch(vt._hx_index) {
+		case 13:
+			var vl = vt.vl;
+			var vl1 = vl.slice();
+			parent.type = hxsl_Type.TStruct(vl1);
+			var _g = 0;
+			var _g1 = vl1.length;
+			while(_g < _g1) {
+				var i = _g++;
+				var v = vl1[i];
+				vl1[i] = this.makeVar({ type : v.type, qualifiers : v.qualifiers, name : v.name, kind : v.kind, expr : null},pos,parent);
+			}
+			return parent.type;
+		case 15:
+			var t = vt.t;
+			var size = vt.size;
+			if(t._hx_index == 15) {
+				var _g = t.t;
+				var _g = t.size;
+				this.error("Multidimentional arrays are not allowed",pos);
+			}
+			var s;
+			switch(size._hx_index) {
+			case 0:
+				var _g = size.v;
+				s = size;
+				break;
+			case 1:
+				var v = size.v;
+				var path = v.name.split(".");
+				var v2 = null;
+				var _g = 0;
+				while(_g < path.length) {
+					var n = path[_g];
+					++_g;
+					if(v2 == null) {
+						v2 = this.vars.h[n];
+						if(v2 == null && parent != null) {
+							var p = parent;
+							while(p.parent != null) p = p.parent;
+							if(p.name == n) {
+								v2 = p;
+							}
+						}
+					} else {
+						var _g1 = v2.type;
+						if(_g1._hx_index == 13) {
+							var vl = _g1.vl;
+							var f = null;
+							var _g2 = 0;
+							while(_g2 < vl.length) {
+								var v1 = vl[_g2];
+								++_g2;
+								if(v1.name == n) {
+									f = v1;
+									break;
+								}
+							}
+							v2 = f;
+						} else {
+							v2 = null;
+						}
+					}
+					if(v2 == null) {
+						break;
+					}
+				}
+				if(v2 == null) {
+					this.error("Array size variable '" + v.name + "'not found",pos);
+				}
+				if(!hxsl_Tools.isConst(v2)) {
+					this.error("Array size variable '" + v.name + "'should be a constant",pos);
+				}
+				s = hxsl_SizeDecl.SVar(v2);
+				break;
+			}
+			t = this.makeVarType(t,parent,pos);
+			switch(vt._hx_index) {
+			case 15:
+				var _g = vt.t;
+				var _g = vt.size;
+				return hxsl_Type.TArray(t,s);
+			case 16:
+				var _g = vt.t;
+				var _g = vt.size;
+				var kind = vt.kind;
+				return hxsl_Type.TBuffer(t,s,kind);
+			default:
+				throw haxe_Exception.thrown("assert");
+			}
+			break;
+		case 16:
+			var _g = vt.kind;
+			var t = vt.t;
+			var size = vt.size;
+			if(t._hx_index == 15) {
+				var _g = t.t;
+				var _g = t.size;
+				this.error("Multidimentional arrays are not allowed",pos);
+			}
+			var s;
+			switch(size._hx_index) {
+			case 0:
+				var _g = size.v;
+				s = size;
+				break;
+			case 1:
+				var v = size.v;
+				var path = v.name.split(".");
+				var v2 = null;
+				var _g = 0;
+				while(_g < path.length) {
+					var n = path[_g];
+					++_g;
+					if(v2 == null) {
+						v2 = this.vars.h[n];
+						if(v2 == null && parent != null) {
+							var p = parent;
+							while(p.parent != null) p = p.parent;
+							if(p.name == n) {
+								v2 = p;
+							}
+						}
+					} else {
+						var _g1 = v2.type;
+						if(_g1._hx_index == 13) {
+							var vl = _g1.vl;
+							var f = null;
+							var _g2 = 0;
+							while(_g2 < vl.length) {
+								var v1 = vl[_g2];
+								++_g2;
+								if(v1.name == n) {
+									f = v1;
+									break;
+								}
+							}
+							v2 = f;
+						} else {
+							v2 = null;
+						}
+					}
+					if(v2 == null) {
+						break;
+					}
+				}
+				if(v2 == null) {
+					this.error("Array size variable '" + v.name + "'not found",pos);
+				}
+				if(!hxsl_Tools.isConst(v2)) {
+					this.error("Array size variable '" + v.name + "'should be a constant",pos);
+				}
+				s = hxsl_SizeDecl.SVar(v2);
+				break;
+			}
+			t = this.makeVarType(t,parent,pos);
+			switch(vt._hx_index) {
+			case 15:
+				var _g = vt.t;
+				var _g = vt.size;
+				return hxsl_Type.TArray(t,s);
+			case 16:
+				var _g = vt.t;
+				var _g = vt.size;
+				var kind = vt.kind;
+				return hxsl_Type.TBuffer(t,s,kind);
+			default:
+				throw haxe_Exception.thrown("assert");
+			}
+			break;
+		default:
+			return vt;
+		}
+	}
+	,isParentArray: function(v) {
+		if(v.parent == null) {
+			return false;
+		}
+		var _g = v.parent.type;
+		switch(_g._hx_index) {
+		case 13:
+			var _g1 = _g.vl;
+			return this.isParentArray(v.parent);
+		case 15:
+			var _g1 = _g.t;
+			var _g1 = _g.size;
+			return true;
+		case 16:
+			var _g1 = _g.t;
+			var _g1 = _g.size;
+			var _g1 = _g.kind;
+			return true;
+		default:
+			return false;
+		}
+	}
+	,fieldAccess: function(e,f,$with,pos) {
+		var ef;
+		var _g = e.t;
+		if(_g._hx_index == 13) {
+			var vl = _g.vl;
+			var found = null;
+			var _g = 0;
+			while(_g < vl.length) {
+				var v = vl[_g];
+				++_g;
+				if(v.name == f) {
+					found = v;
+					break;
+				}
+			}
+			ef = found == null ? null : this.isParentArray(found) ? { e : hxsl_TExprDef.TField(e,f), t : found.type, p : pos} : { e : hxsl_TExprDef.TVar(found), t : found.type, p : pos};
+		} else {
+			ef = null;
+		}
+		if(ef != null) {
+			return hxsl__$Checker_FieldAccess.FField(ef);
+		}
+		var g = this.globals.h[f];
+		if(g == null) {
+			var gl;
+			var _g = e.t;
+			switch(f) {
+			case "fetch":
+				switch(_g._hx_index) {
+				case 10:
+					var _g1 = _g.dim;
+					var _g1 = _g.isArray;
+					gl = hxsl_TGlobal.Texel;
+					break;
+				case 17:
+					var _g1 = _g.size;
+					gl = hxsl_TGlobal.ChannelFetch;
+					break;
+				default:
+					gl = null;
+				}
+				break;
+			case "fetchLod":
+				switch(_g._hx_index) {
+				case 10:
+					var _g1 = _g.dim;
+					var _g1 = _g.isArray;
+					gl = hxsl_TGlobal.Texel;
+					break;
+				case 17:
+					var _g1 = _g.size;
+					gl = hxsl_TGlobal.ChannelFetch;
+					break;
+				default:
+					gl = null;
+				}
+				break;
+			case "get":
+				switch(_g._hx_index) {
+				case 10:
+					var _g1 = _g.dim;
+					var _g1 = _g.isArray;
+					gl = hxsl_TGlobal.Texture;
+					break;
+				case 17:
+					var _g1 = _g.size;
+					gl = hxsl_TGlobal.ChannelRead;
+					break;
+				default:
+					gl = null;
+				}
+				break;
+			case "getLod":
+				switch(_g._hx_index) {
+				case 10:
+					var _g1 = _g.dim;
+					var _g1 = _g.isArray;
+					gl = hxsl_TGlobal.TextureLod;
+					break;
+				case 17:
+					var _g1 = _g.size;
+					gl = hxsl_TGlobal.ChannelReadLod;
+					break;
+				default:
+					gl = null;
+				}
+				break;
+			case "size":
+				switch(_g._hx_index) {
+				case 10:
+					var _g1 = _g.dim;
+					var _g1 = _g.isArray;
+					gl = hxsl_TGlobal.TextureSize;
+					break;
+				case 11:
+					var _g1 = _g.dim;
+					var _g1 = _g.isArray;
+					var _g1 = _g.channels;
+					gl = hxsl_TGlobal.TextureSize;
+					break;
+				case 17:
+					var _g1 = _g.size;
+					gl = hxsl_TGlobal.ChannelTextureSize;
+					break;
+				default:
+					gl = null;
+				}
+				break;
+			case "store":
+				if(_g._hx_index == 11) {
+					var _g1 = _g.dim;
+					var _g1 = _g.isArray;
+					var _g1 = _g.channels;
+					gl = hxsl_TGlobal.ImageStore;
+				} else {
+					gl = null;
+				}
+				break;
+			default:
+				gl = null;
+			}
+			if(gl != null) {
+				if(f == "get" && this.inWhile) {
+					this.error("Cannot use .get() in while loop, use .getLod instead",pos);
+				}
+				var this1 = this.globals;
+				var key = hxsl_Tools2.toString(gl);
+				g = this1.h[key];
+			}
+		}
+		if(g != null) {
+			var _g = g.t;
+			if(_g._hx_index == 14) {
+				var variants = _g.variants;
+				var sel = [];
+				var _g = 0;
+				while(_g < variants.length) {
+					var v = variants[_g];
+					++_g;
+					if(v.args.length == 0 || !this.tryUnify(e.t,v.args[0].type)) {
+						continue;
+					}
+					var args = v.args.slice();
+					args.shift();
+					sel.push({ args : args, ret : v.ret});
+				}
+				if(sel.length > 0 || variants.length == 0) {
+					return hxsl__$Checker_FieldAccess.FGlobal(g.g,e,sel);
+				}
+			}
+			var _g = e.t;
+			if(g.g._hx_index == 28) {
+				if(_g._hx_index == 15) {
+					var _g1 = _g.t;
+					var _g1 = _g.size;
+					return hxsl__$Checker_FieldAccess.FField({ e : hxsl_TExprDef.TCall({ e : hxsl_TExprDef.TGlobal(hxsl_TGlobal.Length), t : hxsl_Type.TVoid, p : pos},[e]), t : hxsl_Type.TInt, p : pos});
+				}
+			}
+		}
+		var stype;
+		var ncomps;
+		var _g = e.t;
+		switch(_g._hx_index) {
+		case 1:
+			stype = hxsl_VecType.VInt;
+			ncomps = 1;
+			break;
+		case 2:
+			stype = hxsl_VecType.VBool;
+			ncomps = 1;
+			break;
+		case 3:
+			stype = hxsl_VecType.VFloat;
+			ncomps = 1;
+			break;
+		case 5:
+			var size = _g.size;
+			var t = _g.t;
+			stype = t;
+			ncomps = size;
+			break;
+		case 9:
+			var size = _g.size;
+			stype = hxsl_VecType.VFloat;
+			ncomps = size;
+			break;
+		default:
+			stype = null;
+			ncomps = 0;
+		}
+		if(ncomps > 0 && f.length <= 4) {
+			var str = "xrsygtzbpwaq";
+			var comps = [hxsl_Component.X,hxsl_Component.Y,hxsl_Component.Z,hxsl_Component.W];
+			var cat = -1;
+			var out = [];
+			var _g = 0;
+			var _g1 = f.length;
+			while(_g < _g1) {
+				var i = _g++;
+				var idx = str.indexOf(f.charAt(i));
+				if(idx < 0) {
+					return null;
+				}
+				var icat = idx % 3;
+				if(cat < 0) {
+					cat = icat;
+				} else if(icat != cat) {
+					return null;
+				}
+				var cid = idx / 3 | 0;
+				if(cid >= ncomps) {
+					this.error(hxsl_Tools.toString(e.t) + " does not have component " + f.charAt(i),pos);
+				}
+				out.push(comps[cid]);
+			}
+			return hxsl__$Checker_FieldAccess.FField({ e : hxsl_TExprDef.TSwiz(e,out), t : out.length == 1 ? hxsl_Tools.toType(stype) : hxsl_Type.TVec(out.length,stype), p : pos});
+		}
+		return null;
+	}
+	,getSizeType: function(size,vtype) {
+		switch(size) {
+		case 1:
+			if(vtype == hxsl_VecType.VInt) {
+				return hxsl_Type.TInt;
+			} else {
+				return hxsl_Type.TFloat;
+			}
+			break;
+		case 2:
+			if(vtype == hxsl_VecType.VInt) {
+				return hxsl_Checker.ivec2;
+			} else {
+				return hxsl_Checker.vec2;
+			}
+			break;
+		case 3:
+			if(vtype == hxsl_VecType.VInt) {
+				return hxsl_Checker.ivec3;
+			} else {
+				return hxsl_Checker.vec3;
+			}
+			break;
+		case 4:
+			if(vtype == hxsl_VecType.VInt) {
+				return hxsl_Checker.ivec4;
+			} else {
+				return hxsl_Checker.vec4;
+			}
+			break;
+		default:
+			throw haxe_Exception.thrown("assert");
+		}
+	}
+	,specialGlobal: function(g,e,args,pos) {
+		var _gthis = this;
+		var type = null;
+		switch(g._hx_index) {
+		case 37:
+			if(args.length != 1) {
+				this.error("TextureSize() requires one single argument",pos);
+			}
+			var _g = args[0].t;
+			switch(_g._hx_index) {
+			case 10:
+				var dim = _g.dim;
+				var arr = _g.isArray;
+				type = this.getSizeType(hxsl_Tools.getDimSize(dim,arr),hxsl_VecType.VFloat);
+				break;
+			case 11:
+				var _g1 = _g.channels;
+				var dim = _g.dim;
+				var arr = _g.isArray;
+				type = this.getSizeType(hxsl_Tools.getDimSize(dim,arr),hxsl_VecType.VFloat);
+				break;
+			default:
+				this.unify(args[0].t,hxsl_Type.TSampler(hxsl_TexDimension.T2D,false),args[0].p);
+				type = hxsl_Checker.vec2;
+			}
+			break;
+		case 41:
+			var t = hxsl_Type.TFloat;
+			var skip = false;
+			if(args.length == 1 && (t == hxsl_Type.TInt || t == hxsl_Type.TFloat)) {
+				var _g = args[0].t;
+				if(_g._hx_index == 5) {
+					var n2 = _g.size;
+					var t2 = _g.t;
+					if((t2 == hxsl_VecType.VInt || t2 == hxsl_VecType.VFloat) && n2 == 2) {
+						skip = true;
+					}
+				}
+			}
+			if(!skip) {
+				var tsize = 0;
+				var _g = 0;
+				while(_g < args.length) {
+					var a = args[_g];
+					++_g;
+					var _g1 = a.t;
+					if(_g1._hx_index == 5) {
+						var size = _g1.size;
+						var k = _g1.t;
+						if(hxsl_Tools.toType(k) != t) {
+							_gthis.unify(a.t,t,a.p);
+						}
+						tsize += size;
+					} else {
+						_gthis.unifyExpr(a,t);
+						++tsize;
+					}
+				}
+				if(tsize != 2 && tsize > 1) {
+					_gthis.error(hxsl_Tools2.toString(g) + " requires " + 2 + " " + hxsl_Tools.toString(t) + " values but has " + tsize,pos);
+				}
+			}
+			type = hxsl_Type.TVec(2,hxsl_VecType.VFloat);
+			break;
+		case 42:
+			var t = hxsl_Type.TFloat;
+			var skip = false;
+			if(args.length == 1 && (t == hxsl_Type.TInt || t == hxsl_Type.TFloat)) {
+				var _g = args[0].t;
+				if(_g._hx_index == 5) {
+					var n2 = _g.size;
+					var t2 = _g.t;
+					if((t2 == hxsl_VecType.VInt || t2 == hxsl_VecType.VFloat) && n2 == 3) {
+						skip = true;
+					}
+				}
+			}
+			if(!skip) {
+				var tsize = 0;
+				var _g = 0;
+				while(_g < args.length) {
+					var a = args[_g];
+					++_g;
+					var _g1 = a.t;
+					if(_g1._hx_index == 5) {
+						var size = _g1.size;
+						var k = _g1.t;
+						if(hxsl_Tools.toType(k) != t) {
+							_gthis.unify(a.t,t,a.p);
+						}
+						tsize += size;
+					} else {
+						_gthis.unifyExpr(a,t);
+						++tsize;
+					}
+				}
+				if(tsize != 3 && tsize > 1) {
+					_gthis.error(hxsl_Tools2.toString(g) + " requires " + 3 + " " + hxsl_Tools.toString(t) + " values but has " + tsize,pos);
+				}
+			}
+			type = hxsl_Type.TVec(3,hxsl_VecType.VFloat);
+			break;
+		case 43:
+			var t = hxsl_Type.TFloat;
+			var skip = false;
+			if(args.length == 1 && (t == hxsl_Type.TInt || t == hxsl_Type.TFloat)) {
+				var _g = args[0].t;
+				if(_g._hx_index == 5) {
+					var n2 = _g.size;
+					var t2 = _g.t;
+					if((t2 == hxsl_VecType.VInt || t2 == hxsl_VecType.VFloat) && n2 == 4) {
+						skip = true;
+					}
+				}
+			}
+			if(!skip) {
+				var tsize = 0;
+				var _g = 0;
+				while(_g < args.length) {
+					var a = args[_g];
+					++_g;
+					var _g1 = a.t;
+					if(_g1._hx_index == 5) {
+						var size = _g1.size;
+						var k = _g1.t;
+						if(hxsl_Tools.toType(k) != t) {
+							_gthis.unify(a.t,t,a.p);
+						}
+						tsize += size;
+					} else {
+						_gthis.unifyExpr(a,t);
+						++tsize;
+					}
+				}
+				if(tsize != 4 && tsize > 1) {
+					_gthis.error(hxsl_Tools2.toString(g) + " requires " + 4 + " " + hxsl_Tools.toString(t) + " values but has " + tsize,pos);
+				}
+			}
+			type = hxsl_Type.TVec(4,hxsl_VecType.VFloat);
+			break;
+		case 44:case 45:case 46:
+			var k;
+			switch(g._hx_index) {
+			case 44:
+				k = 2;
+				break;
+			case 45:
+				k = 3;
+				break;
+			case 46:
+				k = 4;
+				break;
+			default:
+				throw haxe_Exception.thrown("assert");
+			}
+			if(args.length == 1) {
+				switch(args[0].t._hx_index) {
+				case 1:case 3:
+					break;
+				default:
+					var t = hxsl_Type.TInt;
+					var skip = false;
+					if(args.length == 1 && (t == hxsl_Type.TInt || t == hxsl_Type.TFloat)) {
+						var _g = args[0].t;
+						if(_g._hx_index == 5) {
+							var n2 = _g.size;
+							var t2 = _g.t;
+							if((t2 == hxsl_VecType.VInt || t2 == hxsl_VecType.VFloat) && n2 == k) {
+								skip = true;
+							}
+						}
+					}
+					if(!skip) {
+						var tsize = 0;
+						var _g = 0;
+						while(_g < args.length) {
+							var a = args[_g];
+							++_g;
+							var _g1 = a.t;
+							if(_g1._hx_index == 5) {
+								var size = _g1.size;
+								var k1 = _g1.t;
+								if(hxsl_Tools.toType(k1) != t) {
+									_gthis.unify(a.t,t,a.p);
+								}
+								tsize += size;
+							} else {
+								_gthis.unifyExpr(a,t);
+								++tsize;
+							}
+						}
+						if(tsize != k && tsize > 1) {
+							_gthis.error(hxsl_Tools2.toString(g) + " requires " + k + " " + hxsl_Tools.toString(t) + " values but has " + tsize,pos);
+						}
+					}
+				}
+			} else {
+				var t = hxsl_Type.TInt;
+				var skip = false;
+				if(args.length == 1 && (t == hxsl_Type.TInt || t == hxsl_Type.TFloat)) {
+					var _g = args[0].t;
+					if(_g._hx_index == 5) {
+						var n2 = _g.size;
+						var t2 = _g.t;
+						if((t2 == hxsl_VecType.VInt || t2 == hxsl_VecType.VFloat) && n2 == k) {
+							skip = true;
+						}
+					}
+				}
+				if(!skip) {
+					var tsize = 0;
+					var _g = 0;
+					while(_g < args.length) {
+						var a = args[_g];
+						++_g;
+						var _g1 = a.t;
+						if(_g1._hx_index == 5) {
+							var size = _g1.size;
+							var k1 = _g1.t;
+							if(hxsl_Tools.toType(k1) != t) {
+								_gthis.unify(a.t,t,a.p);
+							}
+							tsize += size;
+						} else {
+							_gthis.unifyExpr(a,t);
+							++tsize;
+						}
+					}
+					if(tsize != k && tsize > 1) {
+						_gthis.error(hxsl_Tools2.toString(g) + " requires " + k + " " + hxsl_Tools.toString(t) + " values but has " + tsize,pos);
+					}
+				}
+			}
+			type = hxsl_Type.TVec(k,hxsl_VecType.VInt);
+			break;
+		case 47:
+			var t = hxsl_Type.TBool;
+			var skip = false;
+			if(args.length == 1 && (t == hxsl_Type.TInt || t == hxsl_Type.TFloat)) {
+				var _g = args[0].t;
+				if(_g._hx_index == 5) {
+					var n2 = _g.size;
+					var t2 = _g.t;
+					if((t2 == hxsl_VecType.VInt || t2 == hxsl_VecType.VFloat) && n2 == 2) {
+						skip = true;
+					}
+				}
+			}
+			if(!skip) {
+				var tsize = 0;
+				var _g = 0;
+				while(_g < args.length) {
+					var a = args[_g];
+					++_g;
+					var _g1 = a.t;
+					if(_g1._hx_index == 5) {
+						var size = _g1.size;
+						var k = _g1.t;
+						if(hxsl_Tools.toType(k) != t) {
+							_gthis.unify(a.t,t,a.p);
+						}
+						tsize += size;
+					} else {
+						_gthis.unifyExpr(a,t);
+						++tsize;
+					}
+				}
+				if(tsize != 2 && tsize > 1) {
+					_gthis.error(hxsl_Tools2.toString(g) + " requires " + 2 + " " + hxsl_Tools.toString(t) + " values but has " + tsize,pos);
+				}
+			}
+			type = hxsl_Type.TVec(2,hxsl_VecType.VBool);
+			break;
+		case 48:
+			var t = hxsl_Type.TBool;
+			var skip = false;
+			if(args.length == 1 && (t == hxsl_Type.TInt || t == hxsl_Type.TFloat)) {
+				var _g = args[0].t;
+				if(_g._hx_index == 5) {
+					var n2 = _g.size;
+					var t2 = _g.t;
+					if((t2 == hxsl_VecType.VInt || t2 == hxsl_VecType.VFloat) && n2 == 3) {
+						skip = true;
+					}
+				}
+			}
+			if(!skip) {
+				var tsize = 0;
+				var _g = 0;
+				while(_g < args.length) {
+					var a = args[_g];
+					++_g;
+					var _g1 = a.t;
+					if(_g1._hx_index == 5) {
+						var size = _g1.size;
+						var k = _g1.t;
+						if(hxsl_Tools.toType(k) != t) {
+							_gthis.unify(a.t,t,a.p);
+						}
+						tsize += size;
+					} else {
+						_gthis.unifyExpr(a,t);
+						++tsize;
+					}
+				}
+				if(tsize != 3 && tsize > 1) {
+					_gthis.error(hxsl_Tools2.toString(g) + " requires " + 3 + " " + hxsl_Tools.toString(t) + " values but has " + tsize,pos);
+				}
+			}
+			type = hxsl_Type.TVec(3,hxsl_VecType.VBool);
+			break;
+		case 49:
+			var t = hxsl_Type.TBool;
+			var skip = false;
+			if(args.length == 1 && (t == hxsl_Type.TInt || t == hxsl_Type.TFloat)) {
+				var _g = args[0].t;
+				if(_g._hx_index == 5) {
+					var n2 = _g.size;
+					var t2 = _g.t;
+					if((t2 == hxsl_VecType.VInt || t2 == hxsl_VecType.VFloat) && n2 == 4) {
+						skip = true;
+					}
+				}
+			}
+			if(!skip) {
+				var tsize = 0;
+				var _g = 0;
+				while(_g < args.length) {
+					var a = args[_g];
+					++_g;
+					var _g1 = a.t;
+					if(_g1._hx_index == 5) {
+						var size = _g1.size;
+						var k = _g1.t;
+						if(hxsl_Tools.toType(k) != t) {
+							_gthis.unify(a.t,t,a.p);
+						}
+						tsize += size;
+					} else {
+						_gthis.unifyExpr(a,t);
+						++tsize;
+					}
+				}
+				if(tsize != 4 && tsize > 1) {
+					_gthis.error(hxsl_Tools2.toString(g) + " requires " + 4 + " " + hxsl_Tools.toString(t) + " values but has " + tsize,pos);
+				}
+			}
+			type = hxsl_Type.TVec(4,hxsl_VecType.VBool);
+			break;
+		case 50:
+			var _g = [];
+			var _g1 = 0;
+			while(_g1 < args.length) {
+				var a = args[_g1];
+				++_g1;
+				_g.push(a.t);
+			}
+			var _g1 = _g;
+			switch(_g1.length) {
+			case 1:
+				if(_g1[0]._hx_index == 12) {
+					type = hxsl_Type.TMat2;
+				} else {
+					this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+				}
+				break;
+			case 2:
+				var _g = _g1[0];
+				var _g2 = _g1[1];
+				if(_g._hx_index == 5) {
+					if(_g.size == 2) {
+						if(_g.t._hx_index == 1) {
+							if(_g2._hx_index == 5) {
+								if(_g2.size == 2) {
+									if(_g2.t._hx_index == 1) {
+										type = hxsl_Type.TMat2;
+									} else {
+										this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+									}
+								} else {
+									this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+								}
+							} else {
+								this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+							}
+						} else {
+							this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+						}
+					} else {
+						this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+					}
+				} else {
+					this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+				}
+				break;
+			case 4:
+				if(_g1[0]._hx_index == 3) {
+					if(_g1[1]._hx_index == 3) {
+						if(_g1[2]._hx_index == 3) {
+							if(_g1[3]._hx_index == 3) {
+								type = hxsl_Type.TMat2;
+							} else {
+								this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+							}
+						} else {
+							this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+						}
+					} else {
+						this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+					}
+				} else {
+					this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+				}
+				break;
+			default:
+				this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+			}
+			break;
+		case 51:
+			var _g = [];
+			var _g1 = 0;
+			while(_g1 < args.length) {
+				var a = args[_g1];
+				++_g1;
+				_g.push(a.t);
+			}
+			var _g1 = _g;
+			switch(_g1.length) {
+			case 1:
+				switch(_g1[0]._hx_index) {
+				case 7:case 8:
+					type = hxsl_Type.TMat3;
+					break;
+				default:
+					this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+				}
+				break;
+			case 3:
+				var _g = _g1[0];
+				var _g2 = _g1[1];
+				var _g3 = _g1[2];
+				if(_g._hx_index == 5) {
+					if(_g.size == 3) {
+						if(_g.t._hx_index == 1) {
+							if(_g2._hx_index == 5) {
+								if(_g2.size == 3) {
+									if(_g2.t._hx_index == 1) {
+										if(_g3._hx_index == 5) {
+											if(_g3.size == 3) {
+												if(_g3.t._hx_index == 1) {
+													type = hxsl_Type.TMat3;
+												} else {
+													this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+												}
+											} else {
+												this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+											}
+										} else {
+											this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+										}
+									} else {
+										this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+									}
+								} else {
+									this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+								}
+							} else {
+								this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+							}
+						} else {
+							this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+						}
+					} else {
+						this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+					}
+				} else {
+					this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+				}
+				break;
+			case 9:
+				if(_g1[0]._hx_index == 3) {
+					if(_g1[1]._hx_index == 3) {
+						if(_g1[2]._hx_index == 3) {
+							if(_g1[3]._hx_index == 3) {
+								if(_g1[4]._hx_index == 3) {
+									if(_g1[5]._hx_index == 3) {
+										if(_g1[6]._hx_index == 3) {
+											if(_g1[7]._hx_index == 3) {
+												if(_g1[8]._hx_index == 3) {
+													type = hxsl_Type.TMat3;
+												} else {
+													this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+												}
+											} else {
+												this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+											}
+										} else {
+											this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+										}
+									} else {
+										this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+									}
+								} else {
+									this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+								}
+							} else {
+								this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+							}
+						} else {
+							this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+						}
+					} else {
+						this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+					}
+				} else {
+					this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+				}
+				break;
+			default:
+				this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+			}
+			break;
+		case 52:
+			var _g = [];
+			var _g1 = 0;
+			while(_g1 < args.length) {
+				var a = args[_g1];
+				++_g1;
+				_g.push(a.t);
+			}
+			var _g1 = _g;
+			switch(_g1.length) {
+			case 1:
+				if(_g1[0]._hx_index == 7) {
+					type = hxsl_Type.TMat4;
+				} else {
+					this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+				}
+				break;
+			case 4:
+				var _g = _g1[0];
+				var _g2 = _g1[1];
+				var _g3 = _g1[2];
+				var _g4 = _g1[3];
+				if(_g._hx_index == 5) {
+					if(_g.size == 4) {
+						if(_g.t._hx_index == 1) {
+							if(_g2._hx_index == 5) {
+								if(_g2.size == 4) {
+									if(_g2.t._hx_index == 1) {
+										if(_g3._hx_index == 5) {
+											if(_g3.size == 4) {
+												if(_g3.t._hx_index == 1) {
+													if(_g4._hx_index == 5) {
+														if(_g4.size == 4) {
+															if(_g4.t._hx_index == 1) {
+																type = hxsl_Type.TMat4;
+															} else {
+																this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+															}
+														} else {
+															this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+														}
+													} else {
+														this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+													}
+												} else {
+													this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+												}
+											} else {
+												this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+											}
+										} else {
+											this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+										}
+									} else {
+										this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+									}
+								} else {
+									this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+								}
+							} else {
+								this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+							}
+						} else {
+							this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+						}
+					} else {
+						this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+					}
+				} else {
+					this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+				}
+				break;
+			default:
+				this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+			}
+			break;
+		case 53:
+			var _g = [];
+			var _g1 = 0;
+			while(_g1 < args.length) {
+				var a = args[_g1];
+				++_g1;
+				_g.push(a.t);
+			}
+			var _g1 = _g;
+			switch(_g1.length) {
+			case 1:
+				if(_g1[0]._hx_index == 7) {
+					type = hxsl_Type.TMat3x4;
+				} else {
+					this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+				}
+				break;
+			case 3:
+				var _g = _g1[0];
+				var _g2 = _g1[1];
+				var _g3 = _g1[2];
+				if(_g._hx_index == 5) {
+					if(_g.size == 4) {
+						if(_g.t._hx_index == 1) {
+							if(_g2._hx_index == 5) {
+								if(_g2.size == 4) {
+									if(_g2.t._hx_index == 1) {
+										if(_g3._hx_index == 5) {
+											if(_g3.size == 4) {
+												if(_g3.t._hx_index == 1) {
+													type = hxsl_Type.TMat3x4;
+												} else {
+													this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+												}
+											} else {
+												this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+											}
+										} else {
+											this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+										}
+									} else {
+										this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+									}
+								} else {
+									this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+								}
+							} else {
+								this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+							}
+						} else {
+							this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+						}
+					} else {
+						this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+					}
+				} else {
+					this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+				}
+				break;
+			default:
+				this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+			}
+			break;
+		case 68:
+			type = hxsl_Type.TVoid;
+			break;
+		case 79:
+			var _g = [];
+			var _g1 = 0;
+			while(_g1 < args.length) {
+				var a = args[_g1];
+				++_g1;
+				_g.push(a.t);
+			}
+			var _g1 = _g;
+			if(_g1.length == 3) {
+				var _g = _g1[0];
+				if(_g._hx_index == 11) {
+					var dim = _g.dim;
+					var arr = _g.isArray;
+					var chans = _g.channels;
+					var uv = _g1[1];
+					var color = _g1[2];
+					var szt = this.getSizeType(hxsl_Tools.getDimSize(dim,arr),hxsl_VecType.VInt);
+					this.unify(uv,szt,args[1].p);
+					this.unify(color,chans == 1 ? hxsl_Type.TFloat : hxsl_Type.TVec(chans,hxsl_VecType.VFloat),args[2].p);
+					type = hxsl_Type.TVoid;
+				} else {
+					this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+				}
+			} else {
+				this.error("Cannot apply " + hxsl_Tools2.toString(g) + " to these parameters",pos);
+			}
+			break;
+		default:
+		}
+		if(type == null) {
+			throw haxe_Exception.thrown("Custom Global not supported " + Std.string(g));
+		}
+		return { e : hxsl_TExprDef.TCall(e,args), t : type, p : pos};
+	}
+	,unifyCallParams: function(efun,args,variants,pos) {
+		var minArgs = 1000;
+		var maxArgs = -1000;
+		var sel = [];
+		var _g = 0;
+		while(_g < variants.length) {
+			var v = variants[_g];
+			++_g;
+			var n = v.args.length;
+			if(n < minArgs) {
+				minArgs = n;
+			}
+			if(n > maxArgs) {
+				maxArgs = n;
+			}
+			if(n == args.length) {
+				sel.push(v);
+			}
+		}
+		switch(sel.length) {
+		case 0:
+			if(variants.length == 0) {
+				var _g = efun.e;
+				if(_g._hx_index == 2) {
+					var g = _g.g;
+					var _g = [];
+					var _g1 = 0;
+					while(_g1 < args.length) {
+						var a = args[_g1];
+						++_g1;
+						_g.push(this.typeExpr(a,hxsl__$Checker_WithType.Value));
+					}
+					return this.specialGlobal(g,efun,_g,pos);
+				} else {
+					throw haxe_Exception.thrown("assert");
+				}
+			} else {
+				return this.error("Function expects " + (minArgs == maxArgs ? "" + minArgs : minArgs + "-" + maxArgs) + " arguments",pos);
+			}
+			break;
+		case 1:
+			var f = sel[0];
+			var targs = [];
+			var _g = 0;
+			var _g1 = args.length;
+			while(_g < _g1) {
+				var i = _g++;
+				var ft = f.args[i].type;
+				var a = this.typeExpr(args[i],hxsl__$Checker_WithType.With(ft));
+				try {
+					this.unifyExpr(a,ft);
+				} catch( _g2 ) {
+					var _g3 = haxe_Exception.caught(_g2).unwrap();
+					if(((_g3) instanceof hxsl_Error)) {
+						var e = _g3;
+						e.msg += " for argument '" + f.args[i].name + "'";
+						throw haxe_Exception.thrown(e);
+					} else {
+						throw _g2;
+					}
+				}
+				targs.push(a);
+			}
+			if(variants.length > 1) {
+				efun.t = hxsl_Type.TFun([f]);
+			}
+			return { e : hxsl_TExprDef.TCall(efun,targs), t : f.ret, p : pos};
+		default:
+			var bestMatch = null;
+			var mcount = -1;
+			var _g = 0;
+			while(_g < sel.length) {
+				var f = sel[_g];
+				++_g;
+				var outArgs = [];
+				var _g1 = 0;
+				var _g2 = args.length;
+				while(_g1 < _g2) {
+					var i = _g1++;
+					var a = this.typeExpr(args[i],hxsl__$Checker_WithType.With(f.args[i].type));
+					if(!this.tryUnify(a.t,f.args[i].type)) {
+						break;
+					}
+					outArgs.push(a);
+				}
+				if(outArgs.length > mcount) {
+					bestMatch = f;
+					mcount = outArgs.length;
+					if(mcount == args.length) {
+						efun.t = hxsl_Type.TFun([f]);
+						return { e : hxsl_TExprDef.TCall(efun,outArgs), t : f.ret, p : pos};
+					}
+				}
+			}
+			var _g = 0;
+			var _g1 = args.length;
+			while(_g < _g1) {
+				var i = _g++;
+				try {
+					var e = this.typeExpr(args[i],hxsl__$Checker_WithType.Value);
+					this.unify(e.t,bestMatch.args[i].type,e.p);
+				} catch( _g2 ) {
+					var _g3 = haxe_Exception.caught(_g2).unwrap();
+					if(((_g3) instanceof hxsl_Error)) {
+						var e1 = _g3;
+						e1.msg += " for argument '" + bestMatch.args[i].name + "'";
+						throw haxe_Exception.thrown(e1);
+					} else {
+						throw _g2;
+					}
+				}
+			}
+			throw haxe_Exception.thrown("assert");
+		}
+	}
+	,toFloat: function(e) {
+		if(e.t != hxsl_Type.TInt) {
+			throw haxe_Exception.thrown("assert");
+		}
+		var _g = e.e;
+		if(_g._hx_index == 0) {
+			var _g1 = _g.c;
+			if(_g1._hx_index == 2) {
+				var v = _g1.v;
+				e.e = hxsl_TExprDef.TConst(hxsl_Const.CFloat(v));
+				e.t = hxsl_Type.TFloat;
+			} else {
+				e.e = hxsl_TExprDef.TCall({ e : hxsl_TExprDef.TGlobal(hxsl_TGlobal.ToFloat), t : hxsl_Type.TFun([]), p : e.p},[{ e : e.e, t : e.t, p : e.p}]);
+				e.t = hxsl_Type.TFloat;
+			}
+		} else {
+			e.e = hxsl_TExprDef.TCall({ e : hxsl_TExprDef.TGlobal(hxsl_TGlobal.ToFloat), t : hxsl_Type.TFun([]), p : e.p},[{ e : e.e, t : e.t, p : e.p}]);
+			e.t = hxsl_Type.TFloat;
+		}
+	}
+	,typeBinop: function(op,e1,e2,pos) {
+		switch(op._hx_index) {
+		case 4:
+			throw haxe_Exception.thrown("assert");
+		case 5:case 6:case 7:case 8:case 9:case 10:
+			var _g = e1.t;
+			switch(_g._hx_index) {
+			case 2:
+				if((op == haxe_macro_Binop.OpEq || op == haxe_macro_Binop.OpNotEq) && e2.t != hxsl_Type.TVoid) {
+					this.unifyExpr(e2,e1.t);
+					return hxsl_Type.TBool;
+				} else {
+					var _g1 = e1.e;
+					var _g2 = e2.e;
+					switch(_g1._hx_index) {
+					case 0:
+						if(_g1.c._hx_index == 0) {
+							if(_g2._hx_index == 1) {
+								var v = _g2.v;
+								if(!hxsl_Tools.hasQualifier(v,hxsl_VarQualifier.Nullable)) {
+									this.error("Variable is not declared as nullable",e1.p);
+								}
+								return hxsl_Type.TBool;
+							} else {
+								return this.error("Cannot compare " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+							}
+						} else {
+							return this.error("Cannot compare " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+						}
+						break;
+					case 1:
+						if(_g2._hx_index == 0) {
+							if(_g2.c._hx_index == 0) {
+								var v = _g1.v;
+								if(!hxsl_Tools.hasQualifier(v,hxsl_VarQualifier.Nullable)) {
+									this.error("Variable is not declared as nullable",e1.p);
+								}
+								return hxsl_Type.TBool;
+							} else {
+								return this.error("Cannot compare " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+							}
+						} else {
+							return this.error("Cannot compare " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+						}
+						break;
+					default:
+						return this.error("Cannot compare " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+					}
+				}
+				break;
+			case 1:case 3:case 4:
+				if(e2.t != hxsl_Type.TVoid) {
+					this.unifyExpr(e2,e1.t);
+					return hxsl_Type.TBool;
+				} else {
+					var _g1 = e1.e;
+					var _g2 = e2.e;
+					switch(_g1._hx_index) {
+					case 0:
+						if(_g1.c._hx_index == 0) {
+							if(_g2._hx_index == 1) {
+								var v = _g2.v;
+								if(!hxsl_Tools.hasQualifier(v,hxsl_VarQualifier.Nullable)) {
+									this.error("Variable is not declared as nullable",e1.p);
+								}
+								return hxsl_Type.TBool;
+							} else {
+								return this.error("Cannot compare " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+							}
+						} else {
+							return this.error("Cannot compare " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+						}
+						break;
+					case 1:
+						if(_g2._hx_index == 0) {
+							if(_g2.c._hx_index == 0) {
+								var v = _g1.v;
+								if(!hxsl_Tools.hasQualifier(v,hxsl_VarQualifier.Nullable)) {
+									this.error("Variable is not declared as nullable",e1.p);
+								}
+								return hxsl_Type.TBool;
+							} else {
+								return this.error("Cannot compare " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+							}
+						} else {
+							return this.error("Cannot compare " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+						}
+						break;
+					default:
+						return this.error("Cannot compare " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+					}
+				}
+				break;
+			case 5:
+				var _g1 = _g.size;
+				var _g1 = _g.t;
+				if(e2.t != hxsl_Type.TVoid) {
+					this.unifyExpr(e2,e1.t);
+					return e1.t;
+				} else {
+					var _g = e1.e;
+					var _g1 = e2.e;
+					switch(_g._hx_index) {
+					case 0:
+						if(_g.c._hx_index == 0) {
+							if(_g1._hx_index == 1) {
+								var v = _g1.v;
+								if(!hxsl_Tools.hasQualifier(v,hxsl_VarQualifier.Nullable)) {
+									this.error("Variable is not declared as nullable",e1.p);
+								}
+								return hxsl_Type.TBool;
+							} else {
+								return this.error("Cannot compare " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+							}
+						} else {
+							return this.error("Cannot compare " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+						}
+						break;
+					case 1:
+						if(_g1._hx_index == 0) {
+							if(_g1.c._hx_index == 0) {
+								var v = _g.v;
+								if(!hxsl_Tools.hasQualifier(v,hxsl_VarQualifier.Nullable)) {
+									this.error("Variable is not declared as nullable",e1.p);
+								}
+								return hxsl_Type.TBool;
+							} else {
+								return this.error("Cannot compare " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+							}
+						} else {
+							return this.error("Cannot compare " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+						}
+						break;
+					default:
+						return this.error("Cannot compare " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+					}
+				}
+				break;
+			default:
+				var _g = e1.e;
+				var _g1 = e2.e;
+				switch(_g._hx_index) {
+				case 0:
+					if(_g.c._hx_index == 0) {
+						if(_g1._hx_index == 1) {
+							var v = _g1.v;
+							if(!hxsl_Tools.hasQualifier(v,hxsl_VarQualifier.Nullable)) {
+								this.error("Variable is not declared as nullable",e1.p);
+							}
+							return hxsl_Type.TBool;
+						} else {
+							return this.error("Cannot compare " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+						}
+					} else {
+						return this.error("Cannot compare " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+					}
+					break;
+				case 1:
+					if(_g1._hx_index == 0) {
+						if(_g1.c._hx_index == 0) {
+							var v = _g.v;
+							if(!hxsl_Tools.hasQualifier(v,hxsl_VarQualifier.Nullable)) {
+								this.error("Variable is not declared as nullable",e1.p);
+							}
+							return hxsl_Type.TBool;
+						} else {
+							return this.error("Cannot compare " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+						}
+					} else {
+						return this.error("Cannot compare " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+					}
+					break;
+				default:
+					return this.error("Cannot compare " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+				}
+			}
+			break;
+		case 11:case 12:case 13:case 16:case 17:case 18:
+			this.unifyExpr(e1,hxsl_Type.TInt);
+			this.unifyExpr(e2,hxsl_Type.TInt);
+			return hxsl_Type.TInt;
+		case 14:case 15:
+			this.unifyExpr(e1,hxsl_Type.TBool);
+			this.unifyExpr(e2,hxsl_Type.TBool);
+			return hxsl_Type.TBool;
+		case 0:case 1:case 2:case 3:case 19:
+			var _g = e1.t;
+			var _g1 = e2.t;
+			if(op._hx_index == 1) {
+				switch(_g._hx_index) {
+				case 1:
+					switch(_g1._hx_index) {
+					case 1:
+						return hxsl_Type.TInt;
+					case 3:
+						this.toFloat(e1);
+						return hxsl_Type.TFloat;
+					case 5:
+						var _g2 = _g1.size;
+						if(_g1.t._hx_index == 1) {
+							this.toFloat(e1);
+							return e2.t;
+						} else {
+							var opName;
+							switch(op._hx_index) {
+							case 0:
+								opName = "add";
+								break;
+							case 1:
+								opName = "multiply";
+								break;
+							case 2:
+								opName = "divide";
+								break;
+							case 3:
+								opName = "subtract";
+								break;
+							default:
+								throw haxe_Exception.thrown("assert");
+							}
+							return this.error("Cannot " + opName + " " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+						}
+						break;
+					default:
+						var opName;
+						switch(op._hx_index) {
+						case 0:
+							opName = "add";
+							break;
+						case 1:
+							opName = "multiply";
+							break;
+						case 2:
+							opName = "divide";
+							break;
+						case 3:
+							opName = "subtract";
+							break;
+						default:
+							throw haxe_Exception.thrown("assert");
+						}
+						return this.error("Cannot " + opName + " " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+					}
+					break;
+				case 3:
+					switch(_g1._hx_index) {
+					case 1:
+						this.toFloat(e2);
+						return hxsl_Type.TFloat;
+					case 3:
+						return hxsl_Type.TFloat;
+					case 5:
+						var _g2 = _g1.size;
+						if(_g1.t._hx_index == 1) {
+							return e2.t;
+						} else {
+							var opName;
+							switch(op._hx_index) {
+							case 0:
+								opName = "add";
+								break;
+							case 1:
+								opName = "multiply";
+								break;
+							case 2:
+								opName = "divide";
+								break;
+							case 3:
+								opName = "subtract";
+								break;
+							default:
+								throw haxe_Exception.thrown("assert");
+							}
+							return this.error("Cannot " + opName + " " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+						}
+						break;
+					default:
+						var opName;
+						switch(op._hx_index) {
+						case 0:
+							opName = "add";
+							break;
+						case 1:
+							opName = "multiply";
+							break;
+						case 2:
+							opName = "divide";
+							break;
+						case 3:
+							opName = "subtract";
+							break;
+						default:
+							throw haxe_Exception.thrown("assert");
+						}
+						return this.error("Cannot " + opName + " " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+					}
+					break;
+				case 5:
+					var _g2 = _g.size;
+					var _g3 = _g.t;
+					switch(_g2) {
+					case 2:
+						if(_g3._hx_index == 1) {
+							switch(_g1._hx_index) {
+							case 1:
+								this.toFloat(e2);
+								return e1.t;
+							case 3:
+								return e1.t;
+							case 5:
+								if(_g1.t._hx_index == 1) {
+									var a = _g2;
+									var b = _g1.size;
+									if(a == b) {
+										return hxsl_Type.TVec(a,hxsl_VecType.VFloat);
+									} else {
+										var opName;
+										switch(op._hx_index) {
+										case 0:
+											opName = "add";
+											break;
+										case 1:
+											opName = "multiply";
+											break;
+										case 2:
+											opName = "divide";
+											break;
+										case 3:
+											opName = "subtract";
+											break;
+										default:
+											throw haxe_Exception.thrown("assert");
+										}
+										return this.error("Cannot " + opName + " " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+									}
+								} else {
+									var opName;
+									switch(op._hx_index) {
+									case 0:
+										opName = "add";
+										break;
+									case 1:
+										opName = "multiply";
+										break;
+									case 2:
+										opName = "divide";
+										break;
+									case 3:
+										opName = "subtract";
+										break;
+									default:
+										throw haxe_Exception.thrown("assert");
+									}
+									return this.error("Cannot " + opName + " " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+								}
+								break;
+							case 12:
+								return hxsl_Checker.vec2;
+							default:
+								var opName;
+								switch(op._hx_index) {
+								case 0:
+									opName = "add";
+									break;
+								case 1:
+									opName = "multiply";
+									break;
+								case 2:
+									opName = "divide";
+									break;
+								case 3:
+									opName = "subtract";
+									break;
+								default:
+									throw haxe_Exception.thrown("assert");
+								}
+								return this.error("Cannot " + opName + " " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+							}
+						} else {
+							var opName;
+							switch(op._hx_index) {
+							case 0:
+								opName = "add";
+								break;
+							case 1:
+								opName = "multiply";
+								break;
+							case 2:
+								opName = "divide";
+								break;
+							case 3:
+								opName = "subtract";
+								break;
+							default:
+								throw haxe_Exception.thrown("assert");
+							}
+							return this.error("Cannot " + opName + " " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+						}
+						break;
+					case 3:
+						if(_g3._hx_index == 1) {
+							switch(_g1._hx_index) {
+							case 1:
+								this.toFloat(e2);
+								return e1.t;
+							case 3:
+								return e1.t;
+							case 5:
+								if(_g1.t._hx_index == 1) {
+									var a = _g2;
+									var b = _g1.size;
+									if(a == b) {
+										return hxsl_Type.TVec(a,hxsl_VecType.VFloat);
+									} else {
+										var opName;
+										switch(op._hx_index) {
+										case 0:
+											opName = "add";
+											break;
+										case 1:
+											opName = "multiply";
+											break;
+										case 2:
+											opName = "divide";
+											break;
+										case 3:
+											opName = "subtract";
+											break;
+										default:
+											throw haxe_Exception.thrown("assert");
+										}
+										return this.error("Cannot " + opName + " " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+									}
+								} else {
+									var opName;
+									switch(op._hx_index) {
+									case 0:
+										opName = "add";
+										break;
+									case 1:
+										opName = "multiply";
+										break;
+									case 2:
+										opName = "divide";
+										break;
+									case 3:
+										opName = "subtract";
+										break;
+									default:
+										throw haxe_Exception.thrown("assert");
+									}
+									return this.error("Cannot " + opName + " " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+								}
+								break;
+							case 6:
+								return hxsl_Checker.vec3;
+							case 8:
+								return hxsl_Checker.vec3;
+							default:
+								var opName;
+								switch(op._hx_index) {
+								case 0:
+									opName = "add";
+									break;
+								case 1:
+									opName = "multiply";
+									break;
+								case 2:
+									opName = "divide";
+									break;
+								case 3:
+									opName = "subtract";
+									break;
+								default:
+									throw haxe_Exception.thrown("assert");
+								}
+								return this.error("Cannot " + opName + " " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+							}
+						} else {
+							var opName;
+							switch(op._hx_index) {
+							case 0:
+								opName = "add";
+								break;
+							case 1:
+								opName = "multiply";
+								break;
+							case 2:
+								opName = "divide";
+								break;
+							case 3:
+								opName = "subtract";
+								break;
+							default:
+								throw haxe_Exception.thrown("assert");
+							}
+							return this.error("Cannot " + opName + " " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+						}
+						break;
+					case 4:
+						if(_g3._hx_index == 1) {
+							switch(_g1._hx_index) {
+							case 1:
+								this.toFloat(e2);
+								return e1.t;
+							case 3:
+								return e1.t;
+							case 5:
+								if(_g1.t._hx_index == 1) {
+									var a = _g2;
+									var b = _g1.size;
+									if(a == b) {
+										return hxsl_Type.TVec(a,hxsl_VecType.VFloat);
+									} else {
+										var opName;
+										switch(op._hx_index) {
+										case 0:
+											opName = "add";
+											break;
+										case 1:
+											opName = "multiply";
+											break;
+										case 2:
+											opName = "divide";
+											break;
+										case 3:
+											opName = "subtract";
+											break;
+										default:
+											throw haxe_Exception.thrown("assert");
+										}
+										return this.error("Cannot " + opName + " " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+									}
+								} else {
+									var opName;
+									switch(op._hx_index) {
+									case 0:
+										opName = "add";
+										break;
+									case 1:
+										opName = "multiply";
+										break;
+									case 2:
+										opName = "divide";
+										break;
+									case 3:
+										opName = "subtract";
+										break;
+									default:
+										throw haxe_Exception.thrown("assert");
+									}
+									return this.error("Cannot " + opName + " " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+								}
+								break;
+							case 7:
+								return hxsl_Checker.vec4;
+							default:
+								var opName;
+								switch(op._hx_index) {
+								case 0:
+									opName = "add";
+									break;
+								case 1:
+									opName = "multiply";
+									break;
+								case 2:
+									opName = "divide";
+									break;
+								case 3:
+									opName = "subtract";
+									break;
+								default:
+									throw haxe_Exception.thrown("assert");
+								}
+								return this.error("Cannot " + opName + " " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+							}
+						} else {
+							var opName;
+							switch(op._hx_index) {
+							case 0:
+								opName = "add";
+								break;
+							case 1:
+								opName = "multiply";
+								break;
+							case 2:
+								opName = "divide";
+								break;
+							case 3:
+								opName = "subtract";
+								break;
+							default:
+								throw haxe_Exception.thrown("assert");
+							}
+							return this.error("Cannot " + opName + " " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+						}
+						break;
+					default:
+						if(_g3._hx_index == 1) {
+							switch(_g1._hx_index) {
+							case 1:
+								this.toFloat(e2);
+								return e1.t;
+							case 3:
+								return e1.t;
+							case 5:
+								if(_g1.t._hx_index == 1) {
+									var a = _g2;
+									var b = _g1.size;
+									if(a == b) {
+										return hxsl_Type.TVec(a,hxsl_VecType.VFloat);
+									} else {
+										var opName;
+										switch(op._hx_index) {
+										case 0:
+											opName = "add";
+											break;
+										case 1:
+											opName = "multiply";
+											break;
+										case 2:
+											opName = "divide";
+											break;
+										case 3:
+											opName = "subtract";
+											break;
+										default:
+											throw haxe_Exception.thrown("assert");
+										}
+										return this.error("Cannot " + opName + " " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+									}
+								} else {
+									var opName;
+									switch(op._hx_index) {
+									case 0:
+										opName = "add";
+										break;
+									case 1:
+										opName = "multiply";
+										break;
+									case 2:
+										opName = "divide";
+										break;
+									case 3:
+										opName = "subtract";
+										break;
+									default:
+										throw haxe_Exception.thrown("assert");
+									}
+									return this.error("Cannot " + opName + " " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+								}
+								break;
+							default:
+								var opName;
+								switch(op._hx_index) {
+								case 0:
+									opName = "add";
+									break;
+								case 1:
+									opName = "multiply";
+									break;
+								case 2:
+									opName = "divide";
+									break;
+								case 3:
+									opName = "subtract";
+									break;
+								default:
+									throw haxe_Exception.thrown("assert");
+								}
+								return this.error("Cannot " + opName + " " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+							}
+						} else {
+							var opName;
+							switch(op._hx_index) {
+							case 0:
+								opName = "add";
+								break;
+							case 1:
+								opName = "multiply";
+								break;
+							case 2:
+								opName = "divide";
+								break;
+							case 3:
+								opName = "subtract";
+								break;
+							default:
+								throw haxe_Exception.thrown("assert");
+							}
+							return this.error("Cannot " + opName + " " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+						}
+					}
+					break;
+				case 7:
+					if(_g1._hx_index == 7) {
+						return hxsl_Type.TMat4;
+					} else {
+						var opName;
+						switch(op._hx_index) {
+						case 0:
+							opName = "add";
+							break;
+						case 1:
+							opName = "multiply";
+							break;
+						case 2:
+							opName = "divide";
+							break;
+						case 3:
+							opName = "subtract";
+							break;
+						default:
+							throw haxe_Exception.thrown("assert");
+						}
+						return this.error("Cannot " + opName + " " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+					}
+					break;
+				default:
+					var opName;
+					switch(op._hx_index) {
+					case 0:
+						opName = "add";
+						break;
+					case 1:
+						opName = "multiply";
+						break;
+					case 2:
+						opName = "divide";
+						break;
+					case 3:
+						opName = "subtract";
+						break;
+					default:
+						throw haxe_Exception.thrown("assert");
+					}
+					return this.error("Cannot " + opName + " " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+				}
+			} else {
+				switch(_g._hx_index) {
+				case 1:
+					switch(_g1._hx_index) {
+					case 1:
+						return hxsl_Type.TInt;
+					case 3:
+						this.toFloat(e1);
+						return hxsl_Type.TFloat;
+					case 5:
+						var _g2 = _g1.size;
+						if(_g1.t._hx_index == 1) {
+							this.toFloat(e1);
+							return e2.t;
+						} else {
+							var opName;
+							switch(op._hx_index) {
+							case 0:
+								opName = "add";
+								break;
+							case 1:
+								opName = "multiply";
+								break;
+							case 2:
+								opName = "divide";
+								break;
+							case 3:
+								opName = "subtract";
+								break;
+							default:
+								throw haxe_Exception.thrown("assert");
+							}
+							return this.error("Cannot " + opName + " " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+						}
+						break;
+					default:
+						var opName;
+						switch(op._hx_index) {
+						case 0:
+							opName = "add";
+							break;
+						case 1:
+							opName = "multiply";
+							break;
+						case 2:
+							opName = "divide";
+							break;
+						case 3:
+							opName = "subtract";
+							break;
+						default:
+							throw haxe_Exception.thrown("assert");
+						}
+						return this.error("Cannot " + opName + " " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+					}
+					break;
+				case 3:
+					switch(_g1._hx_index) {
+					case 1:
+						this.toFloat(e2);
+						return hxsl_Type.TFloat;
+					case 3:
+						return hxsl_Type.TFloat;
+					case 5:
+						var _g2 = _g1.size;
+						if(_g1.t._hx_index == 1) {
+							return e2.t;
+						} else {
+							var opName;
+							switch(op._hx_index) {
+							case 0:
+								opName = "add";
+								break;
+							case 1:
+								opName = "multiply";
+								break;
+							case 2:
+								opName = "divide";
+								break;
+							case 3:
+								opName = "subtract";
+								break;
+							default:
+								throw haxe_Exception.thrown("assert");
+							}
+							return this.error("Cannot " + opName + " " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+						}
+						break;
+					default:
+						var opName;
+						switch(op._hx_index) {
+						case 0:
+							opName = "add";
+							break;
+						case 1:
+							opName = "multiply";
+							break;
+						case 2:
+							opName = "divide";
+							break;
+						case 3:
+							opName = "subtract";
+							break;
+						default:
+							throw haxe_Exception.thrown("assert");
+						}
+						return this.error("Cannot " + opName + " " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+					}
+					break;
+				case 5:
+					var _g2 = _g.size;
+					if(_g.t._hx_index == 1) {
+						switch(_g1._hx_index) {
+						case 1:
+							this.toFloat(e2);
+							return e1.t;
+						case 3:
+							return e1.t;
+						case 5:
+							if(_g1.t._hx_index == 1) {
+								var b = _g1.size;
+								var a = _g2;
+								if(a == b) {
+									return hxsl_Type.TVec(a,hxsl_VecType.VFloat);
+								} else {
+									var opName;
+									switch(op._hx_index) {
+									case 0:
+										opName = "add";
+										break;
+									case 1:
+										opName = "multiply";
+										break;
+									case 2:
+										opName = "divide";
+										break;
+									case 3:
+										opName = "subtract";
+										break;
+									default:
+										throw haxe_Exception.thrown("assert");
+									}
+									return this.error("Cannot " + opName + " " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+								}
+							} else {
+								var opName;
+								switch(op._hx_index) {
+								case 0:
+									opName = "add";
+									break;
+								case 1:
+									opName = "multiply";
+									break;
+								case 2:
+									opName = "divide";
+									break;
+								case 3:
+									opName = "subtract";
+									break;
+								default:
+									throw haxe_Exception.thrown("assert");
+								}
+								return this.error("Cannot " + opName + " " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+							}
+							break;
+						default:
+							var opName;
+							switch(op._hx_index) {
+							case 0:
+								opName = "add";
+								break;
+							case 1:
+								opName = "multiply";
+								break;
+							case 2:
+								opName = "divide";
+								break;
+							case 3:
+								opName = "subtract";
+								break;
+							default:
+								throw haxe_Exception.thrown("assert");
+							}
+							return this.error("Cannot " + opName + " " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+						}
+					} else {
+						var opName;
+						switch(op._hx_index) {
+						case 0:
+							opName = "add";
+							break;
+						case 1:
+							opName = "multiply";
+							break;
+						case 2:
+							opName = "divide";
+							break;
+						case 3:
+							opName = "subtract";
+							break;
+						default:
+							throw haxe_Exception.thrown("assert");
+						}
+						return this.error("Cannot " + opName + " " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+					}
+					break;
+				default:
+					var opName;
+					switch(op._hx_index) {
+					case 0:
+						opName = "add";
+						break;
+					case 1:
+						opName = "multiply";
+						break;
+					case 2:
+						opName = "divide";
+						break;
+					case 3:
+						opName = "subtract";
+						break;
+					default:
+						throw haxe_Exception.thrown("assert");
+					}
+					return this.error("Cannot " + opName + " " + hxsl_Tools.toString(e1.t) + " and " + hxsl_Tools.toString(e2.t),pos);
+				}
+			}
+			break;
+		case 20:
+			var _g = op.op;
+			throw haxe_Exception.thrown("assert");
+		case 21:
+			this.unifyExpr(e1,hxsl_Type.TInt);
+			this.unifyExpr(e2,hxsl_Type.TInt);
+			return hxsl_Type.TArray(hxsl_Type.TInt,hxsl_SizeDecl.SConst(0));
+		default:
+			return this.error("Unsupported operator " + Std.string(op),pos);
+		}
+	}
+	,__class__: hxsl_Checker
+};
 var hxsl_Clone = function() {
 	this.varMap = new haxe_ds_IntMap();
 };
@@ -85528,9 +99763,19 @@ hxsl__$Dce_Exit.__name__ = "hxsl._Dce.Exit";
 hxsl__$Dce_Exit.prototype = {
 	__class__: hxsl__$Dce_Exit
 };
-var hxsl__$Dce_VarDeps = function(v) {
+var hxsl__$Dce_VarRel = function(v) {
+	this.fields = 0;
 	this.v = v;
-	this.used = false;
+};
+$hxClasses["hxsl._Dce.VarRel"] = hxsl__$Dce_VarRel;
+hxsl__$Dce_VarRel.__name__ = "hxsl._Dce.VarRel";
+hxsl__$Dce_VarRel.prototype = {
+	__class__: hxsl__$Dce_VarRel
+};
+var hxsl__$Dce_VarDeps = function(v) {
+	this.used = 0;
+	this.keep = 0;
+	this.v = v;
 	this.deps = new haxe_ds_IntMap();
 	this.adeps = [];
 };
@@ -85539,14 +99784,55 @@ hxsl__$Dce_VarDeps.__name__ = "hxsl._Dce.VarDeps";
 hxsl__$Dce_VarDeps.prototype = {
 	__class__: hxsl__$Dce_VarDeps
 };
+var hxsl__$Dce_WriteTo = function() {
+	this.vars = [];
+	this.bits = [];
+};
+$hxClasses["hxsl._Dce.WriteTo"] = hxsl__$Dce_WriteTo;
+hxsl__$Dce_WriteTo.__name__ = "hxsl._Dce.WriteTo";
+hxsl__$Dce_WriteTo.prototype = {
+	push: function(v,b) {
+		this.vars.push(v);
+		this.bits.push(b);
+	}
+	,pop: function() {
+		this.vars.pop();
+		this.bits.pop();
+	}
+	,append: function(v,b) {
+		var _g_current = 0;
+		var _g_array = this.vars;
+		while(_g_current < _g_array.length) {
+			var _g_value = _g_array[_g_current];
+			var _g_key = _g_current++;
+			var i = _g_key;
+			var v2 = _g_value;
+			if(v2 == v) {
+				this.bits[i] |= b;
+				return;
+			}
+		}
+		this.push(v,b);
+	}
+	,appendTo: function(w) {
+		var _g_current = 0;
+		var _g_array = this.vars;
+		while(_g_current < _g_array.length) {
+			var _g_value = _g_array[_g_current];
+			var _g_key = _g_current++;
+			var i = _g_key;
+			var v = _g_value;
+			w.append(v,this.bits[i]);
+		}
+	}
+	,__class__: hxsl__$Dce_WriteTo
+};
 var hxsl_Dce = function() {
 };
 $hxClasses["hxsl.Dce"] = hxsl_Dce;
 hxsl_Dce.__name__ = "hxsl.Dce";
 hxsl_Dce.prototype = {
-	debug: function(msg,pos) {
-	}
-	,dce: function(shaders) {
+	dce: function(shaders) {
 		this.used = new haxe_ds_IntMap();
 		this.channelVars = [];
 		var inputs = [];
@@ -85576,7 +99862,7 @@ hxsl_Dce.prototype = {
 					case 16:
 						var _g7 = _g3.t;
 						var _g8 = _g3.size;
-						tmp = _g3.kind._hx_index == 1;
+						tmp = _g3.kind._hx_index == 2;
 						break;
 					default:
 						tmp = false;
@@ -85585,7 +99871,7 @@ hxsl_Dce.prototype = {
 					tmp = true;
 				}
 				if(tmp) {
-					i.keep = true;
+					i.keep = 15;
 				}
 			}
 		}
@@ -85598,24 +99884,27 @@ hxsl_Dce.prototype = {
 			while(_g1 < _g2.length) {
 				var f = _g2[_g1];
 				++_g1;
-				this.check(f.expr,[],[]);
+				this.check(f.expr,new hxsl__$Dce_WriteTo(),new hxsl__$Dce_WriteTo());
 			}
 		}
 		var outExprs = [];
 		do {
+			if(hxsl_Debug.TRACE) {
+				haxe_Log.trace("DCE LOOP",{ fileName : "hxsl/Debug.hx", lineNumber : 9, className : "hxsl.Dce", methodName : "dce"});
+			}
 			var v = this.used.iterator();
 			while(v.hasNext()) {
 				var v1 = v.next();
-				if(v1.keep) {
-					this.markRec(v1);
+				if(v1.keep != 0) {
+					this.markRec(v1,v1.keep);
 				}
 			}
-			while(inputs.length > 1 && !inputs[inputs.length - 1].used) inputs.pop();
+			while(inputs.length > 1 && inputs[inputs.length - 1].used == 0) inputs.pop();
 			var _g = 0;
 			while(_g < inputs.length) {
 				var v2 = inputs[_g];
 				++_g;
-				this.markRec(v2);
+				this.markRec(v2,15);
 			}
 			outExprs = [];
 			var _g1 = 0;
@@ -85653,7 +99942,7 @@ hxsl_Dce.prototype = {
 		var v = this.used.iterator();
 		while(v.hasNext()) {
 			var v1 = v.next();
-			if(v1.used) {
+			if(v1.used != 0) {
 				continue;
 			}
 			if(v1.v.kind == hxsl_VarKind.Input) {
@@ -85676,39 +99965,87 @@ hxsl_Dce.prototype = {
 		}
 		return vd;
 	}
-	,markRec: function(v) {
-		if(v.used) {
+	,varName: function(v,bits) {
+		if(bits == null) {
+			bits = 15;
+		}
+		return hxsl_Debug.varName(v,bits);
+	}
+	,markRec: function(v,bits) {
+		if((v.used & bits) == bits) {
 			return;
 		}
-		v.used = true;
+		bits &= ~v.used;
+		if(hxsl_Debug.TRACE) {
+			haxe_Log.trace(this.varName(v.v,bits) + " is used",{ fileName : "hxsl/Debug.hx", lineNumber : 9, className : "hxsl.Dce", methodName : "markRec"});
+		}
+		v.used |= bits;
 		var _g = 0;
 		var _g1 = v.adeps;
 		while(_g < _g1.length) {
 			var d = _g1[_g];
 			++_g;
-			this.markRec(d);
+			var mask = this.makeFieldsBits(15,bits);
+			if((d.fields & mask) != 0) {
+				this.markRec(d.v,this.extractFieldsBits(d.fields,bits));
+			}
 		}
 	}
-	,link: function(v,writeTo) {
+	,extractFieldsBits: function(fields,write) {
+		return (((write & 1) == 0 ? 0 : fields) | ((write & 2) == 0 ? 0 : fields >> 4) | ((write & 4) == 0 ? 0 : fields >> 8) | ((write & 8) == 0 ? 0 : fields >> 12)) & 15;
+	}
+	,makeFieldsBits: function(read,write) {
+		return read * ((write & 1) + ((write & 2) << 3) + ((write & 4) << 6) + ((write & 8) << 9));
+	}
+	,link: function(v,writeTo,bits) {
+		if(bits == null) {
+			bits = 15;
+		}
 		var vd = this.get(v);
-		var _g = 0;
-		while(_g < writeTo.length) {
-			var w = writeTo[_g];
-			++_g;
+		var _g_current = 0;
+		var _g_array = writeTo.vars;
+		while(_g_current < _g_array.length) {
+			var _g_value = _g_array[_g_current];
+			var _g_key = _g_current++;
+			var i = _g_key;
+			var w = _g_value;
 			if(w == null) {
-				if(!vd.keep) {
-					vd.keep = true;
+				if(vd.keep == 0) {
+					if(hxsl_Debug.TRACE) {
+						haxe_Log.trace("Force keep " + this.varName(vd.v),{ fileName : "hxsl/Debug.hx", lineNumber : 9, className : "hxsl.Dce", methodName : "link"});
+					}
+					vd.keep = 15;
 					this.markAsKeep = true;
 				}
 				continue;
 			}
-			if(!w.deps.h.hasOwnProperty(v.id)) {
-				w.deps.h[v.id] = vd;
-				w.adeps.push(vd);
+			var d = w.deps.h[v.id];
+			if(d == null) {
+				d = new hxsl__$Dce_VarRel(vd);
+				w.deps.h[v.id] = d;
+				w.adeps.push(d);
+			}
+			var fields = this.makeFieldsBits(bits,writeTo.bits[i]);
+			if((d.fields & fields) != fields) {
+				d.fields |= fields;
+				if(hxsl_Debug.TRACE) {
+					haxe_Log.trace(this.varName(w.v,writeTo.bits[i]) + " depends on " + this.varName(vd.v,bits),{ fileName : "hxsl/Debug.hx", lineNumber : 9, className : "hxsl.Dce", methodName : "link"});
+				}
 			}
 		}
 	}
+	,swizBits: function(sw) {
+		var b = 0;
+		var _g = 0;
+		while(_g < sw.length) {
+			var c = sw[_g];
+			++_g;
+			b |= 1 << c._hx_index;
+		}
+		return b;
+	}
 	,check: function(e,writeTo,isAffected) {
+		var _gthis = this;
 		var _g = e.e;
 		switch(_g._hx_index) {
 		case 1:
@@ -85717,7 +100054,7 @@ hxsl_Dce.prototype = {
 			break;
 		case 4:
 			var el = _g.el;
-			var noWrite = [];
+			var noWrite = new hxsl__$Dce_WriteTo();
 			var _g1 = 0;
 			var _g2 = el.length;
 			while(_g1 < _g2) {
@@ -85739,48 +100076,44 @@ hxsl_Dce.prototype = {
 					var v = _g4.v;
 					var e1 = _g3;
 					var v1 = this.get(v);
-					writeTo.push(v1);
+					writeTo.push(v1,15);
 					this.check(e1,writeTo,isAffected);
 					writeTo.pop();
-					if(isAffected.indexOf(v1) < 0) {
-						isAffected.push(v1);
-					}
+					isAffected.append(v1,15);
 					break;
 				case 9:
 					var _g5 = _g4.e;
 					var _g6 = _g4.regs;
-					var _g6 = _g5.e;
-					var _g7 = _g5.p;
-					var _g7 = _g5.t;
-					switch(_g6._hx_index) {
+					var _g7 = _g5.e;
+					var _g8 = _g5.p;
+					var _g8 = _g5.t;
+					switch(_g7._hx_index) {
 					case 1:
-						var v = _g6.v;
+						var v = _g7.v;
+						var swiz = _g6;
 						var e1 = _g3;
 						var v1 = this.get(v);
-						writeTo.push(v1);
+						var bits = this.swizBits(swiz);
+						writeTo.push(v1,bits);
 						this.check(e1,writeTo,isAffected);
 						writeTo.pop();
-						if(isAffected.indexOf(v1) < 0) {
-							isAffected.push(v1);
-						}
+						isAffected.append(v1,bits);
 						break;
 					case 16:
-						var _g5 = _g6.e;
-						var _g7 = _g5.e;
+						var _g5 = _g7.e;
+						var _g6 = _g5.e;
 						var _g8 = _g5.p;
 						var _g8 = _g5.t;
-						if(_g7._hx_index == 1) {
-							var v = _g7.v;
-							var i = _g6.index;
+						if(_g6._hx_index == 1) {
+							var v = _g6.v;
+							var i = _g7.index;
 							var e1 = _g3;
 							var v1 = this.get(v);
-							writeTo.push(v1);
+							writeTo.push(v1,15);
 							this.check(i,writeTo,isAffected);
 							this.check(e1,writeTo,isAffected);
 							writeTo.pop();
-							if(isAffected.indexOf(v1) < 0) {
-								isAffected.push(v1);
-							}
+							isAffected.append(v1,15);
 						} else {
 							var _g5 = this;
 							var writeTo1 = writeTo;
@@ -85809,13 +100142,11 @@ hxsl_Dce.prototype = {
 						var i = _g4.index;
 						var e1 = _g3;
 						var v1 = this.get(v);
-						writeTo.push(v1);
+						writeTo.push(v1,15);
 						this.check(i,writeTo,isAffected);
 						this.check(e1,writeTo,isAffected);
 						writeTo.pop();
-						if(isAffected.indexOf(v1) < 0) {
-							isAffected.push(v1);
-						}
+						isAffected.append(v1,15);
 					} else {
 						var _g7 = this;
 						var writeTo3 = writeTo;
@@ -85841,13 +100172,11 @@ hxsl_Dce.prototype = {
 							var i = _g4.index;
 							var e1 = _g3;
 							var v1 = this.get(v);
-							writeTo.push(v1);
+							writeTo.push(v1,15);
 							this.check(i,writeTo,isAffected);
 							this.check(e1,writeTo,isAffected);
 							writeTo.pop();
-							if(isAffected.indexOf(v1) < 0) {
-								isAffected.push(v1);
-							}
+							isAffected.append(v1,15);
 						} else {
 							var _g4 = this;
 							var writeTo4 = writeTo;
@@ -85884,48 +100213,44 @@ hxsl_Dce.prototype = {
 					var v = _g1.v;
 					var e1 = _g3;
 					var v1 = this.get(v);
-					writeTo.push(v1);
+					writeTo.push(v1,15);
 					this.check(e1,writeTo,isAffected);
 					writeTo.pop();
-					if(isAffected.indexOf(v1) < 0) {
-						isAffected.push(v1);
-					}
+					isAffected.append(v1,15);
 					break;
 				case 9:
 					var _g2 = _g1.e;
 					var _g10 = _g1.regs;
-					var _g10 = _g2.e;
-					var _g11 = _g2.p;
-					var _g11 = _g2.t;
-					switch(_g10._hx_index) {
+					var _g11 = _g2.e;
+					var _g12 = _g2.p;
+					var _g12 = _g2.t;
+					switch(_g11._hx_index) {
 					case 1:
-						var v = _g10.v;
+						var v = _g11.v;
+						var swiz = _g10;
 						var e1 = _g3;
 						var v1 = this.get(v);
-						writeTo.push(v1);
+						var bits = this.swizBits(swiz);
+						writeTo.push(v1,bits);
 						this.check(e1,writeTo,isAffected);
 						writeTo.pop();
-						if(isAffected.indexOf(v1) < 0) {
-							isAffected.push(v1);
-						}
+						isAffected.append(v1,bits);
 						break;
 					case 16:
-						var _g2 = _g10.e;
-						var _g11 = _g2.e;
+						var _g2 = _g11.e;
+						var _g10 = _g2.e;
 						var _g12 = _g2.p;
 						var _g12 = _g2.t;
-						if(_g11._hx_index == 1) {
-							var v = _g11.v;
-							var i = _g10.index;
+						if(_g10._hx_index == 1) {
+							var v = _g10.v;
+							var i = _g11.index;
 							var e1 = _g3;
 							var v1 = this.get(v);
-							writeTo.push(v1);
+							writeTo.push(v1,15);
 							this.check(i,writeTo,isAffected);
 							this.check(e1,writeTo,isAffected);
 							writeTo.pop();
-							if(isAffected.indexOf(v1) < 0) {
-								isAffected.push(v1);
-							}
+							isAffected.append(v1,15);
 						} else {
 							var _g2 = this;
 							var writeTo7 = writeTo;
@@ -85954,13 +100279,11 @@ hxsl_Dce.prototype = {
 						var i = _g1.index;
 						var e1 = _g3;
 						var v1 = this.get(v);
-						writeTo.push(v1);
+						writeTo.push(v1,15);
 						this.check(i,writeTo,isAffected);
 						this.check(e1,writeTo,isAffected);
 						writeTo.pop();
-						if(isAffected.indexOf(v1) < 0) {
-							isAffected.push(v1);
-						}
+						isAffected.append(v1,15);
 					} else {
 						var _g11 = this;
 						var writeTo9 = writeTo;
@@ -85986,13 +100309,11 @@ hxsl_Dce.prototype = {
 							var i = _g1.index;
 							var e1 = _g3;
 							var v1 = this.get(v);
-							writeTo.push(v1);
+							writeTo.push(v1,15);
 							this.check(i,writeTo,isAffected);
 							this.check(e1,writeTo,isAffected);
 							writeTo.pop();
-							if(isAffected.indexOf(v1) < 0) {
-								isAffected.push(v1);
-							}
+							isAffected.append(v1,15);
 						} else {
 							var _g1 = this;
 							var writeTo10 = writeTo;
@@ -86032,7 +100353,7 @@ hxsl_Dce.prototype = {
 			var v = _g.v;
 			var init = _g.init;
 			if(init != null) {
-				writeTo.push(this.get(v));
+				writeTo.push(this.get(v),15);
 				this.check(init,writeTo,isAffected);
 				writeTo.pop();
 			} else {
@@ -86052,7 +100373,7 @@ hxsl_Dce.prototype = {
 			var _g18 = _g15.t;
 			if(_g17._hx_index == 2) {
 				switch(_g17.g._hx_index) {
-				case 63:
+				case 64:
 					if(_g16.length == 3) {
 						var _g15 = _g16[0];
 						var _g17 = _g16[2];
@@ -86109,7 +100430,7 @@ hxsl_Dce.prototype = {
 						});
 					}
 					break;
-				case 64:
+				case 65:
 					if(_g16.length == 4) {
 						var _g20 = _g16[0];
 						var _g21 = _g16[3];
@@ -86168,7 +100489,7 @@ hxsl_Dce.prototype = {
 						});
 					}
 					break;
-				case 78:
+				case 79:
 					if(_g16.length == 3) {
 						var _g24 = _g16[0];
 						var _g25 = _g24.e;
@@ -86179,13 +100500,11 @@ hxsl_Dce.prototype = {
 							var uv = _g16[1];
 							var val = _g16[2];
 							var v1 = this.get(v);
-							writeTo.push(v1);
+							writeTo.push(v1,15);
 							this.check(uv,writeTo,isAffected);
 							this.check(val,writeTo,isAffected);
 							writeTo.pop();
-							if(isAffected.indexOf(v1) < 0) {
-								isAffected.push(v1);
-							}
+							isAffected.append(v1,15);
 						} else {
 							var _g16 = this;
 							var writeTo23 = writeTo;
@@ -86220,57 +100539,96 @@ hxsl_Dce.prototype = {
 				});
 			}
 			break;
+		case 9:
+			var _g27 = _g.e;
+			var _g28 = _g27.e;
+			var _g29 = _g27.p;
+			var _g29 = _g27.t;
+			if(_g28._hx_index == 1) {
+				var v = _g28.v;
+				var swiz = _g.regs;
+				this.link(v,writeTo,this.swizBits(swiz));
+			} else {
+				var _g27 = this;
+				var writeTo27 = writeTo;
+				var isAffected27 = isAffected;
+				hxsl_Tools.iter(e,function(e) {
+					_g27.check(e,writeTo27,isAffected27);
+				});
+			}
+			break;
 		case 10:
 			var e1 = _g.econd;
 			var eif = _g.eif;
 			var eelse = _g.eelse;
-			var affect = [];
+			var affect = new hxsl__$Dce_WriteTo();
 			this.check(eif,writeTo,affect);
 			if(eelse != null) {
 				this.check(eelse,writeTo,affect);
 			}
-			var len = affect.length;
-			var _g27 = 0;
-			while(_g27 < writeTo.length) {
-				var v = writeTo[_g27];
-				++_g27;
-				if(affect.indexOf(v) < 0) {
-					affect.push(v);
-				}
-			}
+			affect.appendTo(isAffected);
+			writeTo.appendTo(affect);
 			this.check(e1,affect,isAffected);
-			var _g27 = 0;
-			var _g28 = len;
-			while(_g27 < _g28) {
-				var i = _g27++;
-				var v = affect[i];
-				if(isAffected.indexOf(v) < 0) {
-					isAffected.push(v);
-				}
-			}
 			break;
 		case 13:
 			var v = _g.v;
 			var it = _g.it;
 			var loop = _g.loop;
-			var affect = [];
+			var affect = new hxsl__$Dce_WriteTo();
 			this.check(loop,writeTo,affect);
+			affect.appendTo(isAffected);
 			this.check(it,affect,isAffected);
+			break;
+		case 22:
+			var _g28 = _g.target;
+			var _g28 = _g.code;
+			var args = _g.args;
 			var _g = 0;
-			while(_g < affect.length) {
-				var v = affect[_g];
+			while(_g < args.length) {
+				var arg = args[_g];
 				++_g;
-				if(isAffected.indexOf(v) < 0) {
-					isAffected.push(v);
+				if(arg.access != hxsl_SyntaxArgAccess.Read) {
+					var tvars = [[]];
+					var findTVars = [null];
+					findTVars[0] = (function(findTVars,tvars) {
+						return function(e) {
+							var _g = e.e;
+							if(_g._hx_index == 1) {
+								var v = _g.v;
+								tvars[0].push(_gthis.get(v));
+							} else {
+								hxsl_Tools.iter(e,findTVars[0]);
+							}
+						};
+					})(findTVars,tvars);
+					findTVars[0](arg.e);
+					var _g28 = 0;
+					while(_g28 < tvars[0].length) {
+						var v = tvars[0][_g28];
+						++_g28;
+						writeTo.push(v,15);
+						var _g29 = 0;
+						while(_g29 < args.length) {
+							var arg2 = args[_g29];
+							++_g29;
+							if(arg2.access != hxsl_SyntaxArgAccess.Write) {
+								this.check(arg2.e,writeTo,isAffected);
+							}
+						}
+						writeTo.pop();
+						isAffected.append(v,15);
+					}
+				} else {
+					this.check(arg.e,writeTo,isAffected);
 				}
 			}
 			break;
 		default:
 			var _g = this;
-			var writeTo27 = writeTo;
-			var isAffected27 = isAffected;
+			var writeTo28 = writeTo;
+			var isAffected28 = isAffected;
 			hxsl_Tools.iter(e,function(e) {
-				_g.check(e,writeTo27,isAffected27);
+				_g.check(e,writeTo28,isAffected28);
 			});
 		}
 	}
@@ -86280,8 +100638,9 @@ hxsl_Dce.prototype = {
 			var _g1 = _g.eif;
 			var _g1 = _g.eelse;
 			var cond = _g.econd;
-			var writeTo = [null];
-			this.check(cond,writeTo,[]);
+			var writeTo = new hxsl__$Dce_WriteTo();
+			writeTo.append(null,0);
+			this.check(cond,writeTo,new hxsl__$Dce_WriteTo());
 		}
 		hxsl_Tools.iter(e,$bind(this,this.checkBranches));
 	}
@@ -86317,7 +100676,7 @@ hxsl_Dce.prototype = {
 				switch(_g3._hx_index) {
 				case 1:
 					var v = _g3.v;
-					if(!this.get(v).used) {
+					if(this.get(v).used == 0) {
 						return { e : hxsl_TExprDef.TConst(hxsl_Const.CNull), t : e.t, p : e.p};
 					} else {
 						return hxsl_Tools.map(e,function(e) {
@@ -86327,18 +100686,24 @@ hxsl_Dce.prototype = {
 					break;
 				case 9:
 					var _g4 = _g3.e;
-					var _g5 = _g3.regs;
 					var _g5 = _g4.e;
 					var _g6 = _g4.p;
 					var _g6 = _g4.t;
 					if(_g5._hx_index == 1) {
-						var v = _g5.v;
-						if(!this.get(v).used) {
+						var _g4 = _g5.v;
+						var v = _g4;
+						if(this.get(v).used == 0) {
 							return { e : hxsl_TExprDef.TConst(hxsl_Const.CNull), t : e.t, p : e.p};
 						} else {
-							return hxsl_Tools.map(e,function(e) {
-								return _gthis.mapExpr(e,true);
-							});
+							var v = _g4;
+							var swiz = _g3.regs;
+							if((this.get(v).used & this.swizBits(swiz)) == 0) {
+								return { e : hxsl_TExprDef.TConst(hxsl_Const.CNull), t : e.t, p : e.p};
+							} else {
+								return hxsl_Tools.map(e,function(e) {
+									return _gthis.mapExpr(e,true);
+								});
+							}
 						}
 					} else {
 						return hxsl_Tools.map(e,function(e) {
@@ -86354,7 +100719,7 @@ hxsl_Dce.prototype = {
 					var _g5 = _g4.t;
 					if(_g3._hx_index == 1) {
 						var v = _g3.v;
-						if(!this.get(v).used) {
+						if(this.get(v).used == 0) {
 							return { e : hxsl_TExprDef.TConst(hxsl_Const.CNull), t : e.t, p : e.p};
 						} else {
 							return hxsl_Tools.map(e,function(e) {
@@ -86381,7 +100746,7 @@ hxsl_Dce.prototype = {
 				switch(_g1._hx_index) {
 				case 1:
 					var v = _g1.v;
-					if(!this.get(v).used) {
+					if(this.get(v).used == 0) {
 						return { e : hxsl_TExprDef.TConst(hxsl_Const.CNull), t : e.t, p : e.p};
 					} else {
 						return hxsl_Tools.map(e,function(e) {
@@ -86391,18 +100756,24 @@ hxsl_Dce.prototype = {
 					break;
 				case 9:
 					var _g2 = _g1.e;
-					var _g3 = _g1.regs;
 					var _g3 = _g2.e;
 					var _g4 = _g2.p;
 					var _g4 = _g2.t;
 					if(_g3._hx_index == 1) {
-						var v = _g3.v;
-						if(!this.get(v).used) {
+						var _g2 = _g3.v;
+						var v = _g2;
+						if(this.get(v).used == 0) {
 							return { e : hxsl_TExprDef.TConst(hxsl_Const.CNull), t : e.t, p : e.p};
 						} else {
-							return hxsl_Tools.map(e,function(e) {
-								return _gthis.mapExpr(e,true);
-							});
+							var v = _g2;
+							var swiz = _g1.regs;
+							if((this.get(v).used & this.swizBits(swiz)) == 0) {
+								return { e : hxsl_TExprDef.TConst(hxsl_Const.CNull), t : e.t, p : e.p};
+							} else {
+								return hxsl_Tools.map(e,function(e) {
+									return _gthis.mapExpr(e,true);
+								});
+							}
 						}
 					} else {
 						return hxsl_Tools.map(e,function(e) {
@@ -86418,7 +100789,7 @@ hxsl_Dce.prototype = {
 					var _g3 = _g2.t;
 					if(_g1._hx_index == 1) {
 						var v = _g1.v;
-						if(!this.get(v).used) {
+						if(this.get(v).used == 0) {
 							return { e : hxsl_TExprDef.TConst(hxsl_Const.CNull), t : e.t, p : e.p};
 						} else {
 							return hxsl_Tools.map(e,function(e) {
@@ -86446,7 +100817,7 @@ hxsl_Dce.prototype = {
 		case 7:
 			var _g1 = _g.init;
 			var v = _g.v;
-			if(!this.get(v).used) {
+			if(this.get(v).used == 0) {
 				return { e : hxsl_TExprDef.TConst(hxsl_Const.CNull), t : e.t, p : e.p};
 			} else {
 				return hxsl_Tools.map(e,function(e) {
@@ -86462,7 +100833,7 @@ hxsl_Dce.prototype = {
 			var _g4 = _g1.t;
 			if(_g3._hx_index == 2) {
 				switch(_g3.g._hx_index) {
-				case 63:
+				case 64:
 					if(_g2.length == 3) {
 						var _g1 = _g2[0];
 						var _g1 = _g2[2];
@@ -86492,7 +100863,7 @@ hxsl_Dce.prototype = {
 						});
 					}
 					break;
-				case 64:
+				case 65:
 					if(_g2.length == 4) {
 						var _g1 = _g2[0];
 						var _g1 = _g2[3];
@@ -86523,7 +100894,7 @@ hxsl_Dce.prototype = {
 						});
 					}
 					break;
-				case 65:
+				case 66:
 					switch(_g2.length) {
 					case 3:
 						var _g1 = _g2[0];
@@ -86580,7 +100951,7 @@ hxsl_Dce.prototype = {
 						});
 					}
 					break;
-				case 66:
+				case 67:
 					switch(_g2.length) {
 					case 2:
 						var _g1 = _g2[0];
@@ -86683,6 +101054,39 @@ hxsl_Dce.prototype = {
 		}
 	}
 	,__class__: hxsl_Dce
+};
+var hxsl_Debug = function() { };
+$hxClasses["hxsl.Debug"] = hxsl_Debug;
+hxsl_Debug.__name__ = "hxsl.Debug";
+hxsl_Debug.varName = function(v,swizBits) {
+	if(swizBits == null) {
+		swizBits = 15;
+	}
+	var name = v.name;
+	if(swizBits != 15) {
+		name += hxsl_Debug.swizStr(swizBits);
+	}
+	if(hxsl_Debug.VAR_IDS) {
+		return name + "@" + v.id;
+	} else {
+		return name;
+	}
+};
+hxsl_Debug.swizStr = function(bits) {
+	var str = ".";
+	if((bits & 1) != 0) {
+		str += "x";
+	}
+	if((bits & 2) != 0) {
+		str += "y";
+	}
+	if((bits & 4) != 0) {
+		str += "z";
+	}
+	if((bits & 8) != 0) {
+		str += "w";
+	}
+	return str;
 };
 var hxsl_Eval = function() {
 	this.mapped = [];
@@ -87044,7 +101448,7 @@ hxsl_Eval.prototype = {
 	}
 	,evalCall: function(g,args,oldArgs,pos) {
 		switch(g._hx_index) {
-		case 27:
+		case 28:
 			if(args.length == 1) {
 				var _g = args[0];
 				var _g1 = _g.e;
@@ -87072,7 +101476,7 @@ hxsl_Eval.prototype = {
 				return null;
 			}
 			break;
-		case 38:
+		case 39:
 			if(args.length == 1) {
 				var _g = args[0];
 				var _g1 = _g.e;
@@ -87093,7 +101497,7 @@ hxsl_Eval.prototype = {
 				return null;
 			}
 			break;
-		case 63:case 64:
+		case 64:case 65:
 			var i;
 			var _g = args[0].e;
 			if(_g._hx_index == 0) {
@@ -87202,7 +101606,7 @@ hxsl_Eval.prototype = {
 				return hxsl_TExprDef.TCall({ e : hxsl_TExprDef.TGlobal(hxsl_TGlobal.UnpackNormal), t : hxsl_Type.TVoid, p : pos},[tget]);
 			}
 			break;
-		case 67:
+		case 68:
 			var args1 = args;
 			var _g = 0;
 			while(_g < args1.length) {
@@ -88843,6 +103247,19 @@ hxsl_Eval.prototype = {
 			var name = _g.name;
 			d = hxsl_TExprDef.TField(this.evalExpr(e1),name);
 			break;
+		case 22:
+			var target = _g.target;
+			var code = _g.code;
+			var args = _g.args;
+			var _g = [];
+			var _g1 = 0;
+			while(_g1 < args.length) {
+				var arg = args[_g1];
+				++_g1;
+				_g.push({ e : this.evalExpr(arg.e), access : arg.access});
+			}
+			d = hxsl_TExprDef.TSyntax(target,code,_g);
+			break;
 		}
 		return { e : d, t : t, p : e.p};
 	}
@@ -88935,6 +103352,7 @@ hxsl_Flatten.prototype = {
 			this.packTextures(prefix + "Textures" + name,allVars,t.rw == 0 ? hxsl_Type.TSampler(t.dim,t.arr) : hxsl_Type.TRWTexture(t.dim,t.arr,t.rw));
 		}
 		this.packBuffers("buffers",allVars,hxsl_BufferKind.Uniform);
+		this.packBuffers("storagebuffers",allVars,hxsl_BufferKind.Storage);
 		this.packBuffers("rwbuffers",allVars,hxsl_BufferKind.RW);
 		var _g = [];
 		var _g1 = 0;
@@ -89102,7 +103520,7 @@ hxsl_Flatten.prototype = {
 			}
 			if(e1) {
 				var size = Math.ceil(hxsl_Tools.size(v.type) / 4);
-				var v2 = { id : hxsl_Tools.allocVarId(), name : v.name, type : hxsl_Type.TArray(hxsl_Type.TVec(4,hxsl_VecType.VFloat),hxsl_SizeDecl.SConst(size)), kind : v.kind};
+				var v2 = { id : hxsl_Tools.allocVarId(), name : v.name, type : hxsl_Type.TArray(hxsl_Type.TVec(4,hxsl_VecType.VFloat),hxsl_SizeDecl.SConst(size)), kind : v.kind, qualifiers : v.qualifiers};
 				var a = new hxsl__$Flatten_Alloc(v2,hxsl_VecType.VFloat,0,0);
 				a.v = v;
 				this.varMap.set(v,a);
@@ -89175,7 +103593,7 @@ hxsl_Flatten.prototype = {
 							e = this.access(a,t,vp,hxsl_ARead.AOffset(a,1,eindex));
 						} else {
 							var t = _g2;
-							var stride = this.varSize(t,a.t);
+							var stride = this.varSize4Bytes(t,a.t);
 							var e1;
 							if(stride != 0) {
 								var _g2 = v.type;
@@ -89209,7 +103627,7 @@ hxsl_Flatten.prototype = {
 							break;
 						default:
 							var t = _g2;
-							var stride = this.varSize(t,a.t);
+							var stride = this.varSize4Bytes(t,a.t);
 							var e1;
 							if(stride != 0) {
 								var _g1 = v.type;
@@ -89288,7 +103706,7 @@ hxsl_Flatten.prototype = {
 							e = { e : hxsl_TExprDef.TSwiz(arr,sw), t : size == 1 ? hxsl_Type.TFloat : hxsl_Type.TVec(size,hxsl_VecType.VFloat), p : e.p};
 						}
 					} else {
-						var k = 4 - pos1;
+						var k = (idx2 << 2) - pos1;
 						var type;
 						switch(size) {
 						case 2:
@@ -89313,7 +103731,7 @@ hxsl_Flatten.prototype = {
 							var sw = hxsl_Flatten.SWIZ.slice(pos1 & 3,(pos1 & 3) + k);
 							e2 = { e : hxsl_TExprDef.TSwiz(arr,sw), t : k == 1 ? hxsl_Type.TFloat : hxsl_Type.TVec(k,hxsl_VecType.VFloat), p : e.p};
 						}
-						var pos = pos1 + 1;
+						var pos = pos1 + k;
 						var size1 = size - k;
 						var idx = pos >> 2;
 						var arr = _gthis.optimize({ e : hxsl_TExprDef.TArray(expr1,{ e : hxsl_TExprDef.TConst(hxsl_Const.CInt(idx)), p : e.p, t : hxsl_Type.TInt}), p : e.p, t : hxsl_Type.TVec(4,hxsl_VecType.VFloat)});
@@ -89408,56 +103826,11 @@ hxsl_Flatten.prototype = {
 				break;
 			case 9:
 				var size = _g.size;
+				var e1 = { e : hxsl_TExprDef.TGlobal(hxsl_TGlobal.UnpackSnorm4x8), p : e.p, t : hxsl_Type.TVec(size,hxsl_VecType.VFloat)};
 				var idx = pos1 >> 2;
-				var idx2 = pos1 + size - 1 >> 2;
-				if(idx == idx2) {
-					var idx = pos1 >> 2;
-					var arr = _gthis.optimize({ e : hxsl_TExprDef.TArray(expr1,{ e : hxsl_TExprDef.TConst(hxsl_Const.CInt(idx)), p : e.p, t : hxsl_Type.TInt}), p : e.p, t : hxsl_Type.TVec(4,hxsl_VecType.VFloat)});
-					if(size == 4 && (pos1 & 3) == 0) {
-						e = arr;
-					} else {
-						var sw = hxsl_Flatten.SWIZ.slice(pos1 & 3,(pos1 & 3) + size);
-						e = { e : hxsl_TExprDef.TSwiz(arr,sw), t : size == 1 ? hxsl_Type.TFloat : hxsl_Type.TVec(size,hxsl_VecType.VFloat), p : e.p};
-					}
-				} else {
-					var k = 4 - pos1;
-					var type;
-					switch(size) {
-					case 2:
-						type = hxsl_TGlobal.Vec2;
-						break;
-					case 3:
-						type = hxsl_TGlobal.Vec3;
-						break;
-					case 4:
-						type = hxsl_TGlobal.Vec4;
-						break;
-					default:
-						throw haxe_Exception.thrown("assert");
-					}
-					var e1 = { e : hxsl_TExprDef.TGlobal(type), p : e.p, t : hxsl_Type.TVoid};
-					var idx = pos1 >> 2;
-					var arr = _gthis.optimize({ e : hxsl_TExprDef.TArray(expr1,{ e : hxsl_TExprDef.TConst(hxsl_Const.CInt(idx)), p : e.p, t : hxsl_Type.TInt}), p : e.p, t : hxsl_Type.TVec(4,hxsl_VecType.VFloat)});
-					var e2;
-					if(k == 4 && (pos1 & 3) == 0) {
-						e2 = arr;
-					} else {
-						var sw = hxsl_Flatten.SWIZ.slice(pos1 & 3,(pos1 & 3) + k);
-						e2 = { e : hxsl_TExprDef.TSwiz(arr,sw), t : k == 1 ? hxsl_Type.TFloat : hxsl_Type.TVec(k,hxsl_VecType.VFloat), p : e.p};
-					}
-					var pos = pos1 + 1;
-					var size1 = size - k;
-					var idx = pos >> 2;
-					var arr = _gthis.optimize({ e : hxsl_TExprDef.TArray(expr1,{ e : hxsl_TExprDef.TConst(hxsl_Const.CInt(idx)), p : e.p, t : hxsl_Type.TInt}), p : e.p, t : hxsl_Type.TVec(4,hxsl_VecType.VFloat)});
-					var e3;
-					if(size1 == 4 && (pos & 3) == 0) {
-						e3 = arr;
-					} else {
-						var sw = hxsl_Flatten.SWIZ.slice(pos & 3,(pos & 3) + size1);
-						e3 = { e : hxsl_TExprDef.TSwiz(arr,sw), t : size1 == 1 ? hxsl_Type.TFloat : hxsl_Type.TVec(size1,hxsl_VecType.VFloat), p : e.p};
-					}
-					e = { e : hxsl_TExprDef.TCall(e1,[e2,e3]), t : e.t, p : e.p};
-				}
+				var arr = _gthis.optimize({ e : hxsl_TExprDef.TArray(expr1,{ e : hxsl_TExprDef.TConst(hxsl_Const.CInt(idx)), p : e.p, t : hxsl_Type.TInt}), p : e.p, t : hxsl_Type.TVec(4,hxsl_VecType.VFloat)});
+				var sw = hxsl_Flatten.SWIZ.slice(pos1 & 3,(pos1 & 3) + 1);
+				e = { e : hxsl_TExprDef.TCall(e1,[this.floatBitsToUint({ e : hxsl_TExprDef.TSwiz(arr,sw), t : hxsl_Type.TFloat, p : e.p})]), t : e.t, p : e.p};
 				break;
 			default:
 				throw haxe_Exception.thrown("Unsupported type " + hxsl_Tools.toString(e.t));
@@ -89476,7 +103849,16 @@ hxsl_Flatten.prototype = {
 		return { e : hxsl_TExprDef.TArray({ e : hxsl_TExprDef.TVar(a.g), t : a.g.type, p : pos},{ e : hxsl_TExprDef.TConst(hxsl_Const.CInt(offs + index)), t : hxsl_Type.TInt, p : pos}), t : hxsl_Type.TVec(4,a.t), p : pos};
 	}
 	,readOffset: function(a,stride,delta,index,pos) {
-		var index1 = (a.t == null ? a.pos : a.pos >> 2) + index;
+		var index1;
+		var _g = a.g.type;
+		if(_g._hx_index == 16) {
+			var _g1 = _g.t;
+			var _g1 = _g.size;
+			var _g1 = _g.kind;
+			index1 = index;
+		} else {
+			index1 = (a.t == null ? a.pos : a.pos >> 2) + index;
+		}
 		var offset = this.mkAdd(delta,index1,pos);
 		return { e : hxsl_TExprDef.TArray({ e : hxsl_TExprDef.TVar(a.g), t : a.g.type, p : pos},offset), t : hxsl_Type.TVec(4,a.t), p : pos};
 	}
@@ -89499,7 +103881,16 @@ hxsl_Flatten.prototype = {
 				var a1 = acc.a;
 				var stride = acc.stride;
 				var delta = acc.delta;
-				var index = a1.t == null ? a1.pos : a1.pos >> 2;
+				var index;
+				var _g = a1.g.type;
+				if(_g._hx_index == 16) {
+					var _g1 = _g.t;
+					var _g1 = _g.size;
+					var _g1 = _g.kind;
+					index = 0;
+				} else {
+					index = a1.t == null ? a1.pos : a1.pos >> 2;
+				}
 				var offset = _gthis.mkAdd(delta,index,pos);
 				tmp1 = { e : hxsl_TExprDef.TArray({ e : hxsl_TExprDef.TVar(a1.g), t : a1.g.type, p : pos},offset), t : hxsl_Type.TVec(4,a1.t), p : pos};
 				break;
@@ -89515,7 +103906,16 @@ hxsl_Flatten.prototype = {
 				var a1 = acc.a;
 				var stride = acc.stride;
 				var delta = acc.delta;
-				var index = (a1.t == null ? a1.pos : a1.pos >> 2) + 1;
+				var index;
+				var _g = a1.g.type;
+				if(_g._hx_index == 16) {
+					var _g1 = _g.t;
+					var _g1 = _g.size;
+					var _g1 = _g.kind;
+					index = 1;
+				} else {
+					index = (a1.t == null ? a1.pos : a1.pos >> 2) + 1;
+				}
 				var offset = _gthis.mkAdd(delta,index,pos);
 				tmp2 = { e : hxsl_TExprDef.TArray({ e : hxsl_TExprDef.TVar(a1.g), t : a1.g.type, p : pos},offset), t : hxsl_Type.TVec(4,a1.t), p : pos};
 				break;
@@ -89531,7 +103931,16 @@ hxsl_Flatten.prototype = {
 				var a1 = acc.a;
 				var stride = acc.stride;
 				var delta = acc.delta;
-				var index = (a1.t == null ? a1.pos : a1.pos >> 2) + 2;
+				var index;
+				var _g = a1.g.type;
+				if(_g._hx_index == 16) {
+					var _g1 = _g.t;
+					var _g1 = _g.size;
+					var _g1 = _g.kind;
+					index = 2;
+				} else {
+					index = (a1.t == null ? a1.pos : a1.pos >> 2) + 2;
+				}
 				var offset = _gthis.mkAdd(delta,index,pos);
 				tmp3 = { e : hxsl_TExprDef.TArray({ e : hxsl_TExprDef.TVar(a1.g), t : a1.g.type, p : pos},offset), t : hxsl_Type.TVec(4,a1.t), p : pos};
 				break;
@@ -89547,7 +103956,16 @@ hxsl_Flatten.prototype = {
 				var a1 = acc.a;
 				var stride = acc.stride;
 				var delta = acc.delta;
-				var index = (a1.t == null ? a1.pos : a1.pos >> 2) + 3;
+				var index;
+				var _g = a1.g.type;
+				if(_g._hx_index == 16) {
+					var _g1 = _g.t;
+					var _g1 = _g.size;
+					var _g1 = _g.kind;
+					index = 3;
+				} else {
+					index = (a1.t == null ? a1.pos : a1.pos >> 2) + 3;
+				}
 				var offset = _gthis.mkAdd(delta,index,pos);
 				tmp4 = { e : hxsl_TExprDef.TArray({ e : hxsl_TExprDef.TVar(a1.g), t : a1.g.type, p : pos},offset), t : hxsl_Type.TVec(4,a1.t), p : pos};
 				break;
@@ -89566,7 +103984,16 @@ hxsl_Flatten.prototype = {
 				var a1 = acc.a;
 				var stride = acc.stride;
 				var delta = acc.delta;
-				var index = a1.t == null ? a1.pos : a1.pos >> 2;
+				var index;
+				var _g = a1.g.type;
+				if(_g._hx_index == 16) {
+					var _g1 = _g.t;
+					var _g1 = _g.size;
+					var _g1 = _g.kind;
+					index = 0;
+				} else {
+					index = a1.t == null ? a1.pos : a1.pos >> 2;
+				}
 				var offset = _gthis.mkAdd(delta,index,pos);
 				tmp1 = { e : hxsl_TExprDef.TArray({ e : hxsl_TExprDef.TVar(a1.g), t : a1.g.type, p : pos},offset), t : hxsl_Type.TVec(4,a1.t), p : pos};
 				break;
@@ -89582,7 +104009,16 @@ hxsl_Flatten.prototype = {
 				var a1 = acc.a;
 				var stride = acc.stride;
 				var delta = acc.delta;
-				var index = (a1.t == null ? a1.pos : a1.pos >> 2) + 1;
+				var index;
+				var _g = a1.g.type;
+				if(_g._hx_index == 16) {
+					var _g1 = _g.t;
+					var _g1 = _g.size;
+					var _g1 = _g.kind;
+					index = 1;
+				} else {
+					index = (a1.t == null ? a1.pos : a1.pos >> 2) + 1;
+				}
 				var offset = _gthis.mkAdd(delta,index,pos);
 				tmp2 = { e : hxsl_TExprDef.TArray({ e : hxsl_TExprDef.TVar(a1.g), t : a1.g.type, p : pos},offset), t : hxsl_Type.TVec(4,a1.t), p : pos};
 				break;
@@ -89598,7 +104034,16 @@ hxsl_Flatten.prototype = {
 				var a1 = acc.a;
 				var stride = acc.stride;
 				var delta = acc.delta;
-				var index = (a1.t == null ? a1.pos : a1.pos >> 2) + 2;
+				var index;
+				var _g = a1.g.type;
+				if(_g._hx_index == 16) {
+					var _g1 = _g.t;
+					var _g1 = _g.size;
+					var _g1 = _g.kind;
+					index = 2;
+				} else {
+					index = (a1.t == null ? a1.pos : a1.pos >> 2) + 2;
+				}
 				var offset = _gthis.mkAdd(delta,index,pos);
 				tmp3 = { e : hxsl_TExprDef.TArray({ e : hxsl_TExprDef.TVar(a1.g), t : a1.g.type, p : pos},offset), t : hxsl_Type.TVec(4,a1.t), p : pos};
 				break;
@@ -89630,7 +104075,16 @@ hxsl_Flatten.prototype = {
 					var a2 = acc.a;
 					var stride1 = acc.stride;
 					var delta = acc.delta;
-					var index = (a2.t == null ? a2.pos : a2.pos >> 2) + i;
+					var index;
+					var _g3 = a2.g.type;
+					if(_g3._hx_index == 16) {
+						var _g4 = _g3.t;
+						var _g5 = _g3.size;
+						var _g6 = _g3.kind;
+						index = i;
+					} else {
+						index = (a2.t == null ? a2.pos : a2.pos >> 2) + i;
+					}
 					var offset = _gthis.mkAdd(delta,index,pos);
 					tmp = { e : hxsl_TExprDef.TArray({ e : hxsl_TExprDef.TVar(a2.g), t : a2.g.type, p : pos},offset), t : hxsl_Type.TVec(4,a2.t), p : pos};
 					break;
@@ -89669,7 +104123,16 @@ hxsl_Flatten.prototype = {
 						var a1 = acc.a;
 						var stride = acc.stride;
 						var delta = acc.delta;
-						var index = a1.t == null ? a1.pos : a1.pos >> 2;
+						var index;
+						var _g = a1.g.type;
+						if(_g._hx_index == 16) {
+							var _g1 = _g.t;
+							var _g1 = _g.size;
+							var _g1 = _g.kind;
+							index = 0;
+						} else {
+							index = a1.t == null ? a1.pos : a1.pos >> 2;
+						}
 						var offset = _gthis.mkAdd(delta,index,pos);
 						e = { e : hxsl_TExprDef.TArray({ e : hxsl_TExprDef.TVar(a1.g), t : a1.g.type, p : pos},offset), t : hxsl_Type.TVec(4,a1.t), p : pos};
 						break;
@@ -89692,7 +104155,16 @@ hxsl_Flatten.prototype = {
 						var a1 = acc.a;
 						var stride = acc.stride;
 						var delta = acc.delta;
-						var index = a1.t == null ? a1.pos : a1.pos >> 2;
+						var index;
+						var _g = a1.g.type;
+						if(_g._hx_index == 16) {
+							var _g1 = _g.t;
+							var _g1 = _g.size;
+							var _g1 = _g.kind;
+							index = 0;
+						} else {
+							index = a1.t == null ? a1.pos : a1.pos >> 2;
+						}
 						var offset = _gthis.mkAdd(delta,index,pos);
 						e = { e : hxsl_TExprDef.TArray({ e : hxsl_TExprDef.TVar(a1.g), t : a1.g.type, p : pos},offset), t : hxsl_Type.TVec(4,a1.t), p : pos};
 						break;
@@ -89748,7 +104220,16 @@ hxsl_Flatten.prototype = {
 					var a1 = acc.a;
 					var stride = acc.stride;
 					var delta = acc.delta;
-					var index = a1.t == null ? a1.pos : a1.pos >> 2;
+					var index;
+					var _g = a1.g.type;
+					if(_g._hx_index == 16) {
+						var _g1 = _g.t;
+						var _g1 = _g.size;
+						var _g1 = _g.kind;
+						index = 0;
+					} else {
+						index = a1.t == null ? a1.pos : a1.pos >> 2;
+					}
 					var offset = _gthis.mkAdd(delta,index,pos);
 					e = { e : hxsl_TExprDef.TArray({ e : hxsl_TExprDef.TVar(a1.g), t : a1.g.type, p : pos},offset), t : hxsl_Type.TVec(4,a1.t), p : pos};
 					break;
@@ -89771,7 +104252,16 @@ hxsl_Flatten.prototype = {
 					var a1 = acc.a;
 					var stride = acc.stride;
 					var delta = acc.delta;
-					var index = a1.t == null ? a1.pos : a1.pos >> 2;
+					var index;
+					var _g = a1.g.type;
+					if(_g._hx_index == 16) {
+						var _g1 = _g.t;
+						var _g1 = _g.size;
+						var _g1 = _g.kind;
+						index = 0;
+					} else {
+						index = a1.t == null ? a1.pos : a1.pos >> 2;
+					}
 					var offset = _gthis.mkAdd(delta,index,pos);
 					e = { e : hxsl_TExprDef.TArray({ e : hxsl_TExprDef.TVar(a1.g), t : a1.g.type, p : pos},offset), t : hxsl_Type.TVec(4,a1.t), p : pos};
 					break;
@@ -89808,6 +104298,9 @@ hxsl_Flatten.prototype = {
 			}
 		}
 	}
+	,floatBitsToUint: function(e) {
+		return { e : hxsl_TExprDef.TCall({ e : hxsl_TExprDef.TGlobal(hxsl_TGlobal.FloatBitsToUint), t : hxsl_Type.TFun([]), p : e.p},[e]), t : hxsl_Type.TInt, p : e.p};
+	}
 	,toInt: function(e) {
 		if(e.t == hxsl_Type.TInt) {
 			return e;
@@ -89824,7 +104317,7 @@ hxsl_Flatten.prototype = {
 			var _g4 = _g1.p;
 			var _g4 = _g1.t;
 			if(_g3._hx_index == 2) {
-				if(_g3.g._hx_index == 52) {
+				if(_g3.g._hx_index == 53) {
 					if(_g2.length == 1) {
 						var _g1 = _g2[0];
 						var _g2 = _g1.e;
@@ -89836,7 +104329,7 @@ hxsl_Flatten.prototype = {
 							var _g4 = _g1.p;
 							var _g4 = _g1.t;
 							if(_g3._hx_index == 2) {
-								if(_g3.g._hx_index == 51) {
+								if(_g3.g._hx_index == 52) {
 									var args = _g2.args;
 									var rem = 0;
 									var size = 0;
@@ -89999,7 +104492,7 @@ hxsl_Flatten.prototype = {
 						case 1:case 3:
 							var bt1;
 							switch(kind._hx_index) {
-							case 1:case 3:
+							case 1:case 2:case 4:case 5:
 								bt1 = true;
 								break;
 							default:
@@ -90161,6 +104654,39 @@ hxsl_Flatten.prototype = {
 			break;
 		default:
 			throw haxe_Exception.thrown(hxsl_Tools.toString(v) + " size unknown for type " + Std.string(t));
+		}
+	}
+	,varSize4Bytes: function(v,t) {
+		switch(v._hx_index) {
+		case 9:
+			if(v.size == 4) {
+				return 1;
+			} else {
+				throw haxe_Exception.thrown(hxsl_Tools.toString(v) + " 4 bytes size unknown for type" + Std.string(t));
+			}
+			break;
+		case 13:
+			var vl = v.vl;
+			var size = 0;
+			var _g = 0;
+			while(_g < vl.length) {
+				var v1 = vl[_g];
+				++_g;
+				size += this.varSize4Bytes(v1.type,t);
+			}
+			return size;
+		case 15:
+			var _g = v.size;
+			if(_g._hx_index == 0) {
+				var n = _g.v;
+				var at = v.t;
+				return this.varSize4Bytes(at,t) * n;
+			} else {
+				return this.varSize(v,t);
+			}
+			break;
+		default:
+			return this.varSize(v,t);
 		}
 	}
 	,addTextureFormat: function(dim,arr,rw) {
@@ -90657,7 +105183,7 @@ hxsl_GlslOut.prototype = {
 			var arr = t.isArray;
 			var name = this.getSamplerType(dim,arr);
 			this.buf.b += Std.string(name);
-			if(this.glES != null && arr) {
+			if(this.glES != null && (arr || dim == hxsl_TexDimension.T3D)) {
 				this.decl("precision lowp " + name + ";");
 			}
 			break;
@@ -90772,9 +105298,12 @@ hxsl_GlslOut.prototype = {
 			var size = _g.size;
 			var kind = _g.kind;
 			switch(kind._hx_index) {
-			case 0:case 2:
+			case 0:case 3:
 				break;
-			case 1:case 3:
+			case 1:case 4:
+				this.buf.b += Std.string("storage_");
+				break;
+			case 2:case 5:
 				this.buf.b += Std.string("rw_");
 				break;
 			}
@@ -90846,7 +105375,10 @@ hxsl_GlslOut.prototype = {
 				return "_imod";
 			}
 			break;
-		case 33:
+		case 25:
+			this.decl("float invLerp(float v, float a, float b) { return clamp((v - a) / (b - a), 0.0, 1.0); }");
+			break;
+		case 34:
 			var _g = args[0].t;
 			switch(_g._hx_index) {
 			case 10:
@@ -90874,7 +105406,7 @@ hxsl_GlslOut.prototype = {
 			default:
 			}
 			break;
-		case 34:
+		case 35:
 			var _g = args[0].t;
 			switch(_g._hx_index) {
 			case 10:
@@ -90905,9 +105437,9 @@ hxsl_GlslOut.prototype = {
 			default:
 			}
 			break;
-		case 35:
-			return "texelFetch";
 		case 36:
+			return "texelFetch";
+		case 37:
 			var sufix = "";
 			var _g = args[0].t;
 			switch(_g._hx_index) {
@@ -90932,39 +105464,39 @@ hxsl_GlslOut.prototype = {
 			default:
 			}
 			return "_texture" + sufix + "Size";
-		case 50:
+		case 51:
 			if(args[0].t == hxsl_Type.TMat3x4) {
 				this.decl(hxsl_GlslOut.MAT34);
 				this.decl("mat3 _mat3( _mat3x4 v ) { return mat3(v.a.xyz,v.b.xyz,v.c.xyz); }");
 				return "_mat3";
 			}
 			break;
-		case 52:
+		case 53:
 			this.decl(hxsl_GlslOut.MAT34);
 			if(args.length == 1) {
 				this.decl("_mat3x4 mat_to_34( mat4 m ) { return _mat3x4(m[0],m[1],m[2]); }");
 				return "mat_to_34";
 			}
 			break;
-		case 54:
+		case 55:
 			this.decl("vec4 pack( float v ) { vec4 color = fract(v * vec4(1, 255, 255.*255., 255.*255.*255.)); return color - color.yzww * vec4(1. / 255., 1. / 255., 1. / 255., 0.); }");
 			break;
-		case 55:
+		case 56:
 			this.decl("float unpack( vec4 color ) { return dot(color,vec4(1., 1. / 255., 1. / (255. * 255.), 1. / (255. * 255. * 255.))); }");
 			break;
-		case 56:
+		case 57:
 			this.decl("vec4 packNormal( vec3 v ) { return vec4((v + vec3(1.)) * vec3(0.5),1.); }");
 			break;
-		case 57:
+		case 58:
 			this.decl("vec3 unpackNormal( vec4 v ) { return normalize((v.xyz - vec3(0.5)) * vec3(2.)); }");
 			break;
-		case 58:
+		case 59:
 			this.decl("vec2 screenToUv( vec2 v ) { return v * vec2(0.5,-0.5) + vec2(0.5,0.5); }");
 			break;
-		case 59:
+		case 60:
 			this.decl("vec2 uvToScreen( vec2 v ) { return v * vec2(2.,-2.) + vec2(-1., 1.); }");
 			break;
-		case 60:case 61:case 62:
+		case 61:case 62:case 63:
 			if(this.isVertex) {
 				throw haxe_Exception.thrown("Can't use " + Std.string(g) + " in vertex shader");
 			}
@@ -90972,7 +105504,7 @@ hxsl_GlslOut.prototype = {
 				this.decl("#extension GL_OES_standard_derivatives:enable");
 			}
 			break;
-		case 73:
+		case 74:
 			if(this.version < 330) {
 				this.decl("#extension GL_ARB_shader_bit_encoding :enable");
 			}
@@ -90981,12 +105513,12 @@ hxsl_GlslOut.prototype = {
 			this.decl("ivec3 _floatBitsToUint( vec3 v ) { return ivec3(floatBitsToUint(v)); }");
 			this.decl("ivec4 _floatBitsToUint( vec4 v ) { return ivec4(floatBitsToUint(v)); }");
 			break;
-		case 72:case 74:
+		case 73:case 75:
 			if(this.version < 330) {
 				this.decl("#extension GL_ARB_shader_bit_encoding :enable");
 			}
 			break;
-		case 75:
+		case 76:
 			if(this.version < 330) {
 				this.decl("#extension GL_ARB_shader_bit_encoding :enable");
 			}
@@ -91625,7 +106157,7 @@ hxsl_GlslOut.prototype = {
 			if(_g3._hx_index == 2) {
 				var _g4 = _g3.g;
 				switch(_g4._hx_index) {
-				case 35:
+				case 36:
 					var g = _g4;
 					var args = _g2;
 					var v = this.getFunName(g,args,e.t);
@@ -91642,7 +106174,7 @@ hxsl_GlslOut.prototype = {
 						this.buf.b += Std.string(", 0)");
 					}
 					break;
-				case 36:
+				case 37:
 					var g = _g4;
 					var args = _g2;
 					var v = this.getFunName(g,args,e.t);
@@ -91671,7 +106203,7 @@ hxsl_GlslOut.prototype = {
 						}
 					}
 					break;
-				case 53:
+				case 54:
 					if(_g2.length == 1) {
 						var e1 = _g2[0];
 						this.buf.b += Std.string("clamp(");
@@ -91704,9 +106236,9 @@ hxsl_GlslOut.prototype = {
 						this.buf.b += Std.string(")");
 					}
 					break;
-				case 77:
-					break;
 				case 78:
+					break;
+				case 79:
 					if(_g2.length == 3) {
 						var tex = _g2[0];
 						var uv = _g2[1];
@@ -91761,7 +106293,7 @@ hxsl_GlslOut.prototype = {
 						this.buf.b += Std.string(")");
 					}
 					break;
-				case 83:
+				case 84:
 					var args = _g2;
 					this.buf.b += Std.string("atomicAdd(");
 					this.addValue(args[0],tabs);
@@ -92022,6 +106554,29 @@ hxsl_GlslOut.prototype = {
 			this.buf.b += Std.string(".");
 			this.buf.b += Std.string(name);
 			break;
+		case 22:
+			var _g1 = _g.code;
+			var _g2 = _g.args;
+			switch(_g.target) {
+			case "code":case "glsl":
+				var code = _g1;
+				var args = _g2;
+				var pos = 0;
+				var argRegex = new EReg("{(\\d+)}","g");
+				while(argRegex.matchSub(code,pos)) {
+					var matchPos = argRegex.matchedPos();
+					this.buf.b += Std.string(code.substring(pos,matchPos.pos));
+					var index = Std.parseInt(argRegex.matched(1));
+					if(index < args.length) {
+						this.addValue(args[index].e,tabs);
+					}
+					pos = matchPos.pos + matchPos.len;
+				}
+				this.buf.b += Std.string(HxOverrides.substr(code,pos,null));
+				break;
+			default:
+			}
+			break;
 		}
 	}
 	,varName: function(v) {
@@ -92111,19 +106666,27 @@ hxsl_GlslOut.prototype = {
 				var _g1 = _g.size;
 				var _g1 = _g.kind;
 				switch(_g1._hx_index) {
-				case 1:case 3:
+				case 1:case 4:
+					if(this.version < 430) {
+						throw haxe_Exception.thrown("SSBO are available since version 4.3");
+					}
+					this.buf.b += Std.string("layout(std430) readonly buffer ");
+					break;
+				case 2:case 5:
+					if(this.version < 430) {
+						throw haxe_Exception.thrown("SSBO are available since version 4.3");
+					}
 					this.buf.b += Std.string("layout(std430) buffer ");
 					break;
 				default:
 					var kind = _g1;
 					this.buf.b += Std.string("layout(std140) ");
 					switch(kind._hx_index) {
-					case 0:case 2:
+					case 0:case 3:
 						this.buf.b += Std.string("uniform ");
 						break;
-					case 1:case 3:
-						this.buf.b += Std.string("buffer ");
-						break;
+					default:
+						throw haxe_Exception.thrown("assert");
 					}
 				}
 				break;
@@ -92135,6 +106698,9 @@ hxsl_GlslOut.prototype = {
 			this.buf.b += Std.string(this.glES != null && this.glES <= 2 ? "attribute " : "in ");
 			break;
 		case 3:
+			if(hxsl_Tools.hasQualifier(v,hxsl_VarQualifier.Flat)) {
+				this.buf.b += Std.string("flat ");
+			}
 			this.buf.b += Std.string(this.glES != null && this.glES <= 2 ? "varying " : this.isVertex ? "out " : "in ");
 			break;
 		case 4:
@@ -92212,7 +106778,7 @@ hxsl_GlslOut.prototype = {
 			var _g3 = _g1.p;
 			var _g3 = _g1.t;
 			if(_g._hx_index == 2) {
-				if(_g.g._hx_index == 77) {
+				if(_g.g._hx_index == 78) {
 					switch(_g2.length) {
 					case 1:
 						var _g = _g2[0];
@@ -92504,9 +107070,7 @@ var hxsl_Linker = function(mode) {
 $hxClasses["hxsl.Linker"] = hxsl_Linker;
 hxsl_Linker.__name__ = "hxsl.Linker";
 hxsl_Linker.prototype = {
-	debug: function(msg,pos) {
-	}
-	,error: function(msg,p) {
+	error: function(msg,p) {
 		return hxsl_Error.t(msg,p);
 	}
 	,mergeVar: function(path,v,v2,p,shaderName) {
@@ -92582,7 +107146,8 @@ hxsl_Linker.prototype = {
 				}
 			}
 		}
-		var v2 = this.varMap.h[key];
+		var ukey = key.toLowerCase();
+		var v2 = this.varMap.h[ukey];
 		var vname = v.name;
 		if(v2 != null) {
 			var _g = 0;
@@ -92606,7 +107171,7 @@ hxsl_Linker.prototype = {
 			if(tmp || v.kind == hxsl_VarKind.Param && v2.v.kind == hxsl_VarKind.Param) {
 				var k = 2;
 				while(true) {
-					var a = this.varMap.h[key + k];
+					var a = this.varMap.h[ukey + k];
 					if(a == null) {
 						break;
 					}
@@ -92623,15 +107188,16 @@ hxsl_Linker.prototype = {
 				}
 				if(v.kind == hxsl_VarKind.Input) {
 					var _this = this.varMap;
-					if(Object.prototype.hasOwnProperty.call(_this.h,key)) {
-						delete(_this.h[key]);
+					if(Object.prototype.hasOwnProperty.call(_this.h,ukey)) {
+						delete(_this.h[ukey]);
 					}
-					this.varMap.h[key + k] = v2;
+					this.varMap.h[ukey + k] = v2;
 					v2.v.name += k;
 					v2.path += k;
 				} else {
 					vname += k;
 					key += k;
+					ukey += k;
 				}
 			} else {
 				v2.merged.push(v);
@@ -92650,7 +107216,7 @@ hxsl_Linker.prototype = {
 		a.instanceIndex = this.curInstance;
 		a.rootShaderName = shaderName;
 		this.allVars.push(a);
-		this.varMap.h[key] = a;
+		this.varMap.h[ukey] = a;
 		var _g = v2.type;
 		if(_g._hx_index == 13) {
 			var vl = _g.vl;
@@ -92673,11 +107239,31 @@ hxsl_Linker.prototype = {
 			if(!this.locals.h.hasOwnProperty(v.id)) {
 				var v1 = this.allocVar(v,e.p);
 				if(this.curShader != null && !this.curShader.writeMap.h.hasOwnProperty(v1.id)) {
+					if(hxsl_Debug.TRACE) {
+						var msg = this.curShader.name + " read " + v1.path;
+						var _g1 = 0;
+						var _g2 = this.debugDepth;
+						while(_g1 < _g2) {
+							var i = _g1++;
+							msg = "    " + msg;
+						}
+						haxe_Log.trace(msg,{ fileName : "hxsl/Debug.hx", lineNumber : 31, className : "hxsl.Linker", methodName : "mapExprVar"});
+					}
 					if(!this.curShader.readMap.h.hasOwnProperty(v1.id)) {
 						this.curShader.readMap.h[v1.id] = v1;
 						this.curShader.readVars.push(v1);
 					}
 					if(this.curShader.vertex == null && v1.v.kind == hxsl_VarKind.Var) {
+						if(hxsl_Debug.TRACE) {
+							var msg = "Force " + this.curShader.name + " into fragment (use varying)";
+							var _g1 = 0;
+							var _g2 = this.debugDepth;
+							while(_g1 < _g2) {
+								var i = _g1++;
+								msg = "    " + msg;
+							}
+							haxe_Log.trace(msg,{ fileName : "hxsl/Debug.hx", lineNumber : 31, className : "hxsl.Linker", methodName : "mapExprVar"});
+						}
 						this.curShader.vertex = false;
 					}
 				}
@@ -92699,6 +107285,16 @@ hxsl_Linker.prototype = {
 						var e21 = this.mapExprVar(e2);
 						var v1 = this.allocVar(v,e1.p);
 						if(this.curShader != null && !this.curShader.writeMap.h.hasOwnProperty(v1.id)) {
+							if(hxsl_Debug.TRACE) {
+								var msg = this.curShader.name + " write " + v1.path;
+								var _g3 = 0;
+								var _g4 = this.debugDepth;
+								while(_g3 < _g4) {
+									var i = _g3++;
+									msg = "    " + msg;
+								}
+								haxe_Log.trace(msg,{ fileName : "hxsl/Debug.hx", lineNumber : 31, className : "hxsl.Linker", methodName : "mapExprVar"});
+							}
 							this.curShader.writeMap.h[v1.id] = v1;
 							this.curShader.writeVars.push(v1);
 						}
@@ -92710,6 +107306,16 @@ hxsl_Linker.prototype = {
 							var e21 = this.mapExprVar(e2);
 							var v1 = this.allocVar(v,e11.p);
 							if(this.curShader != null && !this.curShader.writeMap.h.hasOwnProperty(v1.id)) {
+								if(hxsl_Debug.TRACE) {
+									var msg = this.curShader.name + " write " + v1.path;
+									var _g2 = 0;
+									var _g3 = this.debugDepth;
+									while(_g2 < _g3) {
+										var i = _g2++;
+										msg = "    " + msg;
+									}
+									haxe_Log.trace(msg,{ fileName : "hxsl/Debug.hx", lineNumber : 31, className : "hxsl.Linker", methodName : "mapExprVar"});
+								}
 								this.curShader.writeMap.h[v1.id] = v1;
 								this.curShader.writeVars.push(v1);
 							}
@@ -92730,6 +107336,16 @@ hxsl_Linker.prototype = {
 							var e21 = this.mapExprVar(e2);
 							var v1 = this.allocVar(v,e11.p);
 							if(this.curShader != null && !this.curShader.writeMap.h.hasOwnProperty(v1.id)) {
+								if(hxsl_Debug.TRACE) {
+									var msg = this.curShader.name + " write " + v1.path;
+									var _g2 = 0;
+									var _g3 = this.debugDepth;
+									while(_g2 < _g3) {
+										var i = _g2++;
+										msg = "    " + msg;
+									}
+									haxe_Log.trace(msg,{ fileName : "hxsl/Debug.hx", lineNumber : 31, className : "hxsl.Linker", methodName : "mapExprVar"});
+								}
 								this.curShader.writeMap.h[v1.id] = v1;
 								this.curShader.writeVars.push(v1);
 							}
@@ -92750,6 +107366,16 @@ hxsl_Linker.prototype = {
 						var e21 = this.mapExprVar(e2);
 						var v1 = this.allocVar(v,e11.p);
 						if(this.curShader != null && !this.curShader.writeMap.h.hasOwnProperty(v1.id)) {
+							if(hxsl_Debug.TRACE) {
+								var msg = this.curShader.name + " write " + v1.path;
+								var _g2 = 0;
+								var _g3 = this.debugDepth;
+								while(_g2 < _g3) {
+									var i = _g2++;
+									msg = "    " + msg;
+								}
+								haxe_Log.trace(msg,{ fileName : "hxsl/Debug.hx", lineNumber : 31, className : "hxsl.Linker", methodName : "mapExprVar"});
+							}
 							this.curShader.writeMap.h[v1.id] = v1;
 							this.curShader.writeVars.push(v1);
 						}
@@ -92769,6 +107395,16 @@ hxsl_Linker.prototype = {
 							var e21 = this.mapExprVar(e2);
 							var v1 = this.allocVar(v,e11.p);
 							if(this.curShader != null && !this.curShader.writeMap.h.hasOwnProperty(v1.id)) {
+								if(hxsl_Debug.TRACE) {
+									var msg = this.curShader.name + " write " + v1.path;
+									var _g1 = 0;
+									var _g2 = this.debugDepth;
+									while(_g1 < _g2) {
+										var i = _g1++;
+										msg = "    " + msg;
+									}
+									haxe_Log.trace(msg,{ fileName : "hxsl/Debug.hx", lineNumber : 31, className : "hxsl.Linker", methodName : "mapExprVar"});
+								}
 								this.curShader.writeMap.h[v1.id] = v1;
 								this.curShader.writeVars.push(v1);
 							}
@@ -92799,9 +107435,65 @@ hxsl_Linker.prototype = {
 			var v = _g.v;
 			this.locals.h[v.id] = true;
 			break;
+		case 22:
+			var target = _g.target;
+			var code = _g.code;
+			var args = _g.args;
+			var mappedArgs = [];
+			var _g = 0;
+			while(_g < args.length) {
+				var arg = args[_g];
+				++_g;
+				var e1;
+				switch(arg.access._hx_index) {
+				case 0:
+					e1 = this.mapExprVar(arg.e);
+					break;
+				case 1:
+					var e2 = this.curShader != null ? this.mapSyntaxWrite(arg.e) : arg.e;
+					e1 = this.mapExprVar(e2);
+					break;
+				case 2:
+					var e3 = this.mapExprVar(arg.e);
+					if(this.curShader != null) {
+						e3 = this.mapSyntaxWrite(e3);
+					}
+					e1 = e3;
+					break;
+				}
+				mappedArgs.push({ e : e1, access : arg.access});
+			}
+			if(this.curShader != null) {
+				this.curShader.hasSyntax = true;
+			}
+			return { e : hxsl_TExprDef.TSyntax(target,code,mappedArgs), t : e.t, p : e.p};
 		default:
 		}
 		return hxsl_Tools.map(e,$bind(this,this.mapExprVar));
+	}
+	,mapSyntaxWrite: function(e) {
+		var _g = e.e;
+		if(_g._hx_index == 1) {
+			var v = _g.v;
+			var v1 = this.allocVar(v,e.p);
+			if(!this.curShader.writeMap.h.hasOwnProperty(v1.id)) {
+				if(hxsl_Debug.TRACE) {
+					var msg = this.curShader.name + " syntax write " + v1.path;
+					var _g = 0;
+					var _g1 = this.debugDepth;
+					while(_g < _g1) {
+						var i = _g++;
+						msg = "    " + msg;
+					}
+					haxe_Log.trace(msg,{ fileName : "hxsl/Debug.hx", lineNumber : 31, className : "hxsl.Linker", methodName : "mapSyntaxWrite"});
+				}
+				this.curShader.writeMap.h[v1.id] = v1;
+				this.curShader.writeVars.push(v1);
+			}
+			return { e : hxsl_TExprDef.TVar(v1.v), t : v1.v.type, p : e.p};
+		} else {
+			return hxsl_Tools.map(e,$bind(this,this.mapSyntaxWrite));
+		}
 	}
 	,addShader: function(name,vertex,e,p) {
 		var s = new hxsl__$Linker_ShaderInfos(name,vertex);
@@ -92810,6 +107502,16 @@ hxsl_Linker.prototype = {
 		s.body = this.mapExprVar(e);
 		this.shaders.push(s);
 		this.curShader = null;
+		if(hxsl_Debug.TRACE) {
+			var msg = "Adding shader " + name + " with priority " + p;
+			var _g = 0;
+			var _g1 = this.debugDepth;
+			while(_g < _g1) {
+				var i = _g++;
+				msg = "    " + msg;
+			}
+			haxe_Log.trace(msg,{ fileName : "hxsl/Debug.hx", lineNumber : 31, className : "hxsl.Linker", methodName : "addShader"});
+		}
 		return s;
 	}
 	,sortByPriorityDesc: function(s1,s2) {
@@ -92841,6 +107543,16 @@ hxsl_Linker.prototype = {
 				if(parent.vertex == null) {
 					parent.vertex = true;
 				}
+			}
+			if(hxsl_Debug.TRACE) {
+				var msg = s.name + " => " + parent.name + " (" + v.path + ")";
+				var _g2 = 0;
+				var _g3 = this.debugDepth;
+				while(_g2 < _g3) {
+					var i = _g2++;
+					msg = "    " + msg;
+				}
+				haxe_Log.trace(msg,{ fileName : "hxsl/Debug.hx", lineNumber : 31, className : "hxsl.Linker", methodName : "buildDependency"});
 			}
 			s.deps.set(parent,true);
 			this.debugDepth++;
@@ -92891,14 +107603,44 @@ hxsl_Linker.prototype = {
 			this.collect(d,out,vertex);
 		}
 		if(cur.vertex == null) {
+			if(hxsl_Debug.TRACE) {
+				var msg = "MARK " + cur.name + " " + (vertex ? "vertex" : "fragment");
+				var _g = 0;
+				var _g1 = this.debugDepth;
+				while(_g < _g1) {
+					var i = _g++;
+					msg = "    " + msg;
+				}
+				haxe_Log.trace(msg,{ fileName : "hxsl/Debug.hx", lineNumber : 31, className : "hxsl.Linker", methodName : "collect"});
+			}
 			cur.vertex = vertex;
 		}
 		if(cur.vertex == vertex) {
+			if(hxsl_Debug.TRACE) {
+				var msg = "COLLECT " + cur.name + " " + (vertex ? "vertex" : "fragment");
+				var _g = 0;
+				var _g1 = this.debugDepth;
+				while(_g < _g1) {
+					var i = _g++;
+					msg = "    " + msg;
+				}
+				haxe_Log.trace(msg,{ fileName : "hxsl/Debug.hx", lineNumber : 31, className : "hxsl.Linker", methodName : "collect"});
+			}
 			out.push(cur);
 		}
 		cur.onStack = false;
 	}
 	,link: function(shadersData) {
+		if(hxsl_Debug.TRACE) {
+			var msg = "---------------------- LINKING -----------------------";
+			var _g = 0;
+			var _g1 = this.debugDepth;
+			while(_g < _g1) {
+				var i = _g++;
+				msg = "    " + msg;
+			}
+			haxe_Log.trace(msg,{ fileName : "hxsl/Debug.hx", lineNumber : 31, className : "hxsl.Linker", methodName : "link"});
+		}
 		this.varMap = new haxe_ds_StringMap();
 		this.varIdMap = new haxe_ds_IntMap();
 		this.allVars = [];
@@ -92937,6 +107679,10 @@ hxsl_Linker.prototype = {
 				var v2 = this.allocVar(v,null,s.name);
 				if(this.isBatchShader && v2.v.kind == hxsl_VarKind.Param && !StringTools.startsWith(v2.path,"Batch_")) {
 					v2.v.kind = hxsl_VarKind.Local;
+					if(v2.v.qualifiers == null) {
+						v2.v.qualifiers = [];
+					}
+					v2.v.qualifiers.push(hxsl_VarQualifier.Flat);
 				}
 				if(v.kind == hxsl_VarKind.Output) {
 					outVars.push(v);
@@ -92957,6 +107703,8 @@ hxsl_Linker.prototype = {
 		var initPrio_vert = [-2000];
 		var initPrio_frag = [-1000];
 		var initPrio_main = [-2500];
+		var shaderOffset_vert = -1500;
+		var shaderOffset_frag = -500;
 		var _g = 0;
 		while(_g < shadersData.length) {
 			var s = shadersData[_g];
@@ -92976,7 +107724,8 @@ hxsl_Linker.prototype = {
 						var e = v.kind;
 						throw haxe_Exception.thrown("Unexpected " + $hxEnums[e.__enum__].__constructs__[e._hx_index]._hx_name.toLowerCase() + "() function in compute shader");
 					}
-					this.addShader(s.name + "." + (v.kind == hxsl_FunctionKind.Vertex ? "vertex" : "fragment"),v.kind == hxsl_FunctionKind.Vertex,f.expr,priority);
+					var offset = v.kind == hxsl_FunctionKind.Vertex ? shaderOffset_vert : shaderOffset_frag;
+					this.addShader(s.name + "." + (v.kind == hxsl_FunctionKind.Vertex ? "vertex" : "fragment"),v.kind == hxsl_FunctionKind.Vertex,f.expr,priority + offset);
 					break;
 				case 2:
 					var prio;
@@ -93046,7 +107795,7 @@ hxsl_Linker.prototype = {
 		while(_g < _g1.length) {
 			var s = _g1[_g];
 			++_g;
-			if(s.hasDiscard || s.isCompute) {
+			if(s.hasDiscard || s.isCompute || s.hasSyntax) {
 				this.initDependencies(s);
 				entry.deps.set(s,true);
 			}
@@ -93071,6 +107820,16 @@ hxsl_Linker.prototype = {
 				}
 			}
 			if(onlyParams) {
+				if(hxsl_Debug.TRACE) {
+					var msg = "Force " + s.name + " into fragment since it only reads params";
+					var _g4 = 0;
+					var _g5 = this.debugDepth;
+					while(_g4 < _g5) {
+						var i = _g4++;
+						msg = "    " + msg;
+					}
+					haxe_Log.trace(msg,{ fileName : "hxsl/Debug.hx", lineNumber : 31, className : "hxsl.Linker", methodName : "link"});
+				}
 				s.vertex = false;
 			}
 		}
@@ -93087,6 +107846,16 @@ hxsl_Linker.prototype = {
 				while(d.hasNext()) {
 					var d1 = d.next();
 					if(d1.vertex == false) {
+						if(hxsl_Debug.TRACE) {
+							var msg = s.name + " marked as fragment because of " + d1.name;
+							var _g2 = 0;
+							var _g3 = this.debugDepth;
+							while(_g2 < _g3) {
+								var i = _g2++;
+								msg = "    " + msg;
+							}
+							haxe_Log.trace(msg,{ fileName : "hxsl/Debug.hx", lineNumber : 31, className : "hxsl.Linker", methodName : "link"});
+						}
 						s.vertex = false;
 						break;
 					}
@@ -93097,6 +107866,16 @@ hxsl_Linker.prototype = {
 				while(d2.hasNext()) {
 					var d3 = d2.next();
 					if(d3.vertex == null) {
+						if(hxsl_Debug.TRACE) {
+							var msg1 = d3.name + " marked as vertex because of " + s.name;
+							var _g4 = 0;
+							var _g5 = this.debugDepth;
+							while(_g4 < _g5) {
+								var i1 = _g4++;
+								msg1 = "    " + msg1;
+							}
+							haxe_Log.trace(msg1,{ fileName : "hxsl/Debug.hx", lineNumber : 31, className : "hxsl.Linker", methodName : "link"});
+						}
 						d3.vertex = true;
 					}
 				}
@@ -93544,6 +108323,9 @@ hxsl_Printer.prototype = {
 				case 13:
 					v1 = "final";
 					break;
+				case 14:
+					v1 = "flat";
+					break;
 				}
 				this.buffer.b += Std.string("@" + v1 + " ");
 			}
@@ -93942,6 +108724,33 @@ hxsl_Printer.prototype = {
 			this.addExpr(e,tabs);
 			this.buffer.b += Std.string(".");
 			this.buffer.b += Std.string(name);
+			break;
+		case 22:
+			var target = _g.target;
+			var code = _g.code;
+			var args = _g.args;
+			this.buffer.b += Std.string("Syntax.");
+			this.buffer.b += Std.string(target);
+			this.buffer.b += Std.string("(");
+			this.addConst(hxsl_Const.CString(code));
+			var _g = 0;
+			while(_g < args.length) {
+				var arg = args[_g];
+				++_g;
+				switch(arg.access._hx_index) {
+				case 0:
+					this.buffer.b += Std.string(", @r ");
+					break;
+				case 1:
+					this.buffer.b += Std.string(", @w ");
+					break;
+				case 2:
+					this.buffer.b += Std.string(", @rw ");
+					break;
+				}
+				this.addExpr(arg.e,tabs);
+			}
+			this.buffer.b += Std.string(")");
 			break;
 		}
 	}
@@ -94390,7 +109199,7 @@ hxsl_Serializer.prototype = {
 					var s2 = q.name;
 					this.writeString(s2);
 					break;
-				case 1:case 2:case 3:case 5:case 8:case 13:
+				case 1:case 2:case 3:case 5:case 8:case 13:case 14:
 					break;
 				}
 			}
@@ -94622,6 +109431,21 @@ hxsl_Serializer.prototype = {
 			this.writeExpr(e1);
 			this.writeString(name);
 			break;
+		case 22:
+			var target = _g.target;
+			var code = _g.code;
+			var args = _g.args;
+			this.writeString(target);
+			this.writeString(code);
+			this.writeVarInt(args.length);
+			var _g = 0;
+			while(_g < args.length) {
+				var v = args[_g];
+				++_g;
+				_gthis.writeExpr(v.e);
+				_gthis.out.addByte(v.access._hx_index);
+			}
+			break;
 		}
 		this.writeType(e.t);
 	}
@@ -94780,6 +109604,18 @@ hxsl_Serializer.prototype = {
 		case 21:
 			e = hxsl_TExprDef.TField(this.readExpr(),this.readString());
 			break;
+		case 22:
+			var e1 = this.readString();
+			var e2 = this.readString();
+			var _g = [];
+			var _g1 = 0;
+			var _g2 = this.readVarInt();
+			while(_g1 < _g2) {
+				var i = _g1++;
+				_g.push({ e : _gthis.readExpr(), access : Type.createEnumIndex(hxsl_SyntaxArgAccess,_gthis.input.readByte(),null), read : false, write : false});
+			}
+			e = hxsl_TExprDef.TSyntax(e1,e2,_g);
+			break;
 		default:
 			throw haxe_Exception.thrown("assert");
 		}
@@ -94851,6 +109687,9 @@ hxsl_Serializer.prototype = {
 					break;
 				case 13:
 					q = hxsl_VarQualifier.Final;
+					break;
+				case 14:
+					q = hxsl_VarQualifier.Flat;
 					break;
 				default:
 					throw haxe_Exception.thrown("assert");
@@ -95032,13 +109871,14 @@ hxsl_ShaderConst.__name__ = "hxsl.ShaderConst";
 hxsl_ShaderConst.prototype = {
 	__class__: hxsl_ShaderConst
 };
-var hxsl_SharedShader = function(src) {
+var hxsl_SharedShader = function(src,module) {
 	this.instanceCache = new haxe_ds_IntMap();
 	this.consts = null;
 	this.globals = [];
 	if(src == "") {
 		return;
 	}
+	this.module = module;
 	this.data = new hxsl_Serializer().unserialize(src);
 	var _g = 0;
 	var _g1 = this.data.vars;
@@ -95049,9 +109889,47 @@ var hxsl_SharedShader = function(src) {
 	}
 	this.data = hxsl_SharedShader.compactMem(this.data);
 	this.initialize();
+	this.initLiveReload();
 };
 $hxClasses["hxsl.SharedShader"] = hxsl_SharedShader;
 hxsl_SharedShader.__name__ = "hxsl.SharedShader";
+hxsl_SharedShader.mergeVars = function(vl,vl2) {
+	if(vl.length != vl2.length) {
+		return false;
+	}
+	var _g_current = 0;
+	var _g_array = vl;
+	while(_g_current < _g_array.length) {
+		var _g_value = _g_array[_g_current];
+		var _g_key = _g_current++;
+		var i = _g_key;
+		var v = _g_value;
+		var v2 = vl2[i];
+		if(v.name != v2.name) {
+			return false;
+		}
+		v2.id = v.id;
+		var _g = v.type;
+		var _g1 = v2.type;
+		if(_g._hx_index == 13) {
+			if(_g1._hx_index == 13) {
+				var vl21 = _g1.vl;
+				var vl = _g.vl;
+				if(vl.length != vl21.length) {
+					return false;
+				}
+				if(!hxsl_SharedShader.mergeVars(vl,vl21)) {
+					return false;
+				}
+			}
+		}
+	}
+	return true;
+};
+hxsl_SharedShader.loadShader = function(fs,name) {
+	var text = fs.getText();
+	throw haxe_Exception.thrown("Shader live reload requires --library hscript");
+};
 hxsl_SharedShader.compactMem = function(mem) {
 	return mem;
 };
@@ -95229,10 +110107,13 @@ hxsl_SharedShader.prototype = {
 				var fullT = this.makeBufferType(v,t,fmt);
 				var tmp;
 				switch(kind._hx_index) {
-				case 2:
+				case 3:
 					tmp = hxsl_BufferKind.Uniform;
 					break;
-				case 3:
+				case 4:
+					tmp = hxsl_BufferKind.Storage;
+					break;
+				case 5:
 					tmp = hxsl_BufferKind.RW;
 					break;
 				default:
@@ -95370,6 +110251,72 @@ hxsl_SharedShader.prototype = {
 				this.consts = c;
 			}
 		}
+	}
+	,initLiveReload: function() {
+		if(this.module == null) {
+			return;
+		}
+		if(!hxd_fs_SourceLoader.isActive()) {
+			return;
+		}
+		hxsl_SharedShader.SHADER_RESOLVE.h[this.data.name] = this;
+		var path = this.module.split(".").join("/") + ".hx";
+		this.file = hxd_fs_SourceLoader.resolve(path);
+		if(this.file != null) {
+			this.file.watch($bind(this,this.onFileReload));
+		}
+	}
+	,onFileReload: function() {
+		var h = hxsl_SharedShader.SHADER_RESOLVE.h;
+		var sh_h = h;
+		var sh_keys = Object.keys(h);
+		var sh_length = sh_keys.length;
+		var sh_current = 0;
+		while(sh_current < sh_length) {
+			var sh = sh_h[sh_keys[sh_current++]];
+			if(sh.file == this.file) {
+				sh.reloadShader();
+			}
+		}
+	}
+	,reloadShader: function() {
+		try {
+			var expr = hxsl_SharedShader.loadShader(this.file,this.data.name);
+			if(expr == null) {
+				return;
+			}
+			var checker = new hxsl_Checker();
+			checker.loadShader = function(name) {
+				var sh = hxsl_SharedShader.SHADER_RESOLVE.h[name];
+				if(sh == null) {
+					throw haxe_Exception.thrown("Could not resolve shader " + name);
+				}
+				if(sh.file == null) {
+					throw haxe_Exception.thrown("Shader " + name + " can't be live reload because of missing live path");
+				}
+				return hxsl_SharedShader.loadShader(sh.file,sh.data.name);
+			};
+			var data = checker.check(this.data.name,expr);
+			this.applyChanges(data);
+		} catch( _g ) {
+			var _g1 = haxe_Exception.caught(_g).unwrap();
+			if(((_g1) instanceof hxsl_Error)) {
+				var e = _g1;
+				var line = HxOverrides.substr(this.file.getText(),0,e.pos.min).split("\n").length;
+				haxe_Log.trace(e.msg,{ methodName : null, className : null, fileName : e.pos.file, lineNumber : line});
+				return;
+			} else {
+				throw _g;
+			}
+		}
+	}
+	,applyChanges: function(data2) {
+		if(!hxsl_SharedShader.mergeVars(this.data.vars,data2.vars)) {
+			return false;
+		}
+		this.data = hxsl_SharedShader.compactMem(data2);
+		this.instanceCache = new haxe_ds_IntMap();
+		return true;
 	}
 	,__class__: hxsl_SharedShader
 };
@@ -95617,7 +110564,7 @@ hxsl_Splitter.prototype = {
 				if(i != null && i.v.kind == hxsl_VarKind.Input) {
 					return;
 				}
-				if(i == null || i.write == 0) {
+				if(v.requireInit && (i == null || i.write == 0)) {
 					throw haxe_Exception.thrown(new hxsl_Error("Varying " + v.v.name + " is not written by vertex shader",p));
 				}
 			}
@@ -95678,8 +110625,48 @@ hxsl_Splitter.prototype = {
 					nv = v;
 				} else {
 					nv = { id : hxsl_Tools.allocVarId(), name : v.name, kind : v.kind, type : v.type};
-					if(v.qualifiers != null && v.qualifiers.indexOf(hxsl_VarQualifier.Final) >= 0) {
-						nv.qualifiers = [hxsl_VarQualifier.Final];
+					if(v.qualifiers != null) {
+						var _g = 0;
+						var _g1 = v.qualifiers;
+						while(_g < _g1.length) {
+							var q = _g1[_g];
+							++_g;
+							switch(q._hx_index) {
+							case 0:
+								var _g2 = q.max;
+								break;
+							case 4:
+								var _g3 = q.n;
+								break;
+							case 6:
+								var _g4 = q.p;
+								break;
+							case 7:
+								var _g5 = q.min;
+								var _g6 = q.max;
+								break;
+							case 1:case 2:case 3:case 5:case 8:
+								break;
+							case 9:
+								var _g7 = q.v;
+								break;
+							case 10:
+								var _g8 = q.s;
+								break;
+							case 11:
+								var _g9 = q.source;
+								break;
+							case 12:
+								var _g10 = q.name;
+								break;
+							case 13:case 14:
+								if(nv.qualifiers == null) {
+									nv.qualifiers = [];
+								}
+								nv.qualifiers.push(q);
+								break;
+							}
+						}
 					}
 					this.uniqueName(nv);
 				}
@@ -95707,6 +110694,7 @@ hxsl_Splitter.prototype = {
 		this.varNames.h[v.name] = v;
 	}
 	,checkExpr: function(e) {
+		var _gthis = this;
 		var _g = e.e;
 		switch(_g._hx_index) {
 		case 1:
@@ -95818,6 +110806,42 @@ hxsl_Splitter.prototype = {
 			inf.local = true;
 			inf.write++;
 			this.checkExpr(loop);
+			break;
+		case 22:
+			var _g1 = _g.target;
+			var _g1 = _g.code;
+			var args = _g.args;
+			var arg = null;
+			var checkSyntaxExpr = null;
+			checkSyntaxExpr = function(e) {
+				var _g = e.e;
+				if(_g._hx_index == 1) {
+					var v = _g.v;
+					var inf = _gthis.get(v);
+					switch(arg.access._hx_index) {
+					case 0:
+						inf.read--;
+						break;
+					case 1:
+						inf.write++;
+						break;
+					case 2:
+						inf.read--;
+						inf.write++;
+						break;
+					}
+				} else {
+					hxsl_Tools.iter(e,checkSyntaxExpr);
+				}
+			};
+			var _g = 0;
+			var _g1 = args.length;
+			while(_g < _g1) {
+				var i = _g++;
+				arg = args[i];
+				checkSyntaxExpr(arg.e);
+				this.checkExpr(arg.e);
+			}
 			break;
 		default:
 			hxsl_Tools.iter(e,$bind(this,this.checkExpr));
@@ -99204,6 +114228,7 @@ game_impl_Colors.WhiteColor = 16777215;
 game_impl_Colors.BlackColor = 0;
 game_impl_Game.Network = "Local";
 game_impl_scene_impl_game_GameScene.SlideTweenManager = new slide_TweenManager();
+h2d_Flow.PADDING_IGNORE_PARENT = -2147483444;
 h3d_impl_RenderContext.STRICT = true;
 h2d_RenderContext.BUFFERING = false;
 h2d_col_Matrix.tmp = new h2d_col_Matrix();
@@ -99216,7 +114241,10 @@ h3d_MatrixImpl.lumR = 0.212671;
 h3d_MatrixImpl.lumG = 0.71516;
 h3d_MatrixImpl.lumB = 0.072169;
 h3d_MatrixImpl.SQ13 = 0.57735026918962576450914878050196;
+h3d_Matrix.IDENTITY_DECOMPOSED = h3d_Matrix.L([1,0,0,0,0,1,1,0,0,0,1,0,0,0,0,1]);
 h3d_anim_Animation.EPSILON = 0.000001;
+h3d_anim_DynamicJoint.SLEEP_THRESHOLD = 0.0001;
+h3d_anim_DynamicJoint.MAX_THRESHOLD = 10e5;
 h3d_col_ObjectCollider.TMP_RAY = new h3d_col_Ray();
 h3d_col_ObjectCollider.TMP_MAT = new h3d_MatrixImpl();
 h3d_scene_Object.ROT2RAD = -0.017453292519943295769236907684886;
@@ -99277,6 +114305,7 @@ h3d_impl_GlDriver.CBUFFERS = (function($this) {
 	$r = _g;
 	return $r;
 }(this));
+h3d_impl_InstanceBuffer.ELEMENT_SIZE = 20;
 h3d_impl_MemoryManager.MAX_MEMORY = 4294967296.;
 h3d_impl_MemoryManager.SIZE = 65532;
 h3d_impl_MemoryManager.ALL_FLAGS = h3d_BufferFlag.__empty_constructs__.slice();
@@ -99326,9 +114355,12 @@ h3d_mat_Pass.blendAlphaOp_mask = 234881024;
 h3d_mat_Pass.wireframe_bits = 1;
 h3d_mat_Pass.wireframe_offset = 28;
 h3d_mat_Pass.wireframe_mask = 268435456;
+h3d_mat_Pass.culled_bits = 1;
+h3d_mat_Pass.culled_offset = 29;
+h3d_mat_Pass.culled_mask = 536870912;
 h3d_mat_Pass.reserved_bits = 1;
-h3d_mat_Pass.reserved_offset = 29;
-h3d_mat_Pass.reserved_mask = 536870912;
+h3d_mat_Pass.reserved_offset = 30;
+h3d_mat_Pass.reserved_mask = 1073741824;
 h3d_mat_Stencil.readMask_bits = 8;
 h3d_mat_Stencil.readMask_offset = 0;
 h3d_mat_Stencil.readMask_mask = 255;
@@ -99372,16 +114404,22 @@ h3d_mat_Texture.checkerTextureKeys = new haxe_ds_IntMap();
 h3d_mat_Texture.noiseTextureKeys = new haxe_ds_IntMap();
 h3d_mat_Texture.genTextureKeys = new haxe_ds_StringMap();
 h3d_pass_Blur.__meta__ = { obj : { ignore : ["shader"]}};
-h3d_shader_ScreenShader.SRC = "HXSMF2gzZC5zaGFkZXIuU2NyZWVuU2hhZGVyBwEFaW5wdXQNAQICCHBvc2l0aW9uBQoBAQADAnV2BQoBAQABAAAEBWZsaXBZAwIAAAUGb3V0cHV0DQICBghwb3NpdGlvbgUMBAUABwVjb2xvcgUMBAUABAAACApwaXhlbENvbG9yBQwEAAAJDGNhbGN1bGF0ZWRVVgUKBAAACghfX2luaXRfXw4GAAALBnZlcnRleA4GAAACAgoAAAUCBgQCBwUMAggFDAUMBgQCCQUKAgMFCgUKAAALAAAFAQYEAgYFDAkDKg4ECgICBQoAAAMGAQoCAgUKBAADAgQDAwEDAAAAAAAAAAADAQMAAAAAAADwPwMFDAUMAA";
-h3d_pass__$Border_BorderShader.SRC = "HXSMHWgzZC5wYXNzLl9Cb3JkZXIuQm9yZGVyU2hhZGVyCQEFaW5wdXQNAQICCHBvc2l0aW9uBQoBAQADAnV2BQoBAQABAAAEBWZsaXBZAwIAAAUGb3V0cHV0DQICBghwb3NpdGlvbgUMBAUABwVjb2xvcgUMBAUABAAACApwaXhlbENvbG9yBQwEAAAJDGNhbGN1bGF0ZWRVVgUKBAAACgVjb2xvcgUMAgAACwhfX2luaXRfXw4GAAAMBnZlcnRleA4GAAANCGZyYWdtZW50DgYAAAMCCwAABQIGBAIHBQwCCAUMBQwGBAIJBQoCAwUKBQoAAAwAAAUBBgQCBgUMCQMqDgQKAgIFCgAAAwYBCgICBQoEAAMCBAMDAQMAAAAAAAAAAAMBAwAAAAAAAPA/AwUMBQwAAQ0AAAUBBgQCCAUMAgoFDAUMAA";
-h3d_pass__$Copy_ArrayCopyShader.SRC = "HXSMHmgzZC5wYXNzLl9Db3B5LkFycmF5Q29weVNoYWRlcgoBBWlucHV0DQECAghwb3NpdGlvbgUKAQEAAwJ1dgUKAQEAAQAABAVmbGlwWQMCAAAFBm91dHB1dA0CAgYIcG9zaXRpb24FDAQFAAcFY29sb3IFDAQFAAQAAAgKcGl4ZWxDb2xvcgUMBAAACQxjYWxjdWxhdGVkVVYFCgQAAAoHdGV4dHVyZQoDAgAACwVsYXllcgECAAAMCF9faW5pdF9fDgYAAA0GdmVydGV4DgYAAA4IZnJhZ21lbnQOBgAAAwIMAAAFAgYEAgcFDAIIBQwFDAYEAgkFCgIDBQoFCgAADQAABQEGBAIGBQwJAyoOBAoCAgUKAAADBgEKAgIFCgQAAwIEAwMBAwAAAAAAAAAAAwEDAAAAAAAA8D8DBQwFDAABDgAABQEGBAIIBQwJAyEOAgIKCgMJAykOAgIJBQoJAyYOAQILAQMFCwUMBQwA";
-h3d_pass__$Copy_CopyShader.SRC = "HXSMGWgzZC5wYXNzLl9Db3B5LkNvcHlTaGFkZXIJAQVpbnB1dA0BAgIIcG9zaXRpb24FCgEBAAMCdXYFCgEBAAEAAAQFZmxpcFkDAgAABQZvdXRwdXQNAgIGCHBvc2l0aW9uBQwEBQAHBWNvbG9yBQwEBQAEAAAICnBpeGVsQ29sb3IFDAQAAAkMY2FsY3VsYXRlZFVWBQoEAAAKB3RleHR1cmUKAgIAAAsIX19pbml0X18OBgAADAZ2ZXJ0ZXgOBgAADQhmcmFnbWVudA4GAAADAgsAAAUCBgQCBwUMAggFDAUMBgQCCQUKAgMFCgUKAAAMAAAFAQYEAgYFDAkDKg4ECgICBQoAAAMGAQoCAgUKBAADAgQDAwEDAAAAAAAAAAADAQMAAAAAAADwPwMFDAUMAAENAAAFAQYEAggFDAkDIQ4CAgoKAgIJBQoFDAUMAA";
-h3d_pass__$CubeCopy_CubeCopyShader.SRC = "HXSMIWgzZC5wYXNzLl9DdWJlQ29weS5DdWJlQ29weVNoYWRlcgoBBWlucHV0DQECAghwb3NpdGlvbgUKAQEAAwJ1dgUKAQEAAQAABAVmbGlwWQMCAAAFBm91dHB1dA0CAgYIcG9zaXRpb24FDAQFAAcFY29sb3IFDAQFAAQAAAgKcGl4ZWxDb2xvcgUMBAAACQxjYWxjdWxhdGVkVVYFCgQAAAoHdGV4dHVyZQoGAgAACwNtYXQGAgAADAhfX2luaXRfXw4GAAANBnZlcnRleA4GAAAOCGZyYWdtZW50DgYAAAMCDAAABQIGBAIHBQwCCAUMBQwGBAIJBQoCAwUKBQoAAA0AAAUBBgQCBgUMCQMqDgQKAgIFCgAAAwYBCgICBQoEAAMCBAMDAQMAAAAAAAAAAAMBAwAAAAAAAPA/AwUMBQwAAQ4AAAUCCA8CdXYFCgQAAAYDBgECCQUKAQMAAAAAAAAAQAMFCgEDAAAAAAAA8D8DBQoABgQCCAUMCQMhDgICCgoGCQMfDgEGAQkDKQ4CAg8FCgEDAAAAAAAA8D8DBQsCCwYFCwULBQwFDAA";
-h3d_prim_HMDModel.lodExportKeyword = "LOD";
+h3d_shader_ScreenShader.SRC = "HXSMF2gzZC5zaGFkZXIuU2NyZWVuU2hhZGVyBwEFaW5wdXQNAQICCHBvc2l0aW9uBQoBAQADAnV2BQoBAQABAAAEBWZsaXBZAwIAAAUGb3V0cHV0DQICBghwb3NpdGlvbgUMBAUABwVjb2xvcgUMBAUABAAACApwaXhlbENvbG9yBQwEAAAJDGNhbGN1bGF0ZWRVVgUKBAAACghfX2luaXRfXw4GAAALBnZlcnRleA4GAAACAgoAAAUCBgQCBwUMAggFDAUMBgQCCQUKAgMFCgUKAAALAAAFAQYEAgYFDAkDKw4ECgICBQoAAAMGAQoCAgUKBAADAgQDAwEDAAAAAAAAAAADAQMAAAAAAADwPwMFDAUMAA";
+h3d_shader_ScreenShader._MODULE = "h3d.shader.ScreenShader";
+h3d_pass__$Border_BorderShader.SRC = "HXSMHWgzZC5wYXNzLl9Cb3JkZXIuQm9yZGVyU2hhZGVyCQEFaW5wdXQNAQICCHBvc2l0aW9uBQoBAQADAnV2BQoBAQABAAAEBWZsaXBZAwIAAAUGb3V0cHV0DQICBghwb3NpdGlvbgUMBAUABwVjb2xvcgUMBAUABAAACApwaXhlbENvbG9yBQwEAAAJDGNhbGN1bGF0ZWRVVgUKBAAACgVjb2xvcgUMAgAACwhfX2luaXRfXw4GAAAMBnZlcnRleA4GAAANCGZyYWdtZW50DgYAAAMCCwAABQIGBAIHBQwCCAUMBQwGBAIJBQoCAwUKBQoAAAwAAAUBBgQCBgUMCQMrDgQKAgIFCgAAAwYBCgICBQoEAAMCBAMDAQMAAAAAAAAAAAMBAwAAAAAAAPA/AwUMBQwAAQ0AAAUBBgQCCAUMAgoFDAUMAA";
+h3d_pass__$Border_BorderShader._MODULE = "h3d.pass.Border";
+h3d_pass__$Copy_ArrayCopyShader.SRC = "HXSMHmgzZC5wYXNzLl9Db3B5LkFycmF5Q29weVNoYWRlcgoBBWlucHV0DQECAghwb3NpdGlvbgUKAQEAAwJ1dgUKAQEAAQAABAVmbGlwWQMCAAAFBm91dHB1dA0CAgYIcG9zaXRpb24FDAQFAAcFY29sb3IFDAQFAAQAAAgKcGl4ZWxDb2xvcgUMBAAACQxjYWxjdWxhdGVkVVYFCgQAAAoHdGV4dHVyZQoDAgAACwVsYXllcgECAAAMCF9faW5pdF9fDgYAAA0GdmVydGV4DgYAAA4IZnJhZ21lbnQOBgAAAwIMAAAFAgYEAgcFDAIIBQwFDAYEAgkFCgIDBQoFCgAADQAABQEGBAIGBQwJAysOBAoCAgUKAAADBgEKAgIFCgQAAwIEAwMBAwAAAAAAAAAAAwEDAAAAAAAA8D8DBQwFDAABDgAABQEGBAIIBQwJAyIOAgIKCgMJAyoOAgIJBQoJAycOAQILAQMFCwUMBQwA";
+h3d_pass__$Copy_ArrayCopyShader._MODULE = "h3d.pass.Copy";
+h3d_pass__$Copy_CopyShader.SRC = "HXSMGWgzZC5wYXNzLl9Db3B5LkNvcHlTaGFkZXIJAQVpbnB1dA0BAgIIcG9zaXRpb24FCgEBAAMCdXYFCgEBAAEAAAQFZmxpcFkDAgAABQZvdXRwdXQNAgIGCHBvc2l0aW9uBQwEBQAHBWNvbG9yBQwEBQAEAAAICnBpeGVsQ29sb3IFDAQAAAkMY2FsY3VsYXRlZFVWBQoEAAAKB3RleHR1cmUKAgIAAAsIX19pbml0X18OBgAADAZ2ZXJ0ZXgOBgAADQhmcmFnbWVudA4GAAADAgsAAAUCBgQCBwUMAggFDAUMBgQCCQUKAgMFCgUKAAAMAAAFAQYEAgYFDAkDKw4ECgICBQoAAAMGAQoCAgUKBAADAgQDAwEDAAAAAAAAAAADAQMAAAAAAADwPwMFDAUMAAENAAAFAQYEAggFDAkDIg4CAgoKAgIJBQoFDAUMAA";
+h3d_pass__$Copy_CopyShader._MODULE = "h3d.pass.Copy";
+h3d_pass__$CubeCopy_CubeCopyShader.SRC = "HXSMIWgzZC5wYXNzLl9DdWJlQ29weS5DdWJlQ29weVNoYWRlcgoBBWlucHV0DQECAghwb3NpdGlvbgUKAQEAAwJ1dgUKAQEAAQAABAVmbGlwWQMCAAAFBm91dHB1dA0CAgYIcG9zaXRpb24FDAQFAAcFY29sb3IFDAQFAAQAAAgKcGl4ZWxDb2xvcgUMBAAACQxjYWxjdWxhdGVkVVYFCgQAAAoHdGV4dHVyZQoGAgAACwNtYXQGAgAADAhfX2luaXRfXw4GAAANBnZlcnRleA4GAAAOCGZyYWdtZW50DgYAAAMCDAAABQIGBAIHBQwCCAUMBQwGBAIJBQoCAwUKBQoAAA0AAAUBBgQCBgUMCQMrDgQKAgIFCgAAAwYBCgICBQoEAAMCBAMDAQMAAAAAAAAAAAMBAwAAAAAAAPA/AwUMBQwAAQ4AAAUCCA8CdXYFCgQAAAYDBgECCQUKAQMAAAAAAAAAQAMFCgEDAAAAAAAA8D8DBQoABgQCCAUMCQMiDgICCgoGCQMgDgEGAQkDKg4CAg8FCgEDAAAAAAAA8D8DBQsCCwYFCwULBQwFDAA";
+h3d_pass__$CubeCopy_CubeCopyShader._MODULE = "h3d.pass.CubeCopy";
 h3d_prim_ModelDatabase.db = new haxe_ds_StringMap();
+h3d_prim_ModelDatabase.FILE_NAME = "model.props";
+h3d_prim_ModelDatabase.LOD_CONFIG = "lodConfig";
+h3d_prim_ModelDatabase.DYN_BONES_CONFIG = "dynamicBones";
 h3d_prim_ModelDatabase.defaultLodConfigs = new haxe_ds_StringMap();
 h3d_prim_ModelDatabase.baseLodConfig = [0.5,0.2,0.01];
-h3d_prim_ModelDatabase.filename = "model.props";
 h3d_prim_ModelDatabase.current = new h3d_prim_ModelDatabase();
 h3d_scene_Mesh.tmpMat = new h3d_MatrixImpl();
 h3d_scene_ObjectFlags.FPosChanged = 1;
@@ -99401,31 +114439,127 @@ h3d_scene_ObjectFlags.FFixedPosition = 8192;
 h3d_scene_ObjectFlags.FFixedPositionSynced = 16384;
 h3d_scene_ObjectFlags.FAlwaysSync = 32768;
 h3d_scene_ObjectFlags.FDrawn = 65536;
+h3d_scene_ObjectFlags.FInSync = 131072;
+h3d_scene_ObjectFlags.FPosChangedInSync = 262144;
 h3d_scene_RenderContext.__meta__ = { fields : { cameraView : { global : ["camera.view"]}, cameraNear : { global : ["camera.zNear"]}, cameraFar : { global : ["camera.zFar"]}, cameraProj : { global : ["camera.proj"]}, cameraPos : { global : ["camera.position"]}, cameraProjDiag : { global : ["camera.projDiag"]}, cameraProjFlip : { global : ["camera.projFlip"]}, cameraViewProj : { global : ["camera.viewProj"]}, cameraInverseViewProj : { global : ["camera.inverseViewProj"]}, cameraPreviousViewProj : { global : ["camera.previousViewProj"]}, cameraJitterOffsets : { global : ["camera.jitterOffsets"]}, globalTime : { global : ["global.time"]}, pixelSize : { global : ["global.pixelSize"]}, globalModelView : { global : ["global.modelView"]}, globalModelViewInverse : { global : ["global.modelViewInverse"]}, globalPreviousModelView : { global : ["global.previousModelView"]}}};
+h3d_scene_DynamicJointData.newWorldPos = (function($this) {
+	var $r;
+	var x = 0;
+	var y = 0;
+	var z = 0;
+	if(z == null) {
+		z = 0.;
+	}
+	if(y == null) {
+		y = 0.;
+	}
+	if(x == null) {
+		x = 0.;
+	}
+	$r = new h3d_VectorImpl(x,y,z);
+	return $r;
+}(this));
+h3d_scene_DynamicJointData.expectedPos = (function($this) {
+	var $r;
+	var x = 0;
+	var y = 0;
+	var z = 0;
+	if(z == null) {
+		z = 0.;
+	}
+	if(y == null) {
+		y = 0.;
+	}
+	if(x == null) {
+		x = 0.;
+	}
+	$r = new h3d_VectorImpl(x,y,z);
+	return $r;
+}(this));
+h3d_scene_DynamicJointData.tmpVec = (function($this) {
+	var $r;
+	var x = 0;
+	var y = 0;
+	var z = 0;
+	if(z == null) {
+		z = 0.;
+	}
+	if(y == null) {
+		y = 0.;
+	}
+	if(x == null) {
+		x = 0.;
+	}
+	$r = new h3d_VectorImpl(x,y,z);
+	return $r;
+}(this));
+h3d_scene_DynamicJointData.tmpVec2 = (function($this) {
+	var $r;
+	var x = 0;
+	var y = 0;
+	var z = 0;
+	if(z == null) {
+		z = 0.;
+	}
+	if(y == null) {
+		y = 0.;
+	}
+	if(x == null) {
+		x = 0.;
+	}
+	$r = new h3d_VectorImpl(x,y,z);
+	return $r;
+}(this));
+h3d_scene_DynamicJointData.tmpQ = new h3d_Quat();
 h3d_scene_Skin.TMP_MAT = new h3d_MatrixImpl();
-h3d_shader_AmbientLight.SRC = "HXSMF2gzZC5zaGFkZXIuQW1iaWVudExpZ2h0CgEGZ2xvYmFsDQECAgxhbWJpZW50TGlnaHQFCwABAAMQcGVyUGl4ZWxMaWdodGluZwIAAQEAAAAAAAAAAAQKcGl4ZWxDb2xvcgUMBAAABQ9saWdodFBpeGVsQ29sb3IFCwQAAAYKbGlnaHRDb2xvcgULBAAABwhhZGRpdGl2ZQICAAEAAAAAAAgIX19pbml0X18OBgAACRBfX2luaXRfX2ZyYWdtZW50DgYAAAoJY2FsY0xpZ2h0DgYAAAsGdmVydGV4DgYAAAwIZnJhZ21lbnQOBgAABQIIAAAFAQYEAgYFCwsCBwICAgULCQMpDgEBAwAAAAAAAAAAAwULBQsFCwACCQAABQEGBAIFBQsLAgcCAgIFCwkDKQ4BAQMAAAAAAAAAAAMFCwULBQsAAwoBDQpsaWdodENvbG9yBQsEAAAFCwUBDQsCBwICDQULBAYAAgIFCwYBCQMWDgIEBgMBAwAAAAAAAPA/AwICBQsFCwULAQMAAAAAAAAAAAMFCwINBQsFCwULBQsFCwAAAAsAAAUBCwcCAgMCAgaBCgIEBQySAAULCQIKDgECBgULBQsFCwAAAAEMAAAFAQsCAwIGgQoCBAUMkgAFCwkCCg4BAgUFCwULBQsAAAA";
-h3d_shader_Base2d.SRC = "HXSMEWgzZC5zaGFkZXIuQmFzZTJkGwEFaW5wdXQNAQMCCHBvc2l0aW9uBQoBAQADAnV2BQoBAQAEBWNvbG9yBQwBAQABAAAFBm91dHB1dA0CAgYIcG9zaXRpb24FDAQFAAcFY29sb3IFDAQFAAQAAAgEdGltZQMAAAAJBnpWYWx1ZQMCAAAKB3RleHR1cmUKAgIAAAsOc3ByaXRlUG9zaXRpb24FDAQAAAwQYWJzb2x1dGVQb3NpdGlvbgUMBAAADQpwaXhlbENvbG9yBQwEAAAODHRleHR1cmVDb2xvcgUMBAAADwxjYWxjdWxhdGVkVVYFCgMAABAKaXNSZWxhdGl2ZQICAAEAAAAAABEFY29sb3IFDAIAABIPYWJzb2x1dGVNYXRyaXhBBQsCAAATD2Fic29sdXRlTWF0cml4QgULAgAAFA1maWx0ZXJNYXRyaXhBBQsCAAAVDWZpbHRlck1hdHJpeEIFCwIAABYIaGFzVVZQb3MCAgABAAAAAAAXBXV2UG9zBQwCAAAYCWtpbGxBbHBoYQICAAEAAAAAABkKcGl4ZWxBbGlnbgICAAEAAAAAABoQaGFsZlBpeGVsSW52ZXJzZQUKAgAAGwl2aWV3cG9ydEEFCwIAABwJdmlld3BvcnRCBQsCAAAdDm91dHB1dFBvc2l0aW9uBQwEAAAeCF9faW5pdF9fDgYAAB8GdmVydGV4DgYAACAIZnJhZ21lbnQOBgAAAwIeAAAFBgYEAgsFDAkDKg4DAgIFCgIJAwEDAAAAAAAA8D8DBQwFDAsCEAIFAwYECgIMBQwAAAMJAx0OAgkDKQ4CCgILBQwRAAUKAQMAAAAAAADwPwMFCwISBQsDAwYECgIMBQwEAAMJAx0OAgkDKQ4CCgILBQwRAAUKAQMAAAAAAADwPwMFCwITBQsDAwYECgIMBQw5AAUKCgILBQw5AAUKBQoABgQCDAUMAgsFDAUMAAYEAg8FCgsCFgIGAAYBAgMFCgoCFwUMOQAFCgUKCgIXBQwRAAUKBQoCAwUKBQoFCgYEAg0FDAsCEAIGAQIRBQwCBAUMBQwCBAUMBQwFDAYEAg4FDAkDIQ4CAgoKAgIPBQoFDAUMBoECDQUMAg4FDAUMAAAfAAAFBQghA3RtcAULBAAACQMpDgIKAgwFDBEABQoBAwAAAAAAAPA/AwULAAYEAiEFCwkDKQ4DCQMdDgICIQULAhQFCwMJAx0OAgIhBQsCFQULAwEDAAAAAAAA8D8DBQsFCwYEAh0FDAkDKg4DCQMdDgICIQULAhsFCwMJAx0OAgIhBQsCHAULAwoCDAUMOQAFCgUMBQwLAhkCBoMKAh0FDBEABQoCGgUKBQoAAAYEAgYFDAIdBQwFDAABIAAABQILBg4CGAIGCQoCDQUMDAADAQP8qfHSTWJQPwMCAgwAAAAGBAIHBQwCDQUMBQwA";
-h3d_shader_BaseMesh.SRC = "HXSME2gzZC5zaGFkZXIuQmFzZU1lc2gcAQZjYW1lcmENAQwCBHZpZXcHAAEAAwRwcm9qBwABAAQIcG9zaXRpb24FCwABAAUIcHJvakZsaXADAAEABghwcm9qRGlhZwULAAEABwh2aWV3UHJvagcAAQAIEHByZXZpb3VzVmlld1Byb2oHAAEACQ9pbnZlcnNlVmlld1Byb2oHAAEACgV6TmVhcgMAAQALBHpGYXIDAAEADANkaXIFCwMBAA0Naml0dGVyT2Zmc2V0cwUMAAEAAAAADgZnbG9iYWwNAgUPBHRpbWUDAA4AEAlwaXhlbFNpemUFCgAOABEJbW9kZWxWaWV3BwAOAQMSEG1vZGVsVmlld0ludmVyc2UHAA4BAxMRcHJldmlvdXNNb2RlbFZpZXcHAA4BAwAAABQFaW5wdXQNAwIVCHBvc2l0aW9uBQsBFAAWBm5vcm1hbAULARQAAQAAFwZvdXRwdXQNBAYYCHBvc2l0aW9uBQwEFwAZBWNvbG9yBQwEFwAaBWRlcHRoAwQXABsGbm9ybWFsBQsEFwAcCXdvcmxkRGlzdAMEFwAdCHZlbG9jaXR5BQoEFwAEAAAeEHJlbGF0aXZlUG9zaXRpb24FCwQAAB8TdHJhbnNmb3JtZWRQb3NpdGlvbgULBAAAIBtwcmV2aW91c1RyYW5zZm9ybWVkUG9zaXRpb24FCwQAACEYcGl4ZWxUcmFuc2Zvcm1lZFBvc2l0aW9uBQsEAAAiEXRyYW5zZm9ybWVkTm9ybWFsBQsEAAAjEXByb2plY3RlZFBvc2l0aW9uBQwEAAAkGXByZXZpb3VzUHJvamVjdGVkUG9zaXRpb24FDAQAACUKcGl4ZWxDb2xvcgUMBAAAJgVkZXB0aAMEAAAnC25kY1Bvc2l0aW9uBQoEAAAoE3ByZXZpb3VzTmRjUG9zaXRpb24FCgQAACkIc2NyZWVuVVYFCgQAACoJc3BlY1Bvd2VyAwQAACsJc3BlY0NvbG9yBQsEAAAsCXdvcmxkRGlzdAMEAAAtDXBpeGVsVmVsb2NpdHkFCgQAAC4FY29sb3IFDAIAAC8Nc3BlY3VsYXJQb3dlcgMCAAEHAAAAAAAAAAAAAAAAAABZQDAOc3BlY3VsYXJBbW91bnQDAgABBwAAAAAAAAAAAAAAAAAAJEAxDXNwZWN1bGFyQ29sb3IFCwIAADIIX19pbml0X18OBgAAMxBfX2luaXRfX2ZyYWdtZW50DgYAADQGdmVydGV4DgYAADUIZnJhZ21lbnQOBgAABAIyAAAFDQYEAh4FCwIVBQsFCwYEAh8FCwYBAh4FCwkDNA4BAhEHCAULBQsGBAIjBQwGAQkDKg4CAh8FCwEDAAAAAAAA8D8DBQwCBwcFDAUMBgQCIAULBgECHgULCQM0DgECEwcIBQsFCwYEAiQFDAYBCQMqDgICIAULAQMAAAAAAADwPwMFDAIIBwUMBQwGBAIiBQsJAx8OAQQGAQIWBQsJAzIOAQIRBwYFCwULBQsFCwYEAgwFCwkDHw4BBAYDAgQFCwIfBQsFCwULBQsFCwYEAiUFDAIuBQwFDAYEAioDAi8DAwYEAisFCwYBAjEFCwIwAwULBQsGBAIpBQoJAzoOAQYCCgIjBQwRAAUKCgIjBQwMAAMFCgUKBQoGBAImAwYCCgIjBQwIAAMKAiMFDAwAAwMDBgQCLAMGAgkDGw4BBgMCHwULAgQFCwULAwILAwMDAAIzAAAFCgYEAiIFCwkDHw4BAiIFCwULBQsGBAInBQoGAgoCIwUMEQAFCgoCIwUMDAADBQoFCgYEAigFCgYCCgIkBQwRAAUKCgIkBQwMAAMFCgUKBgQCKQUKCQM6DgECJwUKBQoFCgYEAiYDBgIKAiMFDAgAAwoCIwUMDAADAwMGBAIqAwIvAwMGBAIrBQsGAQIxBQsCMAMFCwULBoMCJwUKCgINBQwRAAUKBQoGgwIoBQoKAg0FDDkABQoFCgYEAi0FCgYBBAYDAigFCgInBQoFCgUKCQMoDgIBAwAAAAAAAOA/AwEDAAAAAAAA4L8DBQoFCgUKAAA0AAAFAgYEAhgFDAYBAiMFDAkDKg4EAQMAAAAAAADwPwMCBQMBAwAAAAAAAPA/AwEDAAAAAAAA8D8DBQwFDAUMBgQCIQULAh8FCwULAAE1AAAFBQYEAhkFDAIlBQwFDAYEAhoDAiYDAwYEAhsFCwIiBQsFCwYEAhwDAiwDAwYEAh0FCgItBQoFCgA";
-h3d_shader_Blur.SRC = "HXSMD2gzZC5zaGFkZXIuQmx1chkBBWlucHV0DQECAghwb3NpdGlvbgUKAQEAAwJ1dgUKAQEAAQAABAVmbGlwWQMCAAAFBm91dHB1dA0CAgYIcG9zaXRpb24FDAQFAAcFY29sb3IFDAQFAAQAAAgKcGl4ZWxDb2xvcgUMBAAACQxjYWxjdWxhdGVkVVYFCgQAAAoGY2FtZXJhDQMBCw9pbnZlcnNlVmlld1Byb2oHAAoAAAAADAd0ZXh0dXJlCgICAAANDGRlcHRoVGV4dHVyZQoCAgAADgdRdWFsaXR5AQIAAQAAAAAADwdpc0RlcHRoAgIAAQAAAAAAEAZ2YWx1ZXMPAw4CAAARB29mZnNldHMPAw4CAAASBXBpeGVsBQoCAAATDWhhc0ZpeGVkQ29sb3ICAgABAAAAAAAUEHNtb290aEZpeGVkQ29sb3ICAgABAAAAAAAVCmZpeGVkQ29sb3IFDAIAABYQaXNEZXB0aERlcGVuZGFudAICAAEAAAAAABcOZGVwdGhUaHJlc2hvbGQDAgAAGAZpc0N1YmUCAgABAAAAAAAZC2N1YmVUZXh0dXJlCgYCAAAaB2N1YmVEaXIGAgAAGwhfX2luaXRfXw4GAAAcBnZlcnRleA4GAAAdCGZyYWdtZW50DgYAAB4LZ2V0UG9zaXRpb24OBgAABAIbAAAFAgYEAgcFDAIIBQwFDAYEAgkFCgIDBQoFCgAAHAAABQEGBAIGBQwJAyoOBAoCAgUKAAADBgEKAgIFCgQAAwIEAwMBAwAAAAAAAAAAAwEDAAAAAAAA8D8DBQwFDAABHQAABQILAhYCBQUIHwRwY3VyBQsEAAAJAh4OAQIDBQoFCwAIIARjY3VyBQwEAAAJAyEOAgIMCgICAwUKBQwACCEFY29sb3IFDAQAAAkDKg4EAQMAAAAAAAAAAAMBAwAAAAAAAAAAAwEDAAAAAAAAAAADAQMAAAAAAAAAAAMFDAAVBnVucm9sbAAOIgFpAQQAAAYVBgAHAwIOAQEBAgEAAAABAQIOAQ8BAAAFBggjAnV2BQoEAAAGAAIDBQoGAQYBAhIFChECEQ8DDgsGCQIiAQECAAAAAAECBwMCIgEBAiIBAQMFCgkDJg4BAiIBAwUKBQoACCQBYwUMBAAACQMhDgICDAoCAiMFCgUMAAglAXAFCwQAAAkCHg4BAiMFCgULAAgmAWQDBAAACQMPDgEGAwoCHwULCAADCgIlBQsIAAMDAwAGBAIkBQwLBAYHAiYDAhcDAgICIAUMAiQFDAUMBQwGgAIhBQwGAQIkBQwRAhAPAw4LBgkCIgEBAgAAAAABAgcDAiIBAQIiAQEDBQwFDAAAAAYEAggFDAIhBQwFDAALAg8CBQMIJwN2YWwDBAAAAQMAAAAAAAAAAAMAFQZ1bnJvbGwADigBaQEEAAAGFQYABwMCDgEBAQIBAAAAAQECDgEPAQAABQELAhgCBoACJwMGAQkDNw4BCQMhDgICGQoGBgEJAykOAgYDBgEEBgACAwUKBgEGAQISBQoRAhEPAw4LBgkCKAEBAgAAAAABAgcDAigBAQIoAQEDBQoJAyYOAQIoAQMFCgUKBQoBAwAAAAAAAABAAwUKAQMAAAAAAADwPwMFCgEDAAAAAAAA8D8DBQsCGgYFCwUMAxECEA8DDgsGCQIoAQECAAAAAAECBwMCKAEBAigBAQMDAwaAAicDBgEJAzcOAQkDIQ4CAgwKAgYAAgMFCgYBBgECEgUKEQIRDwMOCwYJAigBAQIAAAAAAQIHAwIoAQECKAEBAwUKCQMmDgECKAEDBQoFCgUMAxECEA8DDgsGCQIoAQECAAAAAAECBwMCKAEBAigBAQMDAwAAAAAGBAIIBQwJAzYOAQkDFQ4CAicDAQPLGlDK///vPwMDBQwFDAAFAwgpBWNvbG9yBQwEAAAJAyoOBAEDAAAAAAAAAAADAQMAAAAAAAAAAAMBAwAAAAAAAAAAAwEDAAAAAAAAAAADBQwAFQZ1bnJvbGwADioBaQEEAAAGFQYABwMCDgEBAQIBAAAAAQECDgEPAQAABQELAhgCBoACKQUMBgEJAyEOAgIZCgYGAQkDKQ4CBgMGAQQGAAIDBQoGAQYBAhIFChECEQ8DDgsGCQIqAQECAAAAAAECBwMCKgEBAioBAQMFCgkDJg4BAioBAwUKBQoFCgEDAAAAAAAAAEADBQoBAwAAAAAAAPA/AwUKAQMAAAAAAADwPwMFCwIaBgULBQwRAhAPAw4LBgkCKgEBAgAAAAABAgcDAioBAQIqAQEDBQwFDAaAAikFDAYBCQMhDgICDAoCBgACAwUKBgEGAQISBQoRAhEPAw4LBgkCKgEBAgAAAAABAgcDAioBAQIqAQEDBQoJAyYOAQIqAQMFCgUKBQwRAhAPAw4LBgkCKgEBAgAAAAABAgcDAioBAQIqAQEDBQwFDAAAAAAGBAIIBQwCKQUMBQwAAAALAhMCBQILAhQCBoEKAggFDAwAAwoCFQUMDAADAwYECgIIBQwMAAMGAQoCFQUMDAADCQMmDgEGBwoCCAUMDAADAQMAAAAAAAAAAAMCAwMDAAYECgIIBQySAAULBgEKAhUFDJIABQsKAggFDAwAAwULBQsAAAAAAx4BKwJ1dgUKBAAABQsFBAgsBWRlcHRoAwQAAAkDNw4BCQMhDgICDQoCAisFCgUMAwAILQR0ZW1wBQwEAAAGAQkDKg4DCQM7DgECKwUKBQoCLAMBAwAAAAAAAPA/AwUMAgsHBQwACC4Ib3JpZ2luV1MFCwQAAAYCCgItBQySAAULCgItBQwMAAMFCwANAi4FCwAA";
+h3d_shader_AmbientLight.SRC = "HXSMF2gzZC5zaGFkZXIuQW1iaWVudExpZ2h0CgEGZ2xvYmFsDQECAgxhbWJpZW50TGlnaHQFCwABAAMQcGVyUGl4ZWxMaWdodGluZwIAAQEAAAAAAAAAAAQKcGl4ZWxDb2xvcgUMBAAABQ9saWdodFBpeGVsQ29sb3IFCwQAAAYKbGlnaHRDb2xvcgULBAAABwhhZGRpdGl2ZQICAAEAAAAAAAgIX19pbml0X18OBgAACRBfX2luaXRfX2ZyYWdtZW50DgYAAAoJY2FsY0xpZ2h0DgYAAAsGdmVydGV4DgYAAAwIZnJhZ21lbnQOBgAABQIIAAAFAQYEAgYFCwsCBwICAgULCQMqDgEBAwAAAAAAAAAAAwULBQsFCwACCQAABQEGBAIFBQsLAgcCAgIFCwkDKg4BAQMAAAAAAAAAAAMFCwULBQsAAwoBDQpsaWdodENvbG9yBQsEAAAFCwUBDQsCBwICDQULBAYAAgIFCwYBCQMWDgIEBgMBAwAAAAAAAPA/AwICBQsFCwULAQMAAAAAAAAAAAMFCwINBQsFCwULBQsFCwAAAAsAAAUBCwcCAgMCAgaBCgIEBQySAAULCQIKDgECBgULBQsFCwAAAAEMAAAFAQsCAwIGgQoCBAUMkgAFCwkCCg4BAgUFCwULBQsAAAA";
+h3d_shader_AmbientLight._MODULE = "h3d.shader.AmbientLight";
+h3d_shader_Base2d.SRC = "HXSMEWgzZC5zaGFkZXIuQmFzZTJkGwEFaW5wdXQNAQMCCHBvc2l0aW9uBQoBAQADAnV2BQoBAQAEBWNvbG9yBQwBAQABAAAFBm91dHB1dA0CAgYIcG9zaXRpb24FDAQFAAcFY29sb3IFDAQFAAQAAAgEdGltZQMAAAAJBnpWYWx1ZQMCAAAKB3RleHR1cmUKAgIAAAsOc3ByaXRlUG9zaXRpb24FDAQAAAwQYWJzb2x1dGVQb3NpdGlvbgUMBAAADQpwaXhlbENvbG9yBQwEAAAODHRleHR1cmVDb2xvcgUMBAAADwxjYWxjdWxhdGVkVVYFCgMAABAKaXNSZWxhdGl2ZQICAAEAAAAAABEFY29sb3IFDAIAABIPYWJzb2x1dGVNYXRyaXhBBQsCAAATD2Fic29sdXRlTWF0cml4QgULAgAAFA1maWx0ZXJNYXRyaXhBBQsCAAAVDWZpbHRlck1hdHJpeEIFCwIAABYIaGFzVVZQb3MCAgABAAAAAAAXBXV2UG9zBQwCAAAYCWtpbGxBbHBoYQICAAEAAAAAABkKcGl4ZWxBbGlnbgICAAEAAAAAABoQaGFsZlBpeGVsSW52ZXJzZQUKAgAAGwl2aWV3cG9ydEEFCwIAABwJdmlld3BvcnRCBQsCAAAdDm91dHB1dFBvc2l0aW9uBQwEAAAeCF9faW5pdF9fDgYAAB8GdmVydGV4DgYAACAIZnJhZ21lbnQOBgAAAwIeAAAFBgYEAgsFDAkDKw4DAgIFCgIJAwEDAAAAAAAA8D8DBQwFDAsCEAIFAwYECgIMBQwAAAMJAx4OAgkDKg4CCgILBQwRAAUKAQMAAAAAAADwPwMFCwISBQsDAwYECgIMBQwEAAMJAx4OAgkDKg4CCgILBQwRAAUKAQMAAAAAAADwPwMFCwITBQsDAwYECgIMBQw5AAUKCgILBQw5AAUKBQoABgQCDAUMAgsFDAUMAAYEAg8FCgsCFgIGAAYBAgMFCgoCFwUMOQAFCgUKCgIXBQwRAAUKBQoCAwUKBQoFCgYEAg0FDAsCEAIGAQIRBQwCBAUMBQwCBAUMBQwFDAYEAg4FDAkDIg4CAgoKAgIPBQoFDAUMBoECDQUMAg4FDAUMAAAfAAAFBQghA3RtcAULBAAACQMqDgIKAgwFDBEABQoBAwAAAAAAAPA/AwULAAYEAiEFCwkDKg4DCQMeDgICIQULAhQFCwMJAx4OAgIhBQsCFQULAwEDAAAAAAAA8D8DBQsFCwYEAh0FDAkDKw4DCQMeDgICIQULAhsFCwMJAx4OAgIhBQsCHAULAwoCDAUMOQAFCgUMBQwLAhkCBoMKAh0FDBEABQoCGgUKBQoAAAYEAgYFDAIdBQwFDAABIAAABQILBg4CGAIGCQoCDQUMDAADAQP8qfHSTWJQPwMCAgwAAAAGBAIHBQwCDQUMBQwA";
+h3d_shader_Base2d._MODULE = "h3d.shader.Base2d";
+h3d_shader_BaseMesh.SRC = "HXSME2gzZC5zaGFkZXIuQmFzZU1lc2gcAQZjYW1lcmENAQwCBHZpZXcHAAEAAwRwcm9qBwABAAQIcG9zaXRpb24FCwABAAUIcHJvakZsaXADAAEABghwcm9qRGlhZwULAAEABwh2aWV3UHJvagcAAQAIEHByZXZpb3VzVmlld1Byb2oHAAEACQ9pbnZlcnNlVmlld1Byb2oHAAEACgV6TmVhcgMAAQALBHpGYXIDAAEADANkaXIFCwMBAA0Naml0dGVyT2Zmc2V0cwUMAAEAAAAADgZnbG9iYWwNAgUPBHRpbWUDAA4AEAlwaXhlbFNpemUFCgAOABEJbW9kZWxWaWV3BwAOAQMSEG1vZGVsVmlld0ludmVyc2UHAA4BAxMRcHJldmlvdXNNb2RlbFZpZXcHAA4BAwAAABQFaW5wdXQNAwIVCHBvc2l0aW9uBQsBFAAWBm5vcm1hbAULARQAAQAAFwZvdXRwdXQNBAYYCHBvc2l0aW9uBQwEFwAZBWNvbG9yBQwEFwAaBWRlcHRoAwQXABsGbm9ybWFsBQsEFwAcCXdvcmxkRGlzdAMEFwAdCHZlbG9jaXR5BQoEFwAEAAAeEHJlbGF0aXZlUG9zaXRpb24FCwQAAB8TdHJhbnNmb3JtZWRQb3NpdGlvbgULBAAAIBtwcmV2aW91c1RyYW5zZm9ybWVkUG9zaXRpb24FCwQAACEYcGl4ZWxUcmFuc2Zvcm1lZFBvc2l0aW9uBQsEAAAiEXRyYW5zZm9ybWVkTm9ybWFsBQsEAAAjEXByb2plY3RlZFBvc2l0aW9uBQwEAAAkGXByZXZpb3VzUHJvamVjdGVkUG9zaXRpb24FDAQAACUKcGl4ZWxDb2xvcgUMBAAAJgVkZXB0aAMEAAAnC25kY1Bvc2l0aW9uBQoEAAAoE3ByZXZpb3VzTmRjUG9zaXRpb24FCgQAACkIc2NyZWVuVVYFCgQAACoJc3BlY1Bvd2VyAwQAACsJc3BlY0NvbG9yBQsEAAAsCXdvcmxkRGlzdAMEAAAtDXBpeGVsVmVsb2NpdHkFCgQAAC4FY29sb3IFDAIAAC8Nc3BlY3VsYXJQb3dlcgMCAAEHAAAAAAAAAAAAAAAAAABZQDAOc3BlY3VsYXJBbW91bnQDAgABBwAAAAAAAAAAAAAAAAAAJEAxDXNwZWN1bGFyQ29sb3IFCwIAADIIX19pbml0X18OBgAAMxBfX2luaXRfX2ZyYWdtZW50DgYAADQGdmVydGV4DgYAADUIZnJhZ21lbnQOBgAABAIyAAAFDQYEAh4FCwIVBQsFCwYEAh8FCwYBAh4FCwkDNQ4BAhEHCAULBQsGBAIjBQwGAQkDKw4CAh8FCwEDAAAAAAAA8D8DBQwCBwcFDAUMBgQCIAULBgECHgULCQM1DgECEwcIBQsFCwYEAiQFDAYBCQMrDgICIAULAQMAAAAAAADwPwMFDAIIBwUMBQwGBAIiBQsJAyAOAQQGAQIWBQsJAzMOAQIRBwYFCwULBQsFCwYEAgwFCwkDIA4BBAYDAgQFCwIfBQsFCwULBQsFCwYEAiUFDAIuBQwFDAYEAioDAi8DAwYEAisFCwYBAjEFCwIwAwULBQsGBAIpBQoJAzsOAQYCCgIjBQwRAAUKCgIjBQwMAAMFCgUKBQoGBAImAwYCCgIjBQwIAAMKAiMFDAwAAwMDBgQCLAMGAgkDHA4BBgMCHwULAgQFCwULAwILAwMDAAIzAAAFCgYEAiIFCwkDIA4BAiIFCwULBQsGBAInBQoGAgoCIwUMEQAFCgoCIwUMDAADBQoFCgYEAigFCgYCCgIkBQwRAAUKCgIkBQwMAAMFCgUKBgQCKQUKCQM7DgECJwUKBQoFCgYEAiYDBgIKAiMFDAgAAwoCIwUMDAADAwMGBAIqAwIvAwMGBAIrBQsGAQIxBQsCMAMFCwULBoMCJwUKCgINBQwRAAUKBQoGgwIoBQoKAg0FDDkABQoFCgYEAi0FCgYBBAYDAigFCgInBQoFCgUKCQMpDgIBAwAAAAAAAOA/AwEDAAAAAAAA4L8DBQoFCgUKAAA0AAAFAgYEAhgFDAYBAiMFDAkDKw4EAQMAAAAAAADwPwMCBQMBAwAAAAAAAPA/AwEDAAAAAAAA8D8DBQwFDAUMBgQCIQULAh8FCwULAAE1AAAFBQYEAhkFDAIlBQwFDAYEAhoDAiYDAwYEAhsFCwIiBQsFCwYEAhwDAiwDAwYEAh0FCgItBQoFCgA";
+h3d_shader_BaseMesh._MODULE = "h3d.shader.BaseMesh";
+h3d_shader_Blur.SRC = "HXSMD2gzZC5zaGFkZXIuQmx1chsBBWlucHV0DQECAghwb3NpdGlvbgUKAQEAAwJ1dgUKAQEAAQAABAVmbGlwWQMCAAAFBm91dHB1dA0CAgYIcG9zaXRpb24FDAQFAAcFY29sb3IFDAQFAAQAAAgKcGl4ZWxDb2xvcgUMBAAACQxjYWxjdWxhdGVkVVYFCgQAAAoLaW52ZXJzZVByb2oHAgAACwd0ZXh0dXJlCgICAAAMDGRlcHRoVGV4dHVyZQoCAgAADQdRdWFsaXR5AQIAAQAAAAAADgdpc0RlcHRoAgIAAQAAAAAADwZ2YWx1ZXMPAw0CAAAQB29mZnNldHMPAw0CAAARBXBpeGVsBQoCAAASDWhhc0ZpeGVkQ29sb3ICAgABAAAAAAATEHNtb290aEZpeGVkQ29sb3ICAgABAAAAAAAUCmZpeGVkQ29sb3IFDAIAABUQaXNEZXB0aERlcGVuZGFudAICAAEAAAAAABYOZGVwdGhUaHJlc2hvbGQDAgAAFxVkZXB0aFRocmVzaG9sZE1heERpc3QDAgAAGAZpc0N1YmUCAgABAAAAAAAZC2N1YmVUZXh0dXJlCgYCAAAaB2N1YmVEaXIGAgAAGwhfX2luaXRfXw4GAAAcBnZlcnRleA4GAAAdDnNjYWxlVGhyZXNob2xkDgYAAB4IZnJhZ21lbnQOBgAAHw9nZXRWaWV3UG9zaXRpb24OBgAABQIbAAAFAgYEAgcFDAIIBQwFDAYEAgkFCgIDBQoFCgAAHAAABQEGBAIGBQwJAysOBAoCAgUKAAADBgEKAgIFCgQAAwIEAwMBAwAAAAAAAAAAAwEDAAAAAAAA8D8DBQwFDAADHQEgAXoDBAAAAwUDCCEBdAMEAAACFgMACwYHAhcDAQMAAAAAAAAAAAMCBoECIQMGAAEDAAAAAAAA8D8DCQMWDgIGAwIgAwIXAwMBAwAAAAAAAAAAAwMDAwAADQIhAwAAAR4AAAUCCwIVAgUMCCIKZGltZW5zaW9ucwUKBAAACQMlDgECCwoCBQoACCMNaW52RGltZW5zaW9ucwUKBAAABgIBAwAAAAAAAPA/AwIiBQoFCgAIJAVjb29yZAUKBAAACgNHBQwRAAUKAAglBmZyYWdVVgUKBAAABgEKAiQFChEABQoCIwUKBQoACCYBcAULBAAACQIfDgECJQUKBQsACCcEbWluWgMEAAAKAiYFCwgAAwAIKAFjBQwEAAAJAyIOAgILCgICJQUKBQwACCkFY29sb3IFDAQAAAkDKw4EAQMAAAAAAAAAAAMBAwAAAAAAAAAAAwEDAAAAAAAAAAADAQMAAAAAAAAAAAMFDAAIKgZpc0VkZ2UCBAAAAQEAAgAVBnVucm9sbAAOKwFpAQQAAAYVBwMCDQEBBgACDQEBAgEAAAABAQ8BAAAFBQgsCGN1ckNvb3JkBQoEAAAGAAkDEQ4BBgACJAUKBgEGAQQGAQIRBQoCIgUKBQoFCgkDKQ4BAQMAAAAAAADwPwMFCgUKCQMnDgECKwEDBQoFCgUKCQMpDgEBAwAAAAAAAOA/AwUKBQoACC0JbmVhcmVzdFVWBQoEAAAGAQIsBQoCIwUKBQoACC4EcGN1cgULBAAACQIfDgECLQUKBQsACC8BZAMEAAAJAw8OAQYDCgIuBQsIAAMKAiYFCwgAAwMDAAYEAioCBg8CKgIEBgcCLwMJAh0OAQkDFQ4CCgIuBQsIAAMKAiYFCwgAAwMDAgICAgAAABUGdW5yb2xsAA4wAWkBBAAABhUGAAcDAg0BAQECAQAAAAEBAg0BDwEAAAUICDEIY3VyQ29vcmQFCgQAAAYACQMRDgEGAAIkBQoGAQYBBAYBAhEFCgIiBQoFCgUKEQIQDwMNCwYJAjABAQIAAAAAAQIHAwIwAQECMAEBAwUKCQMnDgECMAEDBQoFCgUKCQMpDgEBAwAAAAAAAOA/AwUKBQoACDIJbmVhcmVzdFVWBQoEAAAGAQIxBQoCIwUKBQoACDMCdXYFCgQAAAYAAiUFCgYBBgECEQUKEQIQDwMNCwYJAjABAQIAAAAAAQIHAwIwAQECMAEBAwUKCQMnDgECMAEDBQoFCgAINARjY3VyBQwEAAAJAyIOAgILCgILBAIqAgICMgUKAjMFCgUKBQwACDUEcGN1cgULBAAACQIfDgECMgUKBQsACDYBZAMEAAAJAw8OAQYDCgI1BQsIAAMKAiYFCwgAAwMDAAYEAigFDAsEBgcCNgMJAh0OAQkDFQ4CCgI1BQsIAAMKAiYFCwgAAwMDAgICKAUMAjQFDAUMBQwGgAIpBQwGAQIoBQwRAg8PAw0LBgkCMAEBAgAAAAABAgcDAjABAQIwAQEDBQwFDAAAAAYEAggFDAIpBQwFDAALAg4CBQMINwN2YWwDBAAAAQMAAAAAAAAAAAMAFQZ1bnJvbGwADjgBaQEEAAAGFQYABwMCDQEBAQIBAAAAAQECDQEPAQAABQELAhgCBoACNwMGAQkDOA4BCQMiDgICGQoGBgEJAyoOAgYDBgEEBgACAwUKBgEGAQIRBQoRAhAPAw0LBgkCOAEBAgAAAAABAgcDAjgBAQI4AQEDBQoJAycOAQI4AQMFCgUKBQoBAwAAAAAAAABAAwUKAQMAAAAAAADwPwMFCgEDAAAAAAAA8D8DBQsCGgYFCwUMAxECDw8DDQsGCQI4AQECAAAAAAECBwMCOAEBAjgBAQMDAwaAAjcDBgEJAzgOAQkDIg4CAgsKAgYAAgMFCgYBBgECEQUKEQIQDwMNCwYJAjgBAQIAAAAAAQIHAwI4AQECOAEBAwUKCQMnDgECOAEDBQoFCgUMAxECDw8DDQsGCQI4AQECAAAAAAECBwMCOAEBAjgBAQMDAwAAAAAGBAIIBQwJAzcOAQkDFQ4CAjcDAQPLGlDK///vPwMDBQwFDAAFAwg5BWNvbG9yBQwEAAAJAysOBAEDAAAAAAAAAAADAQMAAAAAAAAAAAMBAwAAAAAAAAAAAwEDAAAAAAAAAAADBQwAFQZ1bnJvbGwADjoBaQEEAAAGFQYABwMCDQEBAQIBAAAAAQECDQEPAQAABQELAhgCBoACOQUMBgEJAyIOAgIZCgYGAQkDKg4CBgMGAQQGAAIDBQoGAQYBAhEFChECEA8DDQsGCQI6AQECAAAAAAECBwMCOgEBAjoBAQMFCgkDJw4BAjoBAwUKBQoFCgEDAAAAAAAAAEADBQoBAwAAAAAAAPA/AwUKAQMAAAAAAADwPwMFCwIaBgULBQwRAg8PAw0LBgkCOgEBAgAAAAABAgcDAjoBAQI6AQEDBQwFDAaAAjkFDAYBCQMiDgICCwoCBgACAwUKBgEGAQIRBQoRAhAPAw0LBgkCOgEBAgAAAAABAgcDAjoBAQI6AQEDBQoJAycOAQI6AQMFCgUKBQwRAg8PAw0LBgkCOgEBAgAAAAABAgcDAjoBAQI6AQEDBQwFDAAAAAAGBAIIBQwCOQUMBQwAAAALAhICBQILAhMCBoEKAggFDAwAAwoCFAUMDAADAwYECgIIBQwMAAMGAQoCFAUMDAADCQMnDgEGBwoCCAUMDAADAQMAAAAAAAAAAAMCAwMDAAYECgIIBQySAAULBgEKAhQFDJIABQsKAggFDAwAAwULBQsAAAAAAx8BOwJ1dgUKBAAABQsFBAg8BWRlcHRoAwQAAAoJAyIOAgIMCgICOwUKBQwAAAMACD0EdGVtcAUMBAAABgEJAysOAwkDPA4BAjsFCgUKAjwDAQMAAAAAAADwPwMFDAIKBwUMAAg+CG9yaWdpbldTBQsEAAAGAgoCPQUMkgAFCwoCPQUMDAADBQsADQI+BQsAAA";
+h3d_shader_Blur._MODULE = "h3d.shader.Blur";
 h3d_shader_ColorAdd.SRC = "HXSME2gzZC5zaGFkZXIuQ29sb3JBZGQDAQpwaXhlbENvbG9yBQwEAAACBWNvbG9yBQsCAAADCGZyYWdtZW50DgYAAAEBAwAABQEGgAoCAQUMkgAFCwICBQsFCwA";
-h3d_shader_ColorKey.SRC = "HXSME2gzZC5zaGFkZXIuQ29sb3JLZXkDAQhjb2xvcktleQUMAgAAAgx0ZXh0dXJlQ29sb3IFDAQAAAMIZnJhZ21lbnQOBgAAAQEDAAAFAggEBWNkaWZmBQwEAAAGAwICBQwCAQUMBQwACwYJCQMdDgICBAUMAgQFDAMBA/Fo44i1+OQ+AwIMAAAAAA";
-h3d_shader_ColorMatrix.SRC = "HXSMFmgzZC5zaGFkZXIuQ29sb3JNYXRyaXgEAQpwaXhlbENvbG9yBQwEAAACBm1hdHJpeAcCAAADB2VuYWJsZWQCAgABAAAAAAAECGZyYWdtZW50DgYAAAEBBAAABQELAgMCBgQCAQUMCQMqDgIKBAYBCQMqDgIKAgEFDJIABQsBAwAAAAAAAPA/AwUMAgIHBQwFDJIABQsKBAYBAgEFDAICBwUMBQwMAAMFDAUMAAAA";
-h3d_shader_DirShadow.SRC = "HXSMFGgzZC5zaGFkZXIuRGlyU2hhZG93EAEGZW5hYmxlAgIAAQAAAAAAAgdVU0VfRVNNAgIAAQAAAAAAAwtzaGFkb3dQb3dlcgMCAAAEB1VTRV9QQ0YCAgABAAAAAAAFC1BDRl9TQU1QTEVTAQIAAQAAAAAABghwY2ZTY2FsZQMCAAAHCXNoYWRvd1JlcwUKAgAACAlzaGFkb3dNYXARAQIAAAkKc2hhZG93UHJvaggCAAAKCnNoYWRvd0JpYXMDAgAACxN0cmFuc2Zvcm1lZFBvc2l0aW9uBQsEAAAMBnNoYWRvdwMEAAANCWRpclNoYWRvdwMEAAAOC3BvaXNzb25EaXNrDwUMBQIAAA8EcmFuZA4GAAAQCGZyYWdtZW50DgYAAAIDDwERAXYDBAAAAwUCCBICZHADBAAACQMdDgIJAyoOAQIRAwUMCQMqDgQBA18pyxDH+ilAAwED9P3UeOmOU0ADAQOiRbbz/ZRGQAMBA1CNl24Sq1dAAwUMAwANCQMTDgEGAQkDAg4BAhIDAwEDUPwYc9Fd5UADAwMAAAEQAAAFAgsCAQIFAQsCBAIFCwYEAgwDAQMAAAAAAADwPwMDCBMJdGV4ZWxTaXplBQoEAAAGAgEDAAAAAAAA8D8DAgcFCgUKAAgUCXNoYWRvd1BvcwULBAAABgECCwULAgkIBQsACBUIc2hhZG93VXYFCgQAAAkDOg4BCgIUBQsRAAUKBQoACBYEek1heAMEAAAJAzUOAQoCFAULCAADAwAIFwNyb3QDBAAABgEGAQkCDw4BBgAGAAoCCwULAAADCgILBQsEAAMDCgILBQsIAAMDAwEDH4XrUbgeCUADAwEDAAAAAAAAAEADAwAIGARjb3NSAwQAAAkDAw4BAhcDAwAIGQRzaW5SAwQAAAkDAg4BAhcDAwAIGg5zYW1wbGVTdHJlbmd0aAMEAAAGAgEDAAAAAAAA8D8DCQMmDgECBQEDAwAIGwhvZmZTY2FsZQUKBAAABgECEwUKAgYDBQoADhwBaQEEAAAGFQECAAAAAAECBQEPAQAABQQIHQZvZmZzZXQFCgQAAAYBChECDg8FDAUCHAEFDBEABQoCGwUKBQoABgQCHQUKCQMoDgIGAwYBAhgDCgIdBQoAAAMDBgECGQMKAh0FCgQAAwMDBgAGAQIYAwoCHQUKBAADAwYBAhkDCgIdBQoAAAMDAwUKBQoIHgVkZXB0aAMEAAAJA0AOAwIIEQEGAAIVBQoCHQUKBQoBAwAAAAAAAAAAAwMABoMCDAMLBAYHBgMCFgMCCgMDAh4DAgICGgMBAwAAAAAAAAAAAwMDAAAACwICAgUFCB8Jc2hhZG93UG9zBQsEAAAGAQILBQsCCQgFCwAIIAVkZXB0aAMEAAAJAz8OAgIIEQEJAzoOAQoCHwULEQAFCgUKAwAIIQR6TWF4AwQAAAkDNQ4BCgIfBQsIAAMDAAgiBWRlbHRhAwQAAAYDCQMVDgIEBgACIAMCCgMDAwIhAwMCIQMDAAYEAgwDCQM1DgEJAwkOAQYBAgMDAiIDAwMDAwAFBAgjCXNoYWRvd1BvcwULBAAABgECCwULAgkIBQsACCQIc2hhZG93VXYFCgQAAAkDOg4BCgIjBQsRAAUKBQoACCUFZGVwdGgDBAAACQM/DgICCBEBCgIkBQoRAAUKAwAGBAIMAwsGBwYDCQM1DgEKAiMFCwgAAwMCCgMDAiUDAgEDAAAAAAAAAAADAQMAAAAAAADwPwMDAwAAAAAAAAYEAg0DAgwDAwA";
-h3d_shader_GenTexture.SRC = "HXSMFWgzZC5zaGFkZXIuR2VuVGV4dHVyZQoBBWlucHV0DQECAghwb3NpdGlvbgUKAQEAAwJ1dgUKAQEAAQAABAVmbGlwWQMCAAAFBm91dHB1dA0CAgYIcG9zaXRpb24FDAQFAAcFY29sb3IFDAQFAAQAAAgKcGl4ZWxDb2xvcgUMBAAACQxjYWxjdWxhdGVkVVYFCgQAAAoEbW9kZQECAAEAAAAAAAsFY29sb3IFDAIAAAwIX19pbml0X18OBgAADQZ2ZXJ0ZXgOBgAADghmcmFnbWVudA4GAAADAgwAAAUCBgQCBwUMAggFDAUMBgQCCQUKAgMFCgUKAAANAAAFAQYEAgYFDAkDKg4ECgICBQoAAAMGAQoCAgUKBAADAgQDAwEDAAAAAAAAAAADAQMAAAAAAADwPwMFDAUMAAEOAAAFARMEAgoBAQEBAQIAAAAAAQUBBgQCCAUMCwYHCQMbDgEKAgYFDBEABQoDAQMAAAAAAADwPwMCCQMqDgEBAwAAAAAAAAAAAwUMAgsFDAUMBQwAAAAA";
-h3d_shader_LineShader.SRC = "HXSMFWgzZC5zaGFkZXIuTGluZVNoYWRlcgwBBmNhbWVyYQ0BAwIEdmlldwcAAQADBHByb2oHAAEABAh2aWV3UHJvagcAAQAAAAAFBmdsb2JhbA0CAgYJcGl4ZWxTaXplBQoABQAHCW1vZGVsVmlldwcABQEDAAAACAVpbnB1dA0DAwkIcG9zaXRpb24FCwEIAAoGbm9ybWFsBQsBCAALAnV2BQoBCAABAAAMBm91dHB1dA0EAQ0IcG9zaXRpb24FDAQMAAQAAA4RdHJhbnNmb3JtZWROb3JtYWwFCwQAAA8TdHJhbnNmb3JtZWRQb3NpdGlvbgULBAAAEBFwcm9qZWN0ZWRQb3NpdGlvbgUMBAAAEQtsZW5ndGhTY2FsZQMCAAASBXdpZHRoAwIAABMEcGRpcgUMBAAAFAhfX2luaXRfXw4GAAAVBnZlcnRleA4GAAACAhQAAAUBBQUIFgNkaXIFCwQAAAYBAgoFCwkDMg4BAgcHBgULAAYEAhMFDAYBCQMqDgIGAQIWBQsJAzIOAQICBwYFCwEDAAAAAAAA8D8DBQwCAwcFDAUMBoEKAhMFDBEABQoGAgEDAAAAAAAA8D8DCQMNDgEGAAYBCgITBQwAAAMKAhMFDAAAAwMGAQoCEwUMBAADCgITBQwEAAMDAwMDBQoGgAIPBQsGAQYBAhYFCwoCCwUKAAADBQsCEQMFCwULBgQCDgULCQMfDgECFgULBQsFCwAAABUAAAUBBoAKAhAFDBEABQoGAQYBBgEGAQQGAQoCEwUMBQAFCgkDKA4CAQMAAAAAAADwPwMBAwAAAAAAAPC/AwUKBQoFCgQGAwoCCwUKBAADAQMAAAAAAADgPwMDAwUKCgIQBQwIAAMFCgIGBQoFCgISAwUKBQoA";
-h3d_shader_MinMaxShader.SRC = "HXSMF2gzZC5zaGFkZXIuTWluTWF4U2hhZGVyCwEFaW5wdXQNAQICCHBvc2l0aW9uBQoBAQADAnV2BQoBAQABAAAEBWZsaXBZAwIAAAUGb3V0cHV0DQICBghwb3NpdGlvbgUMBAUABwVjb2xvcgUMBAUABAAACApwaXhlbENvbG9yBQwEAAAJDGNhbGN1bGF0ZWRVVgUKBAAACgR0ZXhBCgICAAALBHRleEIKAgIAAAwFaXNNYXgCAgABAAAAAAANCF9faW5pdF9fDgYAAA4GdmVydGV4DgYAAA8IZnJhZ21lbnQOBgAAAwINAAAFAgYEAgcFDAIIBQwFDAYEAgkFCgIDBQoFCgAADgAABQEGBAIGBQwJAyoOBAoCAgUKAAADBgEKAgIFCgQAAwIEAwMBAwAAAAAAAAAAAwEDAAAAAAAA8D8DBQwFDAABDwAABQMIEAFhBQwEAAAJAyEOAgIKCgICCQUKBQwACBEBYgUMBAAACQMhDgICCwoCAgkFCgUMAAYEAggFDAsCDAIJAxYOAgIQBQwCEQUMBQwJAxUOAgIQBQwCEQUMBQwFDAUMAA";
-h3d_shader_CubeMinMaxShader.SRC = "HXSMG2gzZC5zaGFkZXIuQ3ViZU1pbk1heFNoYWRlcgwBBWlucHV0DQECAghwb3NpdGlvbgUKAQEAAwJ1dgUKAQEAAQAABAVmbGlwWQMCAAAFBm91dHB1dA0CAgYIcG9zaXRpb24FDAQFAAcFY29sb3IFDAQFAAQAAAgKcGl4ZWxDb2xvcgUMBAAACQxjYWxjdWxhdGVkVVYFCgQAAAoEdGV4QQoGAgAACwR0ZXhCCgYCAAAMBWlzTWF4AgIAAQAAAAAADQNtYXQGAgAADghfX2luaXRfXw4GAAAPBnZlcnRleA4GAAAQCGZyYWdtZW50DgYAAAMCDgAABQIGBAIHBQwCCAUMBQwGBAIJBQoCAwUKBQoAAA8AAAUBBgQCBgUMCQMqDgQKAgIFCgAAAwYBCgICBQoEAAMCBAMDAQMAAAAAAAAAAAMBAwAAAAAAAPA/AwUMBQwAARAAAAUFCBECdXYFCgQAAAYDBgECCQUKAQMAAAAAAAAAQAMFCgEDAAAAAAAA8D8DBQoACBIDZGlyBQsEAAAGAQkDKQ4CAhEFCgEDAAAAAAAA8D8DBQsCDQYFCwAIEwFhBQwEAAAJAyEOAgIKCgYCEgULBQwACBQBYgUMBAAACQMhDgICCwoGAhIFCwUMAAYEAggFDAsCDAIJAxYOAgITBQwCFAUMBQwJAxUOAgITBQwCFAUMBQwFDAUMAA";
-h3d_shader_NormalMap.SRC = "HXSMFGgzZC5zaGFkZXIuTm9ybWFsTWFwCgEGY2FtZXJhDQECAghwb3NpdGlvbgULAAEAAwNkaXIFCwMBAAAAAAQGZ2xvYmFsDQIBBQltb2RlbFZpZXcHAAQBAwAAAAYFaW5wdXQNAwIHBm5vcm1hbAULAQYACAd0YW5nZW50BQsBBgABAAAJB3RleHR1cmUKAgIAAAoMY2FsY3VsYXRlZFVWBQoEAAALE3RyYW5zZm9ybWVkUG9zaXRpb24FCwQAAAwRdHJhbnNmb3JtZWROb3JtYWwFCwQAAA0SdHJhbnNmb3JtZWRUYW5nZW50BQwDAAAODl9faW5pdF9fdmVydGV4DgYAAA8IZnJhZ21lbnQOBgAAAgIOAAAFAQYEAg0FDAkDKg4CBgECCAULCQMyDgECBQcGBQsLBgcJAx0OAgIIBQsCCAULAwEDAAAAAAAA4D8DAgEDAAAAAAAA8D8DAQMAAAAAAADwvwMDBQwFDAABDwAABQUIEAFuBQsEAAACDAULAAgRAm5mBQsEAAAJAzkOAQkDIQ4CAgkKAgIKBQoFDAULAAgSBHRhblgFCwQAAAkDHw4BCgINBQySAAULBQsACBMEdGFuWQULBAAABgEJAx4OAgIQBQsCEgULBQsHAwoCDQUMDAADAwULAAYEAgwFCwkDHw4BBAYABgAGAQoCEQULAAADAhIFCwULBgEKAhEFCwQAAwITBQsFCwULBgEKAhEFCwgAAwIQBQsFCwULBQsFCwULAA";
-h3d_shader_Shadow.SRC = "HXSMEWgzZC5zaGFkZXIuU2hhZG93BgEGc2hhZG93DQEFAgNtYXARAQABAAMEcHJvaggAAQAEBWNvbG9yBQsAAQAFBXBvd2VyAwABAAYEYmlhcwMAAQAAAAAHCnBpeGVsQ29sb3IFDAQAAAgTdHJhbnNmb3JtZWRQb3NpdGlvbgULBAAACRhwaXhlbFRyYW5zZm9ybWVkUG9zaXRpb24FCwQAAAoJc2hhZG93UG9zBQsEAAEBCwhmcmFnbWVudA4GAAABAQsAAAUGCAwJc2hhZG93UG9zBQsEAAAGAQIJBQsCAwgFCwAIDQVkZXB0aAMEAAAJAz8OAgICEQEJAzoOAQoCDAULEQAFCgUKAwAIDgR6TWF4AwQAAAkDNQ4BCgIMBQsIAAMDAAgPBWRlbHRhAwQAAAYDCQMVDgIEBgACDQMCBgMDAwIOAwMCDgMDAAgQBXNoYWRlAwQAAAkDNQ4BCQMJDgEGAQIFAwIPAwMDAwAGgQoCBwUMkgAFCwYABgEEBgMBAwAAAAAAAPA/AwIQAwMDCgIEBQuSAAULBQsCEAMFCwULAA";
-h3d_shader_SignedDistanceField.SRC = "HXSMHmgzZC5zaGFkZXIuU2lnbmVkRGlzdGFuY2VGaWVsZA8BBWlucHV0DQEDAghwb3NpdGlvbgUKAQEAAwJ1dgUKAQEABAVjb2xvcgUMAQEAAQAABQZvdXRwdXQNAgIGCHBvc2l0aW9uBQwEBQAHBWNvbG9yBQwEBQAEAAAIBHRpbWUDAAAACQ5zcHJpdGVQb3NpdGlvbgUMBAAAChBhYnNvbHV0ZVBvc2l0aW9uBQwEAAALCnBpeGVsQ29sb3IFDAQAAAwMdGV4dHVyZUNvbG9yBQwEAAANDGNhbGN1bGF0ZWRVVgUKAwAADg5vdXRwdXRQb3NpdGlvbgUMBAAADwdjaGFubmVsAQIAAQAAAAAAEA1hdXRvU21vb3RoaW5nAgIAAQAAAAAAEQthbHBoYUN1dG9mZgMCAAASCXNtb290aGluZwMCAAATBm1lZGlhbg4GAAAUCGZyYWdtZW50DgYAAAIDEwMVAXIDBAAAFgFnAwQAABcBYgMEAAADBQENCQMWDgIJAxUOAgIVAwIWAwMJAxUOAgkDFg4CAhUDAhYDAwIXAwMDAAABFAAABQUIGA10ZXh0dXJlU2FtcGxlBQwEAAACDAUMAAgZCGRpc3RhbmNlAwQAAAAABgQCGQMLBgUCDwEBAgAAAAABAgoCGAUMAAADCwYFAg8BAQIBAAAAAQIKAhgFDAQAAwsGBQIPAQECAgAAAAECCgIYBQwIAAMLBgUCDwEBAgMAAAABAgoCGAUMDAADCQITDgMKAhgFDAAAAwoCGAUMBAADCgIYBQwIAAMDAwMDAwMIGglzbW9vdGhWYWwDBAAACwIQAgkDDw4BBgEJAz4OAQIZAwMBAwAAAAAAAOA/AwMDAhIDAwAGBAIMBQwJAyoOBAEDAAAAAAAA8D8DAQMAAAAAAADwPwMBAwAAAAAAAPA/AwkDGg4DBgMCEQMCGgMDBgACEQMCGgMDAhkDAwUMBQwA";
-h3d_shader_SkinBase.SRC = "HXSME2gzZC5zaGFkZXIuU2tpbkJhc2UGARByZWxhdGl2ZVBvc2l0aW9uBQsEAAACE3RyYW5zZm9ybWVkUG9zaXRpb24FCwQAAAMRdHJhbnNmb3JtZWROb3JtYWwFCwQAAAQITWF4Qm9uZXMBAgABAAAAAAAFEWZvdXJCb25lc0J5VmVydGV4AgIAAQAAAAAABg1ib25lc01hdHJpeGVzDwgEAgABCAA";
-h3d_shader_Skin.SRC = "HXSMD2gzZC5zaGFkZXIuU2tpbgoBEHJlbGF0aXZlUG9zaXRpb24FCwQAAAITdHJhbnNmb3JtZWRQb3NpdGlvbgULBAAAAxF0cmFuc2Zvcm1lZE5vcm1hbAULBAAABAhNYXhCb25lcwECAAEAAAAAAAURZm91ckJvbmVzQnlWZXJ0ZXgCAgABAAAAAAAGDWJvbmVzTWF0cml4ZXMPCAQCAAEIBwVpbnB1dA0BBAgIcG9zaXRpb24FCwEHAAkGbm9ybWFsBQsBBwAKB3dlaWdodHMFCwEHAAsHaW5kZXhlcwkEAAAAAQcAAQAADBJ0cmFuc2Zvcm1lZFRhbmdlbnQFDAQAAA0bcHJldmlvdXNUcmFuc2Zvcm1lZFBvc2l0aW9uBQsEAAAOBnZlcnRleA4GAAABAA4AAAUFBgQCAgULBgAGAAYBBAYBAgEFCxECBg8IBAkDJQ4BCgILCQQAAAAAAAMBCAULBQsKAgoFCwAAAwULBgEEBgECAQULEQIGDwgECQMlDgEKAgsJBAAAAAQAAwEIBQsFCwoCCgULBAADBQsFCwYBBAYBAgEFCxECBg8IBAkDJQ4BCgILCQQAAAAIAAMBCAULBQsKAgoFCwgAAwULBQsFCwYEAgMFCwYABgAGAQQGAQIJBQsJAzIOARECBg8IBAkDJQ4BCgILCQQAAAAAAAMBCAYFCwULCgIKBQsAAAMFCwYBBAYBAgkFCwkDMg4BEQIGDwgECQMlDgEKAgsJBAAAAAQAAwEIBgULBQsKAgoFCwQAAwULBQsGAQQGAQIJBQsJAzIOARECBg8IBAkDJQ4BCgILCQQAAAAIAAMBCAYFCwULCgIKBQsIAAMFCwULBQsLAgUCBQMIDwJ3NAMEAAAGAwEDAAAAAAAA8D8DBAYABgAKAgoFCwAAAwoCCgULBAADAwoCCgULCAADAwMDAAaAAgIFCwYBBAYBAgEFCxECBg8IBAkDJQ4BCgILCQQAAAAMAAMBCAULBQsCDwMFCwULBoACAwULBgEEBgECCQULCQMyDgERAgYPCAQJAyUOAQoCCwkEAAAACAADAQgGBQsFCwIPAwULBQsAAAAGBAINBQsCAgULBQsGBAIDBQsJAx8OAQIDBQsFCwULAA";
-h3d_shader_SkinTangent.SRC = "HXSMFmgzZC5zaGFkZXIuU2tpblRhbmdlbnQJARByZWxhdGl2ZVBvc2l0aW9uBQsEAAACE3RyYW5zZm9ybWVkUG9zaXRpb24FCwQAAAMRdHJhbnNmb3JtZWROb3JtYWwFCwQAAAQITWF4Qm9uZXMBAgABAAAAAAAFEWZvdXJCb25lc0J5VmVydGV4AgIAAQAAAAAABg1ib25lc01hdHJpeGVzDwgEAgABCAcFaW5wdXQNAQUICHBvc2l0aW9uBQsBBwAJBm5vcm1hbAULAQcACgd0YW5nZW50BQsBBwALB3dlaWdodHMFCwEHAAwHaW5kZXhlcwkEAAAAAQcAAQAADRJ0cmFuc2Zvcm1lZFRhbmdlbnQFDAQAAA4GdmVydGV4DgYAAAEADgAABQYGBAICBQsGAAYABgEEBgECAQULEQIGDwgECQMlDgEKAgwJBAAAAAAAAwEIBQsFCwoCCwULAAADBQsGAQQGAQIBBQsRAgYPCAQJAyUOAQoCDAkEAAAABAADAQgFCwULCgILBQsEAAMFCwULBgEEBgECAQULEQIGDwgECQMlDgEKAgwJBAAAAAgAAwEIBQsFCwoCCwULCAADBQsFCwULBgQCAwULBgAGAAYBBAYBAgkFCwkDMg4BEQIGDwgECQMlDgEKAgwJBAAAAAAAAwEIBgULBQsKAgsFCwAAAwULBgEEBgECCQULCQMyDgERAgYPCAQJAyUOAQoCDAkEAAAABAADAQgGBQsFCwoCCwULBAADBQsFCwYBBAYBAgkFCwkDMg4BEQIGDwgECQMlDgEKAgwJBAAAAAgAAwEIBgULBQsKAgsFCwgAAwULBQsFCwYECgINBQySAAULBgAGAAYBBAYBCgIKBQuSAAULCQMyDgERAgYPCAQJAyUOAQoCDAkEAAAAAAADAQgGBQsFCwoCCwULAAADBQsGAQQGAQoCCgULkgAFCwkDMg4BEQIGDwgECQMlDgEKAgwJBAAAAAQAAwEIBgULBQsKAgsFCwQAAwULBQsGAQQGAQoCCgULkgAFCwkDMg4BEQIGDwgECQMlDgEKAgwJBAAAAAgAAwEIBgULBQsKAgsFCwgAAwULBQsFCwsCBQIFBAgPAnc0AwQAAAYDAQMAAAAAAADwPwMEBgAGAAoCCwULAAADCgILBQsEAAMDCgILBQsIAAMDAwMABoACAgULBgEEBgECAQULEQIGDwgECQMlDgEKAgwJBAAAAAwAAwEIBQsFCwIPAwULBQsGgAIDBQsGAQQGAQIJBQsJAzIOARECBg8IBAkDJQ4BCgIMCQQAAAAIAAMBCAYFCwULAg8DBQsFCwaACgINBQySAAULBgEEBgEKAgoFC5IABQsJAzIOARECBg8IBAkDJQ4BCgIMCQQAAAAMAAMBCAYFCwULAg8DBQsFCwAAAAYEAgMFCwkDHw4BAgMFCwULBQsGBAoCDQUMkgAFCwkDHw4BCgINBQySAAULBQsFCwA";
-h3d_shader_SpecularTexture.SRC = "HXSMGmgzZC5zaGFkZXIuU3BlY3VsYXJUZXh0dXJlBAEHdGV4dHVyZQoCAgAAAgxjYWxjdWxhdGVkVVYFCgQAAAMJc3BlY0NvbG9yBQsEAAAECGZyYWdtZW50DgYAAAEBBAAABQEGgQIDBQsKCQMhDgICAQoCAgIFCgUMkgAFCwULAA";
-h3d_shader_Texture.SRC = "HXSMEmgzZC5zaGFkZXIuVGV4dHVyZQsBBWlucHV0DQEBAgJ1dgUKAQEAAQAAAwhhZGRpdGl2ZQICAAEAAAAAAAQJa2lsbEFscGhhAgIAAQAAAAAABQ1zcGVjdWxhckFscGhhAgIAAQAAAAAABhJraWxsQWxwaGFUaHJlc2hvbGQDAgABBwAAAAAAAAAAAAAAAAAA8D8HB3RleHR1cmUKAgIAAAgMY2FsY3VsYXRlZFVWBQoEAAAJCnBpeGVsQ29sb3IFDAQAAAoJc3BlY0NvbG9yBQsEAAALBnZlcnRleA4GAAAMCGZyYWdtZW50DgYAAAIACwAABQEGBAIIBQoCAgUKBQoAAQwAAAUECA0BYwUMBAAACQMhDgICBwoCAggFCgUMAAsGDgIEAgYJBgMKAg0FDAwAAwIGAwMBAwAAAAAAAAAAAwICDAAAAAsCAwIGgAIJBQwCDQUMBQwGgQIJBQwCDQUMBQwACwIFAgaBAgoFCwoCDQUM/gAFCwULAAAA";
+h3d_shader_ColorAdd._MODULE = "h3d.shader.ColorAdd";
+h3d_shader_ColorKey.SRC = "HXSME2gzZC5zaGFkZXIuQ29sb3JLZXkDAQhjb2xvcktleQUMAgAAAgx0ZXh0dXJlQ29sb3IFDAQAAAMIZnJhZ21lbnQOBgAAAQEDAAAFAggEBWNkaWZmBQwEAAAGAwICBQwCAQUMBQwACwYJCQMeDgICBAUMAgQFDAMBA/Fo44i1+OQ+AwIMAAAAAA";
+h3d_shader_ColorKey._MODULE = "h3d.shader.ColorKey";
+h3d_shader_ColorMatrix.SRC = "HXSMFmgzZC5zaGFkZXIuQ29sb3JNYXRyaXgEAQpwaXhlbENvbG9yBQwEAAACBm1hdHJpeAcCAAADB2VuYWJsZWQCAgABAAAAAAAECGZyYWdtZW50DgYAAAEBBAAABQELAgMCBgQCAQUMCQMrDgIKBAYBCQMrDgIKAgEFDJIABQsBAwAAAAAAAPA/AwUMAgIHBQwFDJIABQsKBAYBAgEFDAICBwUMBQwMAAMFDAUMAAAA";
+h3d_shader_ColorMatrix._MODULE = "h3d.shader.ColorMatrix";
+h3d_shader_DirShadow.SRC = "HXSMFGgzZC5zaGFkZXIuRGlyU2hhZG93EAEGZW5hYmxlAgIAAQAAAAAAAgdVU0VfRVNNAgIAAQAAAAAAAwtzaGFkb3dQb3dlcgMCAAAEB1VTRV9QQ0YCAgABAAAAAAAFC1BDRl9TQU1QTEVTAQIAAQAAAAAABghwY2ZTY2FsZQMCAAAHCXNoYWRvd1JlcwUKAgAACAlzaGFkb3dNYXARAQIAAAkKc2hhZG93UHJvaggCAAAKCnNoYWRvd0JpYXMDAgAACxN0cmFuc2Zvcm1lZFBvc2l0aW9uBQsEAAAMBnNoYWRvdwMEAAANCWRpclNoYWRvdwMEAAAOC3BvaXNzb25EaXNrDwUMBQIAAA8EcmFuZA4GAAAQCGZyYWdtZW50DgYAAAIDDwERAXYDBAAAAwUCCBICZHADBAAACQMeDgIJAysOAQIRAwUMCQMrDgQBA18pyxDH+ilAAwED9P3UeOmOU0ADAQOiRbbz/ZRGQAMBA1CNl24Sq1dAAwUMAwANCQMTDgEGAQkDAg4BAhIDAwEDUPwYc9Fd5UADAwMAAAEQAAAFAgsCAQIFAQsCBAIFCwYEAgwDAQMAAAAAAADwPwMDCBMJdGV4ZWxTaXplBQoEAAAGAgEDAAAAAAAA8D8DAgcFCgUKAAgUCXNoYWRvd1BvcwULBAAABgECCwULAgkIBQsACBUIc2hhZG93VXYFCgQAAAkDOw4BCgIUBQsRAAUKBQoACBYEek1heAMEAAAJAzYOAQoCFAULCAADAwAIFwNyb3QDBAAABgEGAQkCDw4BBgAGAAoCCwULAAADCgILBQsEAAMDCgILBQsIAAMDAwEDH4XrUbgeCUADAwEDAAAAAAAAAEADAwAIGARjb3NSAwQAAAkDAw4BAhcDAwAIGQRzaW5SAwQAAAkDAg4BAhcDAwAIGg5zYW1wbGVTdHJlbmd0aAMEAAAGAgEDAAAAAAAA8D8DCQMnDgECBQEDAwAIGwhvZmZTY2FsZQUKBAAABgECEwUKAgYDBQoADhwBaQEEAAAGFQECAAAAAAECBQEPAQAABQQIHQZvZmZzZXQFCgQAAAYBChECDg8FDAUCHAEFDBEABQoCGwUKBQoABgQCHQUKCQMpDgIGAwYBAhgDCgIdBQoAAAMDBgECGQMKAh0FCgQAAwMDBgAGAQIYAwoCHQUKBAADAwYBAhkDCgIdBQoAAAMDAwUKBQoIHgVkZXB0aAMEAAAJA0EOAwIIEQEGAAIVBQoCHQUKBQoBAwAAAAAAAAAAAwMABoMCDAMLBAYHBgMCFgMCCgMDAh4DAgICGgMBAwAAAAAAAAAAAwMDAAAACwICAgUFCB8Jc2hhZG93UG9zBQsEAAAGAQILBQsCCQgFCwAIIAVkZXB0aAMEAAAJA0AOAgIIEQEJAzsOAQoCHwULEQAFCgUKAwAIIQR6TWF4AwQAAAkDNg4BCgIfBQsIAAMDAAgiBWRlbHRhAwQAAAYDCQMVDgIEBgACIAMCCgMDAwIhAwMCIQMDAAYEAgwDCQM2DgEJAwkOAQYBAgMDAiIDAwMDAwAFBAgjCXNoYWRvd1BvcwULBAAABgECCwULAgkIBQsACCQIc2hhZG93VXYFCgQAAAkDOw4BCgIjBQsRAAUKBQoACCUFZGVwdGgDBAAACQNADgICCBEBCgIkBQoRAAUKAwAGBAIMAwsGBwYDCQM2DgEKAiMFCwgAAwMCCgMDAiUDAgEDAAAAAAAAAAADAQMAAAAAAADwPwMDAwAAAAAAAAYEAg0DAgwDAwA";
+h3d_shader_DirShadow._MODULE = "h3d.shader.DirShadow";
+h3d_shader_GenTexture.SRC = "HXSMFWgzZC5zaGFkZXIuR2VuVGV4dHVyZQoBBWlucHV0DQECAghwb3NpdGlvbgUKAQEAAwJ1dgUKAQEAAQAABAVmbGlwWQMCAAAFBm91dHB1dA0CAgYIcG9zaXRpb24FDAQFAAcFY29sb3IFDAQFAAQAAAgKcGl4ZWxDb2xvcgUMBAAACQxjYWxjdWxhdGVkVVYFCgQAAAoEbW9kZQECAAEAAAAAAAsFY29sb3IFDAIAAAwIX19pbml0X18OBgAADQZ2ZXJ0ZXgOBgAADghmcmFnbWVudA4GAAADAgwAAAUCBgQCBwUMAggFDAUMBgQCCQUKAgMFCgUKAAANAAAFAQYEAgYFDAkDKw4ECgICBQoAAAMGAQoCAgUKBAADAgQDAwEDAAAAAAAAAAADAQMAAAAAAADwPwMFDAUMAAEOAAAFARMEAgoBAQEBAQIAAAAAAQUBBgQCCAUMCwYHCQMcDgEKAgYFDBEABQoDAQMAAAAAAADwPwMCCQMrDgEBAwAAAAAAAAAAAwUMAgsFDAUMBQwAAAAA";
+h3d_shader_GenTexture._MODULE = "h3d.shader.GenTexture";
+h3d_shader_LineShader.SRC = "HXSMFWgzZC5zaGFkZXIuTGluZVNoYWRlcgwBBmNhbWVyYQ0BAwIEdmlldwcAAQADBHByb2oHAAEABAh2aWV3UHJvagcAAQAAAAAFBmdsb2JhbA0CAgYJcGl4ZWxTaXplBQoABQAHCW1vZGVsVmlldwcABQEDAAAACAVpbnB1dA0DAwkIcG9zaXRpb24FCwEIAAoGbm9ybWFsBQsBCAALAnV2BQoBCAABAAAMBm91dHB1dA0EAQ0IcG9zaXRpb24FDAQMAAQAAA4RdHJhbnNmb3JtZWROb3JtYWwFCwQAAA8TdHJhbnNmb3JtZWRQb3NpdGlvbgULBAAAEBFwcm9qZWN0ZWRQb3NpdGlvbgUMBAAAEQtsZW5ndGhTY2FsZQMCAAASBXdpZHRoAwIAABMEcGRpcgUMBAAAFAhfX2luaXRfXw4GAAAVBnZlcnRleA4GAAACAhQAAAUBBQUIFgNkaXIFCwQAAAYBAgoFCwkDMw4BAgcHBgULAAYEAhMFDAYBCQMrDgIGAQIWBQsJAzMOAQICBwYFCwEDAAAAAAAA8D8DBQwCAwcFDAUMBoEKAhMFDBEABQoGAgEDAAAAAAAA8D8DCQMNDgEGAAYBCgITBQwAAAMKAhMFDAAAAwMGAQoCEwUMBAADCgITBQwEAAMDAwMDBQoGgAIPBQsGAQYBAhYFCwoCCwUKAAADBQsCEQMFCwULBgQCDgULCQMgDgECFgULBQsFCwAAABUAAAUBBoAKAhAFDBEABQoGAQYBBgEGAQQGAQoCEwUMBQAFCgkDKQ4CAQMAAAAAAADwPwMBAwAAAAAAAPC/AwUKBQoFCgQGAwoCCwUKBAADAQMAAAAAAADgPwMDAwUKCgIQBQwIAAMFCgIGBQoFCgISAwUKBQoA";
+h3d_shader_LineShader._MODULE = "h3d.shader.LineShader";
+h3d_shader_MinMaxShader.SRC = "HXSMF2gzZC5zaGFkZXIuTWluTWF4U2hhZGVyCwEFaW5wdXQNAQICCHBvc2l0aW9uBQoBAQADAnV2BQoBAQABAAAEBWZsaXBZAwIAAAUGb3V0cHV0DQICBghwb3NpdGlvbgUMBAUABwVjb2xvcgUMBAUABAAACApwaXhlbENvbG9yBQwEAAAJDGNhbGN1bGF0ZWRVVgUKBAAACgR0ZXhBCgICAAALBHRleEIKAgIAAAwFaXNNYXgCAgABAAAAAAANCF9faW5pdF9fDgYAAA4GdmVydGV4DgYAAA8IZnJhZ21lbnQOBgAAAwINAAAFAgYEAgcFDAIIBQwFDAYEAgkFCgIDBQoFCgAADgAABQEGBAIGBQwJAysOBAoCAgUKAAADBgEKAgIFCgQAAwIEAwMBAwAAAAAAAAAAAwEDAAAAAAAA8D8DBQwFDAABDwAABQMIEAFhBQwEAAAJAyIOAgIKCgICCQUKBQwACBEBYgUMBAAACQMiDgICCwoCAgkFCgUMAAYEAggFDAsCDAIJAxYOAgIQBQwCEQUMBQwJAxUOAgIQBQwCEQUMBQwFDAUMAA";
+h3d_shader_MinMaxShader._MODULE = "h3d.shader.MinMaxShader";
+h3d_shader_CubeMinMaxShader.SRC = "HXSMG2gzZC5zaGFkZXIuQ3ViZU1pbk1heFNoYWRlcgwBBWlucHV0DQECAghwb3NpdGlvbgUKAQEAAwJ1dgUKAQEAAQAABAVmbGlwWQMCAAAFBm91dHB1dA0CAgYIcG9zaXRpb24FDAQFAAcFY29sb3IFDAQFAAQAAAgKcGl4ZWxDb2xvcgUMBAAACQxjYWxjdWxhdGVkVVYFCgQAAAoEdGV4QQoGAgAACwR0ZXhCCgYCAAAMBWlzTWF4AgIAAQAAAAAADQNtYXQGAgAADghfX2luaXRfXw4GAAAPBnZlcnRleA4GAAAQCGZyYWdtZW50DgYAAAMCDgAABQIGBAIHBQwCCAUMBQwGBAIJBQoCAwUKBQoAAA8AAAUBBgQCBgUMCQMrDgQKAgIFCgAAAwYBCgICBQoEAAMCBAMDAQMAAAAAAAAAAAMBAwAAAAAAAPA/AwUMBQwAARAAAAUFCBECdXYFCgQAAAYDBgECCQUKAQMAAAAAAAAAQAMFCgEDAAAAAAAA8D8DBQoACBIDZGlyBQsEAAAGAQkDKg4CAhEFCgEDAAAAAAAA8D8DBQsCDQYFCwAIEwFhBQwEAAAJAyIOAgIKCgYCEgULBQwACBQBYgUMBAAACQMiDgICCwoGAhIFCwUMAAYEAggFDAsCDAIJAxYOAgITBQwCFAUMBQwJAxUOAgITBQwCFAUMBQwFDAUMAA";
+h3d_shader_CubeMinMaxShader._MODULE = "h3d.shader.MinMaxShader";
+h3d_shader_NormalMap.SRC = "HXSMFGgzZC5zaGFkZXIuTm9ybWFsTWFwCgEGY2FtZXJhDQECAghwb3NpdGlvbgULAAEAAwNkaXIFCwMBAAAAAAQGZ2xvYmFsDQIBBQltb2RlbFZpZXcHAAQBAwAAAAYFaW5wdXQNAwIHBm5vcm1hbAULAQYACAd0YW5nZW50BQsBBgABAAAJB3RleHR1cmUKAgIAAAoMY2FsY3VsYXRlZFVWBQoEAAALE3RyYW5zZm9ybWVkUG9zaXRpb24FCwQAAAwRdHJhbnNmb3JtZWROb3JtYWwFCwQAAA0SdHJhbnNmb3JtZWRUYW5nZW50BQwDAAAODl9faW5pdF9fdmVydGV4DgYAAA8IZnJhZ21lbnQOBgAAAgIOAAAFAQYEAg0FDAkDKw4CBgECCAULCQMzDgECBQcGBQsLBgcJAx4OAgIIBQsCCAULAwEDAAAAAAAA4D8DAgEDAAAAAAAA8D8DAQMAAAAAAADwvwMDBQwFDAABDwAABQUIEAFuBQsEAAACDAULAAgRAm5mBQsEAAAJAzoOAQkDIg4CAgkKAgIKBQoFDAULAAgSBHRhblgFCwQAAAkDIA4BCgINBQySAAULBQsACBMEdGFuWQULBAAABgEJAx8OAgIQBQsCEgULBQsHAwoCDQUMDAADAwULAAYEAgwFCwkDIA4BBAYABgAGAQoCEQULAAADAhIFCwULBgEKAhEFCwQAAwITBQsFCwULBgEKAhEFCwgAAwIQBQsFCwULBQsFCwULAA";
+h3d_shader_NormalMap._MODULE = "h3d.shader.NormalMap";
+h3d_shader_Shadow.SRC = "HXSMEWgzZC5zaGFkZXIuU2hhZG93BgEGc2hhZG93DQEFAgNtYXARAQABAAMEcHJvaggAAQAEBWNvbG9yBQsAAQAFBXBvd2VyAwABAAYEYmlhcwMAAQAAAAAHCnBpeGVsQ29sb3IFDAQAAAgTdHJhbnNmb3JtZWRQb3NpdGlvbgULBAAACRhwaXhlbFRyYW5zZm9ybWVkUG9zaXRpb24FCwQAAAoJc2hhZG93UG9zBQsEAAEBCwhmcmFnbWVudA4GAAABAQsAAAUGCAwJc2hhZG93UG9zBQsEAAAGAQIJBQsCAwgFCwAIDQVkZXB0aAMEAAAJA0AOAgICEQEJAzsOAQoCDAULEQAFCgUKAwAIDgR6TWF4AwQAAAkDNg4BCgIMBQsIAAMDAAgPBWRlbHRhAwQAAAYDCQMVDgIEBgACDQMCBgMDAwIOAwMCDgMDAAgQBXNoYWRlAwQAAAkDNg4BCQMJDgEGAQIFAwIPAwMDAwAGgQoCBwUMkgAFCwYABgEEBgMBAwAAAAAAAPA/AwIQAwMDCgIEBQuSAAULBQsCEAMFCwULAA";
+h3d_shader_Shadow._MODULE = "h3d.shader.Shadow";
+h3d_shader_SignedDistanceField.SRC = "HXSMHmgzZC5zaGFkZXIuU2lnbmVkRGlzdGFuY2VGaWVsZA8BBWlucHV0DQEDAghwb3NpdGlvbgUKAQEAAwJ1dgUKAQEABAVjb2xvcgUMAQEAAQAABQZvdXRwdXQNAgIGCHBvc2l0aW9uBQwEBQAHBWNvbG9yBQwEBQAEAAAIBHRpbWUDAAAACQ5zcHJpdGVQb3NpdGlvbgUMBAAAChBhYnNvbHV0ZVBvc2l0aW9uBQwEAAALCnBpeGVsQ29sb3IFDAQAAAwMdGV4dHVyZUNvbG9yBQwEAAANDGNhbGN1bGF0ZWRVVgUKAwAADg5vdXRwdXRQb3NpdGlvbgUMBAAADwdjaGFubmVsAQIAAQAAAAAAEA1hdXRvU21vb3RoaW5nAgIAAQAAAAAAEQthbHBoYUN1dG9mZgMCAAASCXNtb290aGluZwMCAAATBm1lZGlhbg4GAAAUCGZyYWdtZW50DgYAAAIDEwMVAXIDBAAAFgFnAwQAABcBYgMEAAADBQENCQMWDgIJAxUOAgIVAwIWAwMJAxUOAgkDFg4CAhUDAhYDAwIXAwMDAAABFAAABQUIGA10ZXh0dXJlU2FtcGxlBQwEAAACDAUMAAgZCGRpc3RhbmNlAwQAAAAABgQCGQMLBgUCDwEBAgAAAAABAgoCGAUMAAADCwYFAg8BAQIBAAAAAQIKAhgFDAQAAwsGBQIPAQECAgAAAAECCgIYBQwIAAMLBgUCDwEBAgMAAAABAgoCGAUMDAADCQITDgMKAhgFDAAAAwoCGAUMBAADCgIYBQwIAAMDAwMDAwMIGglzbW9vdGhWYWwDBAAACwIQAgkDDw4BBgEJAz8OAQIZAwMBAwAAAAAAAOA/AwMDAhIDAwAGBAIMBQwJAysOBAEDAAAAAAAA8D8DAQMAAAAAAADwPwMBAwAAAAAAAPA/AwkDGw4DBgMCEQMCGgMDBgACEQMCGgMDAhkDAwUMBQwA";
+h3d_shader_SignedDistanceField._MODULE = "h3d.shader.SignedDistanceField";
+h3d_shader_Utils.SRC = "HXSMEGgzZC5zaGFkZXIuVXRpbHMHAQtib25lTWF0cml4WAgEAAACC2JvbmVNYXRyaXhZCAQAAAMLYm9uZU1hdHJpeFoIBAAABAtib25lTWF0cml4VwgEAAAFC3NraW5XZWlnaHRzBQwEAAAGDmFwcGx5U2tpblBvaW50DgYAAAcMYXBwbHlTa2luVmVjDgYAAAIDBgEIAXAFCwQAAAULBQMICQt0cmFuc2Zvcm1lZAULBAAABgAGAAYBBAYBAggFCwIBCAULBQsKAgUFDAAAAwULBgEEBgECCAULAgIIBQsFCwoCBQUMBAADBQsFCwYBBAYBAggFCwIDCAULBQsKAgUFDAgAAwULBQsACwYHCgIFBQwMAAMBAwAAAAAAAAAAAwIFAQaAAgkFCwYBBAYBAggFCwIECAULBQsKAgUFDAwAAwULBQsAAAANAgkFCwAAAwcBCgF2BQsEAAAFCwUDCAsLdHJhbnNmb3JtZWQFCwQAAAYABgAGAQQGAQIKBQsJAzMOAQIBCAYFCwULCgIFBQwAAAMFCwYBBAYBAgoFCwkDMw4BAgIIBgULBQsKAgUFDAQAAwULBQsGAQQGAQIKBQsJAzMOAQIDCAYFCwULCgIFBQwIAAMFCwULAAsGBwoCBQUMDAADAQMAAAAAAAAAAAMCBQEGgAILBQsGAQQGAQIKBQsJAzMOAQIECAYFCwULCgIFBQwMAAMFCwULAAAADQILBQsAAA";
+h3d_shader_Utils._MODULE = "h3d.shader.Skin";
+h3d_shader_SkinBase.SRC = "HXSME2gzZC5zaGFkZXIuU2tpbkJhc2UIARByZWxhdGl2ZVBvc2l0aW9uBQsEAAACE3RyYW5zZm9ybWVkUG9zaXRpb24FCwQAAAMRdHJhbnNmb3JtZWROb3JtYWwFCwQAAAQITWF4Qm9uZXMBAgABAAAAAAAFEWZvdXJCb25lc0J5VmVydGV4AgIAAQAAAAAABgtjYWxjUHJldlBvcwICAAEAAAAAAAcNYm9uZXNNYXRyaXhlcw8IBAIAAQgIEXByZXZCb25lc01hdHJpeGVzDwgEAgABCAA";
+h3d_shader_SkinBase._MODULE = "h3d.shader.SkinBase";
+h3d_shader_Skin.SRC = "HXSMD2gzZC5zaGFkZXIuU2tpbhIBEHJlbGF0aXZlUG9zaXRpb24FCwQAAAITdHJhbnNmb3JtZWRQb3NpdGlvbgULBAAAAxF0cmFuc2Zvcm1lZE5vcm1hbAULBAAABAhNYXhCb25lcwECAAEAAAAAAAURZm91ckJvbmVzQnlWZXJ0ZXgCAgABAAAAAAAGC2NhbGNQcmV2UG9zAgIAAQAAAAAABw1ib25lc01hdHJpeGVzDwgEAgABCAgRcHJldkJvbmVzTWF0cml4ZXMPCAQCAAEICQtib25lTWF0cml4WAgEAAAKC2JvbmVNYXRyaXhZCAQAAAsLYm9uZU1hdHJpeFoIBAAADAtib25lTWF0cml4VwgEAAANC3NraW5XZWlnaHRzBQwEAAAOBWlucHV0DQEEDwhwb3NpdGlvbgULAQ4AEAZub3JtYWwFCwEOABEHd2VpZ2h0cwULAQ4AEgdpbmRleGVzCQQAAAABDgABAAATG3ByZXZpb3VzVHJhbnNmb3JtZWRQb3NpdGlvbgULBAAAFA5hcHBseVNraW5Qb2ludA4GAAAVDGFwcGx5U2tpblZlYw4GAAAWBnZlcnRleA4GAAADAxQBFwFwBQsEAAAFCwUDCBgLdHJhbnNmb3JtZWQFCwQAAAYABgAGAQQGAQIXBQsCCQgFCwULCgINBQwAAAMFCwYBBAYBAhcFCwIKCAULBQsKAg0FDAQAAwULBQsGAQQGAQIXBQsCCwgFCwULCgINBQwIAAMFCwULAAsGBwoCDQUMDAADAQMAAAAAAAAAAAMCBQEGgAIYBQsGAQQGAQIXBQsCDAgFCwULCgINBQwMAAMFCwULAAAADQIYBQsAAAMVARkBdgULBAAABQsFAwgaC3RyYW5zZm9ybWVkBQsEAAAGAAYABgEEBgECGQULCQMzDgECCQgGBQsFCwoCDQUMAAADBQsGAQQGAQIZBQsJAzMOAQIKCAYFCwULCgINBQwEAAMFCwULBgEEBgECGQULCQMzDgECCwgGBQsFCwoCDQUMCAADBQsFCwALBgcKAg0FDAwAAwEDAAAAAAAAAAADAgUBBoACGgULBgEEBgECGQULCQMzDgECDAgGBQsFCwoCDQUMDAADBQsFCwAAAA0CGgULAAAAFgAABQsLAgYCBQcGBAIJCBECCA8IBAkDJg4BCgISCQQAAAAAAAMBCAgGBAIKCBECCA8IBAkDJg4BCgISCQQAAAAEAAMBCAgGBAILCBECCA8IBAkDJg4BCgISCQQAAAAIAAMBCAgGBAIMCBECCA8IBAkDJg4BCgISCQQAAAAMAAMBCAgGBAINBQwJAysOAgIRBQsBAwAAAAAAAAAAAwUMBQwLAgUCBgQKAg0FDAwAAwYDAQMAAAAAAADwPwMEBgAGAAoCEQULAAADCgIRBQsEAAMDCgIRBQsIAAMDAwMDAAAGBAITBQsJAhQOAQIBBQsFCwULAAAABgQCCQgRAgcPCAQJAyYOAQoCEgkEAAAAAAADAQgIBgQCCggRAgcPCAQJAyYOAQoCEgkEAAAABAADAQgIBgQCCwgRAgcPCAQJAyYOAQoCEgkEAAAACAADAQgIBgQCDAgRAgcPCAQJAyYOAQoCEgkEAAAADAADAQgIBgQCDQUMCQMrDgICEQULAQMAAAAAAAAAAAMFDAUMCwIFAgYECgINBQwMAAMGAwEDAAAAAAAA8D8DBAYABgAKAhEFCwAAAwoCEQULBAADAwoCEQULCAADAwMDAwAABgQCAgULCQIUDgECAQULBQsFCwYEAgMFCwkCFQ4BAhAFCwULBQsGBAIDBQsJAyAOAQIDBQsFCwULCwcCAgYCAgYEAhMFCwICBQsFCwAAAA";
+h3d_shader_Skin._MODULE = "h3d.shader.Skin";
+h3d_shader_SkinTangent.SRC = "HXSMFmgzZC5zaGFkZXIuU2tpblRhbmdlbnQTARByZWxhdGl2ZVBvc2l0aW9uBQsEAAACE3RyYW5zZm9ybWVkUG9zaXRpb24FCwQAAAMRdHJhbnNmb3JtZWROb3JtYWwFCwQAAAQITWF4Qm9uZXMBAgABAAAAAAAFEWZvdXJCb25lc0J5VmVydGV4AgIAAQAAAAAABgtjYWxjUHJldlBvcwICAAEAAAAAAAcNYm9uZXNNYXRyaXhlcw8IBAIAAQgIEXByZXZCb25lc01hdHJpeGVzDwgEAgABCAkLYm9uZU1hdHJpeFgIBAAACgtib25lTWF0cml4WQgEAAALC2JvbmVNYXRyaXhaCAQAAAwLYm9uZU1hdHJpeFcIBAAADQtza2luV2VpZ2h0cwUMBAAADgVpbnB1dA0BBQ8IcG9zaXRpb24FCwEOABAGbm9ybWFsBQsBDgARB3RhbmdlbnQFCwEOABIHd2VpZ2h0cwULAQ4AEwdpbmRleGVzCQQAAAABDgABAAAUEnRyYW5zZm9ybWVkVGFuZ2VudAUMBAAAFRtwcmV2aW91c1RyYW5zZm9ybWVkUG9zaXRpb24FCwQAABYOYXBwbHlTa2luUG9pbnQOBgAAFwxhcHBseVNraW5WZWMOBgAAGAZ2ZXJ0ZXgOBgAAAwMWARkBcAULBAAABQsFAwgaC3RyYW5zZm9ybWVkBQsEAAAGAAYABgEEBgECGQULAgkIBQsFCwoCDQUMAAADBQsGAQQGAQIZBQsCCggFCwULCgINBQwEAAMFCwULBgEEBgECGQULAgsIBQsFCwoCDQUMCAADBQsFCwALBgcKAg0FDAwAAwEDAAAAAAAAAAADAgUBBoACGgULBgEEBgECGQULAgwIBQsFCwoCDQUMDAADBQsFCwAAAA0CGgULAAADFwEbAXYFCwQAAAULBQMIHAt0cmFuc2Zvcm1lZAULBAAABgAGAAYBBAYBAhsFCwkDMw4BAgkIBgULBQsKAg0FDAAAAwULBgEEBgECGwULCQMzDgECCggGBQsFCwoCDQUMBAADBQsFCwYBBAYBAhsFCwkDMw4BAgsIBgULBQsKAg0FDAgAAwULBQsACwYHCgINBQwMAAMBAwAAAAAAAAAAAwIFAQaAAhwFCwYBBAYBAhsFCwkDMw4BAgwIBgULBQsKAg0FDAwAAwULBQsAAAANAhwFCwAAABgAAAUNCwIGAgUHBgQCCQgRAggPCAQJAyYOAQoCEwkEAAAAAAADAQgIBgQCCggRAggPCAQJAyYOAQoCEwkEAAAABAADAQgIBgQCCwgRAggPCAQJAyYOAQoCEwkEAAAACAADAQgIBgQCDAgRAggPCAQJAyYOAQoCEwkEAAAADAADAQgIBgQCDQUMCQMrDgICEgULAQMAAAAAAAAAAAMFDAUMCwIFAgYECgINBQwMAAMGAwEDAAAAAAAA8D8DBAYABgAKAhIFCwAAAwoCEgULBAADAwoCEgULCAADAwMDAwAABgQCFQULCQIWDgECAQULBQsFCwAAAAYEAgkIEQIHDwgECQMmDgEKAhMJBAAAAAAAAwEICAYEAgoIEQIHDwgECQMmDgEKAhMJBAAAAAQAAwEICAYEAgsIEQIHDwgECQMmDgEKAhMJBAAAAAgAAwEICAYEAgwIEQIHDwgECQMmDgEKAhMJBAAAAAwAAwEICAYEAg0FDAkDKw4CAhIFCwEDAAAAAAAAAAADBQwFDAsCBQIGBAoCDQUMDAADBgMBAwAAAAAAAPA/AwQGAAYACgISBQsAAAMKAhIFCwQAAwMKAhIFCwgAAwMDAwMAAAYEAgIFCwkCFg4BAgEFCwULBQsGBAIDBQsJAhcOAQIQBQsFCwULBgQKAhQFDJIABQsJAhcOAQoCEQULkgAFCwULBQsGBAIDBQsJAyAOAQIDBQsFCwULBgQKAhQFDJIABQsJAyAOAQoCFAUMkgAFCwULBQsLBwICBgICBgQCFQULAgIFCwULAAAA";
+h3d_shader_SkinTangent._MODULE = "h3d.shader.SkinTangent";
+h3d_shader_SpecularTexture.SRC = "HXSMGmgzZC5zaGFkZXIuU3BlY3VsYXJUZXh0dXJlBAEHdGV4dHVyZQoCAgAAAgxjYWxjdWxhdGVkVVYFCgQAAAMJc3BlY0NvbG9yBQsEAAAECGZyYWdtZW50DgYAAAEBBAAABQEGgQIDBQsKCQMiDgICAQoCAgIFCgUMkgAFCwULAA";
+h3d_shader_SpecularTexture._MODULE = "h3d.shader.SpecularTexture";
+h3d_shader_Texture.SRC = "HXSMEmgzZC5zaGFkZXIuVGV4dHVyZQsBBWlucHV0DQEBAgJ1dgUKAQEAAQAAAwhhZGRpdGl2ZQICAAEAAAAAAAQJa2lsbEFscGhhAgIAAQAAAAAABQ1zcGVjdWxhckFscGhhAgIAAQAAAAAABhJraWxsQWxwaGFUaHJlc2hvbGQDAgABBwAAAAAAAAAAAAAAAAAA8D8HB3RleHR1cmUKAgIAAAgMY2FsY3VsYXRlZFVWBQoEAAAJCnBpeGVsQ29sb3IFDAQAAAoJc3BlY0NvbG9yBQsEAAALBnZlcnRleA4GAAAMCGZyYWdtZW50DgYAAAIACwAABQEGBAIIBQoCAgUKBQoAAQwAAAUECA0BYwUMBAAACQMiDgICBwoCAggFCgUMAAsGDgIEAgYJBgMKAg0FDAwAAwIGAwMBAwAAAAAAAAAAAwICDAAAAAsCAwIGgAIJBQwCDQUMBQwGgQIJBQwCDQUMBQwACwIFAgaBAgoFCwoCDQUM/gAFCwULAAAA";
+h3d_shader_Texture._MODULE = "h3d.shader.Texture";
 h3d_shader_UVDelta.SRC = "HXSMEmgzZC5zaGFkZXIuVVZEZWx0YQQBB3V2RGVsdGEFCgIAAAIHdXZTY2FsZQUKAgAAAwxjYWxjdWxhdGVkVVYFCgQAAAQGdmVydGV4DgYAAAEABAAABQEGBAIDBQoGAAYBAgMFCgICBQoFCgIBBQoFCgUKAA";
+h3d_shader_UVDelta._MODULE = "h3d.shader.UVDelta";
 h3d_shader_VertexColorAlpha.SRC = "HXSMG2gzZC5zaGFkZXIuVmVydGV4Q29sb3JBbHBoYQQBBWlucHV0DQEBAgVjb2xvcgUMAQEAAQAAAwpwaXhlbENvbG9yBQwEAAAECGFkZGl0aXZlAgIAAQAAAAAABQhmcmFnbWVudA4GAAABAQUAAAUBCwIEAgaAAgMFDAICBQwFDAaBAgMFDAICBQwFDAAA";
-h3d_shader_VolumeDecal.SRC = "HXSMFmgzZC5zaGFkZXIuVm9sdW1lRGVjYWwdAQZjYW1lcmENAQwCBHZpZXcHAAEAAwRwcm9qBwABAAQIcG9zaXRpb24FCwABAAUIcHJvakZsaXADAAEABghwcm9qRGlhZwULAAEABwh2aWV3UHJvagcAAQAIEHByZXZpb3VzVmlld1Byb2oHAAEACQ9pbnZlcnNlVmlld1Byb2oHAAEACgV6TmVhcgMAAQALBHpGYXIDAAEADANkaXIFCwMBAA0Naml0dGVyT2Zmc2V0cwUMAAEAAAAADgZnbG9iYWwNAgUPBHRpbWUDAA4AEAlwaXhlbFNpemUFCgAOABEJbW9kZWxWaWV3BwAOAQMSEG1vZGVsVmlld0ludmVyc2UHAA4BAxMRcHJldmlvdXNNb2RlbFZpZXcHAA4BAwAAABQFaW5wdXQNAwIVCHBvc2l0aW9uBQsBFAAWBm5vcm1hbAULARQAAQAAFwZvdXRwdXQNBAYYCHBvc2l0aW9uBQwEFwAZBWNvbG9yBQwEFwAaBWRlcHRoAwQXABsGbm9ybWFsBQsEFwAcCXdvcmxkRGlzdAMEFwAdCHZlbG9jaXR5BQoEFwAEAAAeEHJlbGF0aXZlUG9zaXRpb24FCwQAAB8TdHJhbnNmb3JtZWRQb3NpdGlvbgULBAAAIBtwcmV2aW91c1RyYW5zZm9ybWVkUG9zaXRpb24FCwQAACEYcGl4ZWxUcmFuc2Zvcm1lZFBvc2l0aW9uBQsEAAAiEXRyYW5zZm9ybWVkTm9ybWFsBQsEAAAjEXByb2plY3RlZFBvc2l0aW9uBQwEAAAkGXByZXZpb3VzUHJvamVjdGVkUG9zaXRpb24FDAQAACUKcGl4ZWxDb2xvcgUMBAAAJgVkZXB0aAMEAAAnC25kY1Bvc2l0aW9uBQoEAAAoE3ByZXZpb3VzTmRjUG9zaXRpb24FCgQAACkIc2NyZWVuVVYFCgQAACoJc3BlY1Bvd2VyAwQAACsJc3BlY0NvbG9yBQsEAAAsCXdvcmxkRGlzdAMEAAAtDXBpeGVsVmVsb2NpdHkFCgQAAC4IZGVwdGhNYXARAQAAAC8Fc2NhbGUFCgIAADAGbm9ybWFsBQsCAAAxB3RhbmdlbnQFCwIAADIKaXNDZW50ZXJlZAICAAEAAAAAADMMY2FsY3VsYXRlZFVWBQoEAAA0EnRyYW5zZm9ybWVkVGFuZ2VudAUMBAAANQ5fX2luaXRfX3ZlcnRleA4GAAA2CGZyYWdtZW50DgYAAAICNQAABQIGBAIiBQsJAx8OAQQGAQIwBQsJAzIOAQIRBwYFCwULBQsFCwYEAjQFDAkDKg4CCQMfDgEEBgECMQULCQMyDgECEQcGBQsFCwULAQMAAAAAAADwPwMFDAUMAAE2AAAFCQg3Bm1hdHJpeAcEAAAGAQIJBwISBwcACDgJc2NyZWVuUG9zBQoEAAAGAgoCIwUMEQAFCgoCIwUMDAADBQoACDkDcnV2BQwEAAAJAyoOAwI4BQoJAz8OAgIuEQEJAzoOAQI4BQoFCgMBAwAAAAAAAPA/AwUMAAg6BHdwb3MFDAQAAAYBAjkFDAI3BwUMAAg7BHBwb3MFDAQAAAYBAjkFDAIJBwUMAAYEAiEFCwYCCgI7BQySAAULCgI7BQwMAAMFCwULBgQCMwUKBgECLwUKBAYCCgI6BQwRAAUKCgI6BQwMAAMFCgUKBQoFCgsCMgIGgAIzBQoBAwAAAAAAAOA/AwUKAAALBgkJAxUOAgkDFQ4CCgIzBQoAAAMKAjMFCgQAAwMJAxUOAgYDAQMAAAAAAADwPwMKAjMFCgAAAwMGAwEDAAAAAAAA8D8DCgIzBQoEAAMDAwMBAwAAAAAAAAAAAwIMAAAAAA";
+h3d_shader_VertexColorAlpha._MODULE = "h3d.shader.VertexColorAlpha";
+h3d_shader_VolumeDecal.SRC = "HXSMFmgzZC5zaGFkZXIuVm9sdW1lRGVjYWwdAQZjYW1lcmENAQwCBHZpZXcHAAEAAwRwcm9qBwABAAQIcG9zaXRpb24FCwABAAUIcHJvakZsaXADAAEABghwcm9qRGlhZwULAAEABwh2aWV3UHJvagcAAQAIEHByZXZpb3VzVmlld1Byb2oHAAEACQ9pbnZlcnNlVmlld1Byb2oHAAEACgV6TmVhcgMAAQALBHpGYXIDAAEADANkaXIFCwMBAA0Naml0dGVyT2Zmc2V0cwUMAAEAAAAADgZnbG9iYWwNAgUPBHRpbWUDAA4AEAlwaXhlbFNpemUFCgAOABEJbW9kZWxWaWV3BwAOAQMSEG1vZGVsVmlld0ludmVyc2UHAA4BAxMRcHJldmlvdXNNb2RlbFZpZXcHAA4BAwAAABQFaW5wdXQNAwIVCHBvc2l0aW9uBQsBFAAWBm5vcm1hbAULARQAAQAAFwZvdXRwdXQNBAYYCHBvc2l0aW9uBQwEFwAZBWNvbG9yBQwEFwAaBWRlcHRoAwQXABsGbm9ybWFsBQsEFwAcCXdvcmxkRGlzdAMEFwAdCHZlbG9jaXR5BQoEFwAEAAAeEHJlbGF0aXZlUG9zaXRpb24FCwQAAB8TdHJhbnNmb3JtZWRQb3NpdGlvbgULBAAAIBtwcmV2aW91c1RyYW5zZm9ybWVkUG9zaXRpb24FCwQAACEYcGl4ZWxUcmFuc2Zvcm1lZFBvc2l0aW9uBQsEAAAiEXRyYW5zZm9ybWVkTm9ybWFsBQsEAAAjEXByb2plY3RlZFBvc2l0aW9uBQwEAAAkGXByZXZpb3VzUHJvamVjdGVkUG9zaXRpb24FDAQAACUKcGl4ZWxDb2xvcgUMBAAAJgVkZXB0aAMEAAAnC25kY1Bvc2l0aW9uBQoEAAAoE3ByZXZpb3VzTmRjUG9zaXRpb24FCgQAACkIc2NyZWVuVVYFCgQAACoJc3BlY1Bvd2VyAwQAACsJc3BlY0NvbG9yBQsEAAAsCXdvcmxkRGlzdAMEAAAtDXBpeGVsVmVsb2NpdHkFCgQAAC4IZGVwdGhNYXARAQAAAC8Fc2NhbGUFCgIAADAGbm9ybWFsBQsCAAAxB3RhbmdlbnQFCwIAADIKaXNDZW50ZXJlZAICAAEAAAAAADMMY2FsY3VsYXRlZFVWBQoEAAA0EnRyYW5zZm9ybWVkVGFuZ2VudAUMBAAANQ5fX2luaXRfX3ZlcnRleA4GAAA2CGZyYWdtZW50DgYAAAICNQAABQIGBAIiBQsJAyAOAQQGAQIwBQsJAzMOAQIRBwYFCwULBQsFCwYEAjQFDAkDKw4CCQMgDgEEBgECMQULCQMzDgECEQcGBQsFCwULAQMAAAAAAADwPwMFDAUMAAE2AAAFCQg3Bm1hdHJpeAcEAAAGAQIJBwISBwcACDgJc2NyZWVuUG9zBQoEAAAGAgoCIwUMEQAFCgoCIwUMDAADBQoACDkDcnV2BQwEAAAJAysOAwI4BQoJA0AOAgIuEQEJAzsOAQI4BQoFCgMBAwAAAAAAAPA/AwUMAAg6BHdwb3MFDAQAAAYBAjkFDAI3BwUMAAg7BHBwb3MFDAQAAAYBAjkFDAIJBwUMAAYEAiEFCwYCCgI7BQySAAULCgI7BQwMAAMFCwULBgQCMwUKBgECLwUKBAYCCgI6BQwRAAUKCgI6BQwMAAMFCgUKBQoFCgsCMgIGgAIzBQoBAwAAAAAAAOA/AwUKAAALBgkJAxUOAgkDFQ4CCgIzBQoAAAMKAjMFCgQAAwMJAxUOAgYDAQMAAAAAAADwPwMKAjMFCgAAAwMGAwEDAAAAAAAA8D8DCgIzBQoEAAMDAwMBAwAAAAAAAAAAAwIMAAAAAA";
+h3d_shader_VolumeDecal._MODULE = "h3d.shader.VolumeDecal";
 haxe_EntryPoint.pending = [];
 haxe_EntryPoint.threadCount = 0;
 haxe_Int32._mul = Math.imul != null ? Math.imul : function(a,b) {
@@ -99649,6 +114783,7 @@ hxd_fmt_hmd_Data.CURRENT_VERSION = 4;
 hxd_fmt_hmd_Reader.BLEND = h2d_BlendMode.__empty_constructs__.slice();
 hxd_fmt_hmd_Reader.CULLING = h3d_mat_Face.__empty_constructs__.slice();
 hxd_fs_EmbedFileSystem.invalidChars = new EReg("[^A-Za-z0-9_]","g");
+hxd_fs_SourceLoader.RELOAD_LFS = [];
 hxd_impl_AllocPos.ENABLED = false;
 hxd_impl_AllocPos.ENGINE_PACKAGES = ["h3d","hxd","h2d","haxe","sys","hrt"];
 hxd_impl_BufferFlags.Dynamic = 0;
@@ -99704,7 +114839,16 @@ hxsl_Tools.UID = 0;
 hxsl_Tools.SWIZ = hxsl_Component.__empty_constructs__.slice();
 hxsl_Tools.MAX_CHANNELS_BITS = 3;
 hxsl_Tools.MAX_PARTIAL_MAPPINGS_BITS = 7;
-hxsl_BatchShader.SRC = "HXSMEGh4c2wuQmF0Y2hTaGFkZXIFAQ9CYXRjaF9IYXNPZmZzZXQCAgABAAAAAAACEEJhdGNoX1VzZVN0b3JhZ2UCAgABAAAAAAADC0JhdGNoX0NvdW50AQIAAQAAEAAABAxCYXRjaF9CdWZmZXIQBQwDAgAABRNCYXRjaF9TdG9yYWdlQnVmZmVyEIEFDAAAAgAAAA";
+hxsl_BatchShader.SRC = "HXSMEGh4c2wuQmF0Y2hTaGFkZXIFAQ9CYXRjaF9IYXNPZmZzZXQCAgABAAAAAAACEEJhdGNoX1VzZVN0b3JhZ2UCAgABAAAAAAADC0JhdGNoX0NvdW50AQIAAQAAEAAABAxCYXRjaF9CdWZmZXIQBQwDAgAABRNCYXRjaF9TdG9yYWdlQnVmZmVyEIIFDAAAAgAAAA";
+hxsl_BatchShader._MODULE = "hxsl.BatchShader";
+hxsl_Checker.vec2 = hxsl_Type.TVec(2,hxsl_VecType.VFloat);
+hxsl_Checker.vec3 = hxsl_Type.TVec(3,hxsl_VecType.VFloat);
+hxsl_Checker.vec4 = hxsl_Type.TVec(4,hxsl_VecType.VFloat);
+hxsl_Checker.ivec2 = hxsl_Type.TVec(2,hxsl_VecType.VInt);
+hxsl_Checker.ivec3 = hxsl_Type.TVec(3,hxsl_VecType.VInt);
+hxsl_Checker.ivec4 = hxsl_Type.TVec(4,hxsl_VecType.VInt);
+hxsl_Debug.VAR_IDS = false;
+hxsl_Debug.TRACE = false;
 hxsl_Flatten.SWIZ = [hxsl_Component.X,hxsl_Component.Y,hxsl_Component.Z,hxsl_Component.W];
 hxsl_GlslOut.KWD_LIST = "attribute const uniform varying buffer shared\r\n\tcoherent volatile restrict readonly writeonly\r\n\tatomic_uint\r\n\tlayout\r\n\tcentroid flat smooth noperspective\r\n\tpatch sample\r\n\tbreak continue do for while switch case default\r\n\tif else\r\n\tsubroutine\r\n\tin out inout\r\n\tfloat double int void bool true false\r\n\tinvariant precise\r\n\tdiscard return\r\n\tmat2 mat3 mat4 dmat2 dmat3 dmat4\r\n\tmat2x2 mat2x3 mat2x4 dmat2x2 dmat2x3 dmat2x4\r\n\tmat3x2 mat3x3 mat3x4 dmat3x2 dmat3x3 dmat3x4\r\n\tmat4x2 mat4x3 mat4x4 dmat4x2 dmat4x3 dmat4x4\r\n\tvec2 vec3 vec4 ivec2 ivec3 ivec4 bvec2 bvec3 bvec4 dvec2 dvec3 dvec4\r\n\tuint uvec2 uvec3 uvec4\r\n\tlowp mediump highp precision\r\n\timage1D iimage1D uimage1D\r\n\timage2D iimage2D uimage2D\r\n\timage3D iimage3D uimage3D\r\n\tstruct\r\n\tcommon partition active\r\n\tasm\r\n\tclass union enum typedef template this packed\r\n\tresource\r\n\tgoto\r\n\tinline noinline public static extern external interface\r\n\tlong short half fixed unsigned superp\r\n\tinput output\r\n\thvec2 hvec3 hvec4 fvec2 fvec3 fvec4\r\n\tsampler3DRect\r\n\tfilter\r\n\tsizeof cast\r\n\tnamespace using\r\n\trow_major";
 hxsl_GlslOut.KWDS = (function($this) {
@@ -99751,7 +114895,6 @@ hxsl_GlslOut.GLOBALS = (function($this) {
 	gl[hxsl_TGlobal.BVec4._hx_index] = "bvec4";
 	gl[hxsl_TGlobal.FragCoord._hx_index] = "gl_FragCoord";
 	gl[hxsl_TGlobal.FrontFacing._hx_index] = "gl_FrontFacing";
-	gl[hxsl_TGlobal.FrontFacing._hx_index] = "gl_FrontFacing";
 	gl[hxsl_TGlobal.FloatBitsToUint._hx_index] = "_floatBitsToUint";
 	gl[hxsl_TGlobal.UintBitsToFloat._hx_index] = "_uintBitsToFloat";
 	gl[hxsl_TGlobal.ComputeVar_LocalInvocation._hx_index] = "ivec3(gl_LocalInvocationID)";
@@ -99794,6 +114937,7 @@ hxsl_ShaderList.MAX_LIST_SIZE = 0;
 hxsl_ShaderList.ALLOW_DUPLICATES = true;
 hxsl_ShaderInstance.UID = 0;
 hxsl_SharedShader.UNROLL_LOOPS = false;
+hxsl_SharedShader.SHADER_RESOLVE = new haxe_ds_StringMap();
 motion_actuators_SimpleActuator.actuators = [];
 motion_actuators_SimpleActuator.actuatorsLength = 0;
 motion_actuators_SimpleActuator.addedEvent = false;

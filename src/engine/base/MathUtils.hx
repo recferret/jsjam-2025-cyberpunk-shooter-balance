@@ -70,4 +70,10 @@ class MathUtils {
 			return min + Math.random() * (max - min);
 	}
 
+	public static function distance(x1:Float, y1:Float, x2:Float, y2:Float):Float {
+        final dx = x2 - x1;
+        final dy = y2 - y1;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
 }
